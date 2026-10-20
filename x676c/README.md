@@ -14,6 +14,21 @@ SM6225) to the Infinix X676C: MediaTek Helio G99 (MT6789), 6x Cortex-A55 +
   placed at 0x140000000+, ADT + boot_args (rev 2) handed over, entry
   reached with x0 = boot_args. Display pump runs on CPU 0x700.
 
+- **Milestone 3 (2026-10-21): xnu boots to the root wait.** CI kernel with
+  `xnu/patches/0140-x676c-mt6789-bringup.patch`: early console on the
+  MediaTek splash layer, every console byte mirrored into pstore, Qualcomm
+  MMIO users off on `infinix,x676c`. The log runs through IOKit (platform
+  expert, AppleKeyStore, HID, CPU0 + GIC SGI), BSD (AMFI, sandbox, HFS,
+  networking) and ends in `Waiting on ... IOMedia ... Apple_HFS`.
+
+## UFS host as LK leaves it
+
+Dumped by the shim before entering xnu: CAP 0x3587071f (32 transfer slots,
+8 task slots, 64-bit DMA), HCE 1, HCS 0x10f (device present, UTRL/UTMRL/UIC
+ready), LK's list at UTRLBA 0x51252c00 idle (DBR 0, RSR 1), last UIC command
+DME_SET PA_PWRMode (0x1571), REFCLK_CTRL 0x3 (requested and acked), MTK IP
+version 0x20160706. Clocks, regulators and the HS link are up.
+
 ## xnu boot flow
 
 ```

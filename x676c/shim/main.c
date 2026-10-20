@@ -22,6 +22,8 @@
 #define PUMP_LIFETIME_S		120
 #define ERROR_HOLD_MS		5000
 
+#define UFSHCI_BASE		0x11270000UL	/* ufshci@11270000, mediatek,mt8183-ufshci */
+
 extern char _head[];
 
 static void log_cpu(uint64_t dtb)
@@ -36,11 +38,24 @@ static void log_cpu(uint64_t dtb)
 	plog_hex("id_aa64mmfr0", rsr("id_aa64mmfr0_el1"));
 }
 
+/*
+ * The UFS host as LK left it (LK read boot_a through it): standard UFSHCI
+ * registers and the MediaTek vendor block, for the xnu UFS driver design.
+ */
+static void log_ufs(void)
+{
+	plog_regs("ufshci std", UFSHCI_BASE, 0x40);
+	plog_regs("ufshci mtk 0x140", UFSHCI_BASE + 0x140, 0x8);
+	plog_regs("ufshci mtk 0x2100", UFSHCI_BASE + 0x2100, 0x4);
+	plog_regs("ufshci mtk 0x2200", UFSHCI_BASE + 0x2200, 0x34);
+}
+
 void shim_main(uint64_t dtb)
 {
 	plog_init();
 	plog_str("x676c shim: xnu loader\n");
 	log_cpu(dtb);
+	log_ufs();
 	plog_hex("pump psci", (uint64_t)pump_start(PUMP_LIFETIME_S));
 	splash_draw((volatile uint32_t *)FB_BASE, FB_STRIDE / 4, FB_W, FB_H);
 	plog_str("splash drawn\n");
