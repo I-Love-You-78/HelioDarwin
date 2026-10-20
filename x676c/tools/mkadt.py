@@ -33,6 +33,12 @@ GICR, GICR_SIZE = 0x0c040000, 0x200000
 TIMEBASE = 13000000
 VTIMER_INTID = 16 + 11
 
+# UFS host (ufshci@11270000, mediatek,mt8183-ufshci), SPI 137. Resets live in
+# infracfg_ao 0x10001000 (ti,syscon-reset): hci 0x130/0x134 bit 15, unipro
+# 0x140/0x144 bit 7, crypto 0x150/0x154 bit 21 (set/clear registers).
+UFS, UFS_SIZE, UFS_SPI = 0x11270000, 0x2300, 137
+INFRACFG_AO = 0x10001000
+
 # Visible top layer LK leaves on the command-mode panel (OVL0 L1); the shim's
 # display pump on CPU 0x700 pushes it to the glass.
 FB, FB_SIZE = 0xfeabe000, 0xa00000
@@ -155,6 +161,17 @@ def build(seed=None, d22ap=D22AP_ADT):
         ('stride', u32(FB_STRIDE)),
     ])
 
+    # bsd/dev/ufs (patch 0141): absolute physical reg, like sweet-ufs
+    ufs = node('x676c-ufs', [
+        ph(),
+        ('compatible', cstr('mediatek,mt8183-ufshci')),
+        ('reg', u64(UFS, UFS_SIZE)),
+        ('interrupt', u32(32 + UFS_SPI)),
+        ('reset-base', u64(INFRACFG_AO)),
+        # (assert offset, deassert offset, bit) for hci, unipro, crypto
+        ('resets', u32(0x130, 0x134, 15, 0x140, 0x144, 7, 0x150, 0x154, 21)),
+    ])
+
     defaults = node('defaults', [ph(), ('no-effaceable-storage', u32(1))])
     buttons = node('buttons', [
         ph(),
@@ -178,7 +195,7 @@ def build(seed=None, d22ap=D22AP_ADT):
         ('manufacturer', cstr('Apple Inc.')),
         ('#address-cells', u32(2)),
         ('#size-cells', u32(2)),
-    ], [chosen, defaults, cpus, arm_io, fbcon, buttons] + product)
+    ], [chosen, defaults, cpus, arm_io, fbcon, ufs, buttons] + product)
 
 
 if __name__ == '__main__':
