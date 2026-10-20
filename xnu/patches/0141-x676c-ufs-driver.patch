@@ -14,16 +14,17 @@ index 21cdb5c..c340a71 100644
  bsd/dev/sweet_touch.c			standard
 diff --git a/bsd/dev/ufs/ufs_disk.c b/bsd/dev/ufs/ufs_disk.c
 new file mode 100644
-index 0000000..865e08d
+index 0000000..4ca6273
 --- /dev/null
 +++ b/bsd/dev/ufs/ufs_disk.c
-@@ -0,0 +1,654 @@
+@@ -0,0 +1,707 @@
 +/*
-+ * UFS LUN 0 as BSD disks: one block device /dev/disk0sN and one character
-+ * device /dev/rdisk0sN per GPT partition (N = GPT entry index + 1).
++ * The UFS user LU as BSD disks: one block device /dev/disk0sN and one
++ * character device /dev/rdisk0sN per GPT partition (N = GPT entry index + 1).
 + *
-+ * The GPT is accepted only when the primary header and its entry array both
-+ * pass their CRC32 checks. Partitions keep their GPT names; the console log
++ * The user LU is found from the unit descriptors (pick_lun). Its GPT is
++ * accepted only when the primary header and its entry array both pass
++ * their CRC32 checks. Partitions keep their GPT names; the console log
 + * lists N -> name. Boot-args:
 + *   rd=ufs            root on the partition named by ufsroot=
 + *   ufsroot=NAME      default "userdata"
@@ -175,6 +176,58 @@ index 0000000..865e08d
 +{
 +	struct ufs_seg seg = { .pa = ud.bounce_pa, .len = count * UFS_BLOCK };
 +	return blocks_io(write, lba, count, &seg, 1);
++}
++
++/*
++ * The user LU: enabled, not a boot LU, largest. On the X676C, LUs 0 and 1
++ * are the 4 MiB boot LUs (preloader) and LU 2 holds the GPT.
++ * Unit descriptor (JESD220): bLUEnable 0x03, bBootLunID 0x04,
++ * bLogicalBlockSize 0x0a (log2), qLogicalBlockCount 0x0b (BE).
++ */
++#define DEVDESC_NUMBER_LU       0x06
++#define UNITDESC_LU_ENABLE      0x03
++#define UNITDESC_BOOT_LUN_ID    0x04
++#define UNITDESC_BLOCK_SIZE     0x0a
++#define UNITDESC_BLOCK_COUNT    0x0b
++
++static int
++pick_lun(void)
++{
++	uint8_t desc[255];
++	uint64_t best_blocks = 0;
++	int error, best = -1;
++
++	bzero(desc, sizeof(desc));
++	if ((error = ufs_read_desc(&ud.hba, DESC_DEVICE, 0, desc, sizeof(desc)))) {
++		return error;
++	}
++	unsigned nlu = desc[DEVDESC_NUMBER_LU];
++	for (unsigned lun = 0; lun < 8; lun++) {
++		bzero(desc, sizeof(desc));
++		if (ufs_read_desc(&ud.hba, DESC_UNIT, (uint8_t)lun, desc, sizeof(desc))) {
++			continue;
++		}
++		uint64_t blocks = rd_be(desc + UNITDESC_BLOCK_COUNT, 8);
++		unsigned shift = desc[UNITDESC_BLOCK_SIZE];
++		bool enabled = desc[UNITDESC_LU_ENABLE] != 0;
++		unsigned boot = desc[UNITDESC_BOOT_LUN_ID];
++		if (!enabled) {
++			continue;
++		}
++		printf("ufs_disk: LU %u: %llu MiB, %u-byte blocks%s\n", lun,
++		    shift < 32 ? (blocks << shift) >> 20 : 0, shift < 32 ? 1u << shift : 0,
++		    boot ? (boot == 1 ? ", boot LU A" : ", boot LU B") : "");
++		if (!boot && blocks > best_blocks) {
++			best_blocks = blocks;
++			best = (int)lun;
++		}
++	}
++	if (best < 0) {
++		printf("ufs_disk: no user LU among %u\n", nlu);
++		return ENXIO;
++	}
++	ud.lun = (uint8_t)best;
++	return 0;
 +}
 +
 +/* ---- GPT ---- */
@@ -603,8 +656,8 @@ index 0000000..865e08d
 +		printf("ufs_disk: host bring-up failed: %d\n", error);
 +		return error;
 +	}
-+	ud.lun = 0;
-+	if ((error = lun_ready()) || (error = ufs_disk_capacity()) || (error = gpt_load())) {
++	if ((error = pick_lun()) || (error = lun_ready()) || (error = ufs_disk_capacity()) ||
++	    (error = gpt_load())) {
 +		return error;
 +	}
 +
@@ -812,10 +865,10 @@ index 0000000..369ec68
 +#endif /* ARM64_BOARD_CONFIG_SWEET */
 diff --git a/bsd/dev/ufs/ufshci.c b/bsd/dev/ufs/ufshci.c
 new file mode 100644
-index 0000000..cff6f19
+index 0000000..7edb6e8
 --- /dev/null
 +++ b/bsd/dev/ufs/ufshci.c
-@@ -0,0 +1,687 @@
+@@ -0,0 +1,688 @@
 +/*
 + * JEDEC UFSHCI core (see ufshci.h for the layering).
 + *
@@ -1224,7 +1277,8 @@ index 0000000..cff6f19
 +		return error;
 +	}
 +	if ((resp[0] & 0x3f) != UPIU_RESPONSE || resp[6]) {
-+		printf("ufshci: SCSI 0x%02x: UPIU 0x%x response 0x%x\n", x->cdb[0], resp[0], resp[6]);
++		printf("ufshci: SCSI 0x%02x LUN %u: UPIU 0x%x flags 0x%x lun %u response 0x%x status 0x%x\n",
++		    x->cdb[0], x->lun, resp[0], resp[1], resp[2], resp[6], resp[7]);
 +		return EIO;
 +	}
 +	x->scsi_status = resp[7];
