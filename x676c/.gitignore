@@ -1,0 +1,5 @@
+# build output and device dumps (partition backups are personal data)
+out/
+backup/
+*.img
+*.bin
