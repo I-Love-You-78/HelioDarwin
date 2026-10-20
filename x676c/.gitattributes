@@ -1,0 +1,3 @@
+# Scripts run in Linux (WSL) and on the phone: keep LF on Windows checkouts.
+*.sh text eol=lf
+*.py text eol=lf
