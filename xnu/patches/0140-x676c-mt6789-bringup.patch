@@ -29,23 +29,46 @@ index 824c022..063789d 100644
  	if (fReal) {
 diff --git a/iokit/Kernel/arm/SweetBoard.h b/iokit/Kernel/arm/SweetBoard.h
 new file mode 100644
-index 0000000..da4ea7a
+index 0000000..f24283d
 --- /dev/null
 +++ b/iokit/Kernel/arm/SweetBoard.h
-@@ -0,0 +1,28 @@
+@@ -0,0 +1,55 @@
 +/*
 + * Which board this SWEET kernel runs on. One kernel serves the Qualcomm
 + * boards (sweet, topaz) and the Infinix X676C (MediaTek MT6789). Drivers
 + * that poke Qualcomm MMIO at fixed physical addresses (MDP/DSI, cpufreq-hw,
 + * GENI I2C, the modem) must stay off on the X676C: those addresses belong
 + * to unrelated MediaTek blocks there. The ADT root compatible decides
-+ * (x676c/tools/mkadt.py puts 'infinix,x676c' in it).
++ * (x676c/tools/mkadt.py puts 'infinix,x676c' in it); it is read straight
++ * from the flattened ADT, like bsd/dev/sweet_ufs.c does, so it works before
++ * and independently of the IORegistry device-tree plane.
 + */
 +#ifndef _IOKIT_ARM_SWEETBOARD_H
 +#define _IOKIT_ARM_SWEETBOARD_H
 +
-+#include <IOKit/IODeviceTreeSupport.h>
-+#include <IOKit/IORegistryEntry.h>
++#include <pexpert/device_tree.h>
++
++/* NUL-separated string list `list` of `size` bytes contains `want`. */
++static inline bool
++sweet_strlist_has(const char *list, unsigned int size, const char *want)
++{
++	unsigned int i = 0;
++
++	while (i < size) {
++		unsigned int j = 0;
++		while (i + j < size && want[j] != '\0' && list[i + j] == want[j]) {
++			j++;
++		}
++		if (want[j] == '\0' && (i + j == size || list[i + j] == '\0')) {
++			return true;
++		}
++		while (i < size && list[i] != '\0') {
++			i++;
++		}
++		i++;
++	}
++	return false;
++}
 +
 +static inline bool
 +sweet_board_x676c(void)
@@ -53,9 +76,13 @@ index 0000000..da4ea7a
 +	static int cached = -1;
 +
 +	if (cached < 0) {
-+		IORegistryEntry *root = IORegistryEntry::fromPath("/", gIODTPlane);
-+		cached = root != NULL && IODTMatchNubWithKeys(root, "infinix,x676c");
-+		OSSafeReleaseNULL(root);
++		DTEntry root;
++		void const *prop;
++		unsigned int size;
++
++		cached = SecureDTLookupEntry(NULL, "/", &root) == kSuccess &&
++		    SecureDTGetProperty(root, "compatible", &prop, &size) == kSuccess &&
++		    sweet_strlist_has((const char *)prop, size, "infinix,x676c");
 +	}
 +	return cached == 1;
 +}
