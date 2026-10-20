@@ -674,10 +674,10 @@ index 0000000..865e08d
 +#endif /* ARM64_BOARD_CONFIG_SWEET */
 diff --git a/bsd/dev/ufs/ufs_mtk.c b/bsd/dev/ufs/ufs_mtk.c
 new file mode 100644
-index 0000000..32859ff
+index 0000000..369ec68
 --- /dev/null
 +++ b/bsd/dev/ufs/ufs_mtk.c
-@@ -0,0 +1,113 @@
+@@ -0,0 +1,132 @@
 +/*
 + * MediaTek glue for the UFSHCI core ("mediatek,mt8183-ufshci", MT6789).
 + *
@@ -783,20 +783,39 @@ index 0000000..32859ff
 +	return ufs_dme_set(hba, VS_SAVEPOWERCONTROL, v & ~VS_SAVEPOWER_DEEP_STALL);
 +}
 +
++/* Debug probe: DEBUG_SEL 0x20 makes PROBE[31:28] the UniPro link state. */
++#define MTK_REG_DEBUG_SEL               0x22c0
++#define MTK_REG_PROBE                   0x22c8
++#define MTK_DEBUG_SEL_LINK              0x20
++
++static void
++mtk_dump(struct ufs_hba *hba)
++{
++	static const char *const states[] = {
++		"disabled", "down", "up", "hibern8", "lost", "cfg",
++	};
++	ufs_wr(hba, MTK_REG_DEBUG_SEL, MTK_DEBUG_SEL_LINK);
++	uint32_t probe = ufs_rd(hba, MTK_REG_PROBE), link = probe >> 28;
++	printf("ufs_mtk: link %s (probe 0x%x), REFCLK_CTRL 0x%x\n",
++	    link < sizeof(states) / sizeof(states[0]) ? states[link] : "?", probe,
++	    ufs_rd(hba, MTK_REG_REFCLK_CTRL));
++}
++
 +const struct ufs_platform ufs_mtk_platform = {
 +	.name         = "MediaTek",
 +	.ref_clk      = mtk_ref_clk,
 +	.device_reset = mtk_device_reset,
 +	.pre_link     = mtk_pre_link,
 +	.post_link    = NULL,
++	.dump         = mtk_dump,
 +};
 +#endif /* ARM64_BOARD_CONFIG_SWEET */
 diff --git a/bsd/dev/ufs/ufshci.c b/bsd/dev/ufs/ufshci.c
 new file mode 100644
-index 0000000..5e14707
+index 0000000..cff6f19
 --- /dev/null
 +++ b/bsd/dev/ufs/ufshci.c
-@@ -0,0 +1,659 @@
+@@ -0,0 +1,687 @@
 +/*
 + * JEDEC UFSHCI core (see ufshci.h for the layering).
 + *
@@ -888,6 +907,21 @@ index 0000000..5e14707
 +		delay(10);
 +	}
 +	return 0;
++}
++
++/* Host, UIC error and vendor state, for every failure path. */
++static void
++ufs_dump_state(struct ufs_hba *hba, const char *why)
++{
++	printf("ufshci: %s: HCE 0x%x HCS 0x%x IS 0x%x DBR 0x%x RSR 0x%x\n", why,
++	    ufs_rd(hba, UFS_REG_HCE), ufs_rd(hba, UFS_REG_HCS), ufs_rd(hba, UFS_REG_IS),
++	    ufs_rd(hba, UFS_REG_UTRLDBR), ufs_rd(hba, UFS_REG_UTRLRSR));
++	printf("ufshci: UIC errors PA 0x%x DL 0x%x N 0x%x T 0x%x DME 0x%x\n",
++	    ufs_rd(hba, UFS_REG_UECPA), ufs_rd(hba, UFS_REG_UECDL), ufs_rd(hba, UFS_REG_UECN),
++	    ufs_rd(hba, UFS_REG_UECT), ufs_rd(hba, UFS_REG_UECDME));
++	if (hba->plat->dump) {
++		hba->plat->dump(hba);
++	}
 +}
 +
 +/* ---- UIC (DME) commands ---- */
@@ -1430,17 +1464,30 @@ index 0000000..5e14707
 +
 +	uint32_t force_reset = 0;
 +	PE_parse_boot_argn("ufsreset", &force_reset, sizeof(force_reset));
++	ufs_dump_state(hba, "as found");
 +	lck_mtx_lock(&hba->lock);
 +	error = force_reset ? ENXIO : ufs_adopt(hba);
++	lck_mtx_unlock(&hba->lock);
++	/*
++	 * Registers can look ready while the link is not (the bootloader may
++	 * leave it in Hibern8 or power the M-PHY down): the adopted link must
++	 * carry one NOP OUT, else start over with the full sequence.
++	 */
++	if (!error && (error = ufs_nop(hba))) {
++		ufs_dump_state(hba, "adopted link does not carry a NOP");
++	}
 +	hba->adopted = !error;
 +	if (error) {
++		lck_mtx_lock(&hba->lock);
 +		error = ufs_full_init(hba);
-+	}
-+	lck_mtx_unlock(&hba->lock);
-+	if (error) {
-+		return error;
++		lck_mtx_unlock(&hba->lock);
++		if (error) {
++			ufs_dump_state(hba, "full init failed");
++			return error;
++		}
 +	}
 +	if ((error = ufs_device_ready(hba, !hba->adopted))) {
++		ufs_dump_state(hba, "device not ready");
 +		return error;
 +	}
 +	if (!hba->adopted) {
@@ -1458,10 +1505,10 @@ index 0000000..5e14707
 +#endif /* ARM64_BOARD_CONFIG_SWEET */
 diff --git a/bsd/dev/ufs/ufshci.h b/bsd/dev/ufs/ufshci.h
 new file mode 100644
-index 0000000..a2d3fed
+index 0000000..b09c97e
 --- /dev/null
 +++ b/bsd/dev/ufs/ufshci.h
-@@ -0,0 +1,201 @@
+@@ -0,0 +1,202 @@
 +/*
 + * UFS host controller driver for the SWEET machine config, written for the
 + * Infinix X676C (MediaTek MT6789, "mediatek,mt8183-ufshci").
@@ -1608,6 +1655,7 @@ index 0000000..a2d3fed
 +	int (*device_reset)(struct ufs_hba *hba);
 +	int (*pre_link)(struct ufs_hba *hba);
 +	int (*post_link)(struct ufs_hba *hba);
++	void (*dump)(struct ufs_hba *hba);      /* vendor state for diagnostics */
 +};
 +
 +struct ufs_hba {
