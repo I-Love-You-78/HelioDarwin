@@ -6,7 +6,9 @@
  *   2. start the display pump on the second A76 (display.c): it pushes
  *      command-mode frames and kicks the MTK watchdog for xnu, then resets
  *      the board after PUMP_LIFETIME_S so a hung boot falls back to Android
- *   3. hand over to xnu (loader.c); on error paint RED and reset
+ *   3. draw the boot splash (splash.c) on the visible layer, the way the
+ *      xnu console expects to find it: black with the apple in the middle
+ *   4. hand over to xnu (loader.c); on error paint RED and reset
  *
  * Any CPU exception logs ESR/ELR/FAR and resets.
  */
@@ -15,6 +17,7 @@
 #include "hw.h"
 #include "loader.h"
 #include "plog.h"
+#include "splash.h"
 
 #define PUMP_LIFETIME_S		120
 #define ERROR_HOLD_MS		5000
@@ -39,6 +42,8 @@ void shim_main(uint64_t dtb)
 	plog_str("x676c shim: xnu loader\n");
 	log_cpu(dtb);
 	plog_hex("pump psci", (uint64_t)pump_start(PUMP_LIFETIME_S));
+	splash_draw((volatile uint32_t *)FB_BASE, FB_STRIDE / 4, FB_W, FB_H);
+	plog_str("splash drawn\n");
 
 	const char *why = loader_boot(dtb);
 

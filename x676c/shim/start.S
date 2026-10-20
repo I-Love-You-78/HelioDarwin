@@ -21,6 +21,11 @@ _head:
 	.globl _start
 _start:
 	msr	daifset, #0xf
+	/* I-cache works with the MMU off; data stays Device-uncached */
+	mrs	x1, sctlr_el1
+	orr	x1, x1, #(1 << 12)
+	msr	sctlr_el1, x1
+	isb
 	msr	spsel, #1
 	adr	x1, _stack_top
 	mov	sp, x1

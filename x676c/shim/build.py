@@ -24,7 +24,7 @@ CFLAGS = [
     "-Wall", "-Wextra",
 ]
 SOURCES = ["start.S", "main.c", "plog.c", "hw.c", "display.c", "loader.c",
-           "fdt.c"]
+           "fdt.c", "splash.c"]
 C_OBJECTS = [os.path.splitext(s)[0] + ".o" for s in SOURCES if s.endswith(".c")]
 
 PAGE = 4096
