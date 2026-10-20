@@ -21,6 +21,14 @@ SM6225) to the Infinix X676C: MediaTek Helio G99 (MT6789), 6x Cortex-A55 +
   expert, AppleKeyStore, HID, CPU0 + GIC SGI), BSD (AMFI, sandbox, HFS,
   networking) and ends in `Waiting on ... IOMedia ... Apple_HFS`.
 
+- **Milestone 4 (2026-10-21): xnu reads the UFS.** Own driver
+  (`xnu/patches/0141-x676c-ufs-driver.patch`, `bsd/dev/ufs/`): full
+  host init (the link LK leaves fails the first NOP), HS-G3 x2 rate B,
+  user LU found from the unit descriptors (LU 2; LU 0/1 are 4 MiB boot
+  LUs), GPT with 64 partitions verified by CRC, `/dev/disk0sN` numbered
+  like Android's `sdcN` (userdata = disk0s63). With `rd=ufs
+  ufsroot=userdata` xnu opens disk0s63 and reads its volume header.
+
 ## UFS host as LK leaves it
 
 Dumped by the shim before entering xnu: CAP 0x3587071f (32 transfer slots,
