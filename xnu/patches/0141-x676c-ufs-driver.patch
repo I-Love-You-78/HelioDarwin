@@ -865,10 +865,10 @@ index 0000000..369ec68
 +#endif /* ARM64_BOARD_CONFIG_SWEET */
 diff --git a/bsd/dev/ufs/ufshci.c b/bsd/dev/ufs/ufshci.c
 new file mode 100644
-index 0000000..7edb6e8
+index 0000000..4092467
 --- /dev/null
 +++ b/bsd/dev/ufs/ufshci.c
-@@ -0,0 +1,688 @@
+@@ -0,0 +1,697 @@
 +/*
 + * JEDEC UFSHCI core (see ufshci.h for the layering).
 + *
@@ -1276,11 +1276,16 @@ index 0000000..7edb6e8
 +	if (error) {
 +		return error;
 +	}
-+	if ((resp[0] & 0x3f) != UPIU_RESPONSE || resp[6]) {
-+		printf("ufshci: SCSI 0x%02x LUN %u: UPIU 0x%x flags 0x%x lun %u response 0x%x status 0x%x\n",
-+		    x->cdb[0], x->lun, resp[0], resp[1], resp[2], resp[6], resp[7]);
++	if ((resp[0] & 0x3f) != UPIU_RESPONSE) {
++		printf("ufshci: SCSI 0x%02x LUN %u: UPIU 0x%x flags 0x%x response 0x%x status 0x%x\n",
++		    x->cdb[0], x->lun, resp[0], resp[1], resp[6], resp[7]);
 +		return EIO;
 +	}
++	/*
++	 * The SCSI status decides, not the UPIU Response field: devices set
++	 * Response to "target failure" along with CHECK CONDITION, e.g. for the
++	 * UNIT ATTENTION every LU reports after a device reset.
++	 */
 +	x->scsi_status = resp[7];
 +	if (x->scsi_status == 0) {
 +		return 0;
@@ -1290,6 +1295,10 @@ index 0000000..7edb6e8
 +		x->sense_key = resp[34 + 2] & 0x0f;
 +		x->asc = resp[34 + 12];
 +		x->ascq = resp[34 + 13];
++	}
++	if (x->sense_key != 0x6) {      /* UNIT ATTENTION is expected; retried by callers */
++		printf("ufshci: SCSI 0x%02x LUN %u: status 0x%x response 0x%x sense %x/%02x/%02x\n",
++		    x->cdb[0], x->lun, x->scsi_status, resp[6], x->sense_key, x->asc, x->ascq);
 +	}
 +	return EIO;
 +}
