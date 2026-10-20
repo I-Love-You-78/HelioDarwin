@@ -9,6 +9,32 @@ SM6225) to the Infinix X676C: MediaTek Helio G99 (MT6789), 6x Cortex-A55 +
 - **Milestone 1 (2026-10-21): own code runs and paints the screen.**
   `shim/` boots in place of the kernel, logs to pstore and pushes
   red/green/blue frames to the command-mode panel.
+- **Milestone 2 (2026-10-21): xnu loader verified on hardware** with a
+  stand-in kernel (`tools/stub`): payload found in LK's initrd, segments
+  placed at 0x140000000+, ADT + boot_args (rev 2) handed over, entry
+  reached with x0 = boot_args. Display pump runs on CPU 0x700.
+
+## xnu boot flow
+
+```
+python tools/mkadt.py shim/out/x676c.adt [--d22ap research/d22ap.adt]
+python tools/mkpayload.py KERNEL shim/out/x676c.adt shim/out/payload.bin --cmdline "..."
+python shim/build.py shim/out/payload.bin      # payload rides as the boot.img ramdisk
+```
+
+- Kernel RAM: **0x140000000 + 0xffff0000** (rank 1, between the dramc
+  training pages 0x13ffff000 / 0x23ffff000; every other carve-out is
+  below 4 GiB). Same values in `mkadt.py` and `shim/loader.c`.
+- GICv3: GICD 0x0c000000, GICR 0x0c040000; virtual timer PPI 11 = INTID 27;
+  CNTFRQ 13 MHz; PSCI 1.0 over SMC.
+- CPUs in the ADT: the six A55 (MPIDR 0x000-0x500). 0x600 (A76) is held
+  back until the AMP topology is set up; **0x700 (A76) runs the display
+  pump** and must never be given to xnu.
+- Display pump (`shim/display.c`): pushes a frame every 33 ms and kicks
+  the MTK watchdog (xnu does not know it), then resets after 120 s so a
+  hung boot falls back to Android.
+- `tools/stub`: kernel-shaped Mach-O that logs the boot_args/ADT it got
+  to pstore and resets. Use it to test loader changes without a kernel.
 
 ## Boot path facts
 

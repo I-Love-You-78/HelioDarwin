@@ -36,6 +36,20 @@ _start:
 3:	wfe
 	b	3b
 
+/* PSCI CPU_ON target (display pump core). MMU off, EL1, own stack. */
+	.globl	secondary_entry
+secondary_entry:
+	msr	daifset, #0xf
+	msr	spsel, #1
+	adr	x1, _pump_stack_top
+	mov	sp, x1
+	adr	x2, vectors
+	msr	vbar_el1, x2
+	isb
+	bl	pump_main
+5:	wfe
+	b	5b
+
 /* Any exception: fresh stack, magenta screen, reboot (shim_exception). */
 	.balign	0x800
 vectors:

@@ -15,6 +15,8 @@ SECTIONS
 		. = ALIGN(16);
 		. += 0x4000;
 		_stack_top = .;
+		. += 0x2000;
+		_pump_stack_top = .;
 		QUAD(0)
 	}
 	. = ALIGN(4096);

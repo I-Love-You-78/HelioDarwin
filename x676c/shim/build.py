@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Build the MT6789 shim into out/shim-boot.img (boot image header v4).
 
+usage: build.py [PAYLOAD]   PAYLOAD (tools/mkpayload.py) becomes the ramdisk
+
 Toolchain: Zig from PyPI (`pip install ziglang`), used as clang + lld.
 The DTB and vendor ramdisk come from vendor_boot of the active slot, so the
 boot image only carries our Image and an empty ramdisk.
@@ -21,10 +23,12 @@ CFLAGS = [
     "-mstrict-align", "-fno-stack-protector", "-fno-sanitize=all",
     "-Wall", "-Wextra",
 ]
-SOURCES = ["start.S", "main.c", "plog.c"]
-C_OBJECTS = ["main.o", "plog.o"]
+SOURCES = ["start.S", "main.c", "plog.c", "hw.c", "display.c", "loader.c",
+           "fdt.c"]
+C_OBJECTS = [os.path.splitext(s)[0] + ".o" for s in SOURCES if s.endswith(".c")]
 
 PAGE = 4096
+BOOT_PARTITION_SIZE = 0x4000000     # boot_a / boot_b, from fastboot getvar
 R_AARCH64_ABS64 = 257
 SHT_RELA = 4
 SHF_ALLOC = 0x2
@@ -128,8 +132,12 @@ def main():
     open(os.path.join(HERE, image), "wb").write(data)
 
     # The X676C LK always gunzips the kernel (stock boot_a carries Image.gz).
-    boot = boot_img_v4(gzip.compress(data, 9, mtime=0), empty_cpio_gz(),
-                       "console=null")
+    # LK appends our ramdisk to the vendor one in /chosen linux,initrd-*:
+    # that is where loader.c looks for the xnu payload.
+    ramdisk = open(sys.argv[1], "rb").read() if len(sys.argv) > 1 else empty_cpio_gz()
+    boot = boot_img_v4(gzip.compress(data, 9, mtime=0), ramdisk, "console=null")
+    if len(boot) > BOOT_PARTITION_SIZE:
+        sys.exit(f"error: boot image {len(boot)} bytes > boot_a")
     out = os.path.join(OUT, "shim-boot.img")
     open(out, "wb").write(boot)
     print(f"Image {len(data)} bytes, shim-boot.img {len(boot)} bytes")
