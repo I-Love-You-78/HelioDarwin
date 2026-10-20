@@ -25,6 +25,8 @@ CFLAGS = [
 ]
 SOURCES = ["start.S", "main.c", "plog.c", "hw.c", "display.c", "loader.c",
            "fdt.c", "splash.c"]
+# Optional splash image (Apple artwork: kept in the git-ignored research/).
+LOGO_SRC = os.path.join(HERE, "..", "research", "apple.png")
 C_OBJECTS = [os.path.splitext(s)[0] + ".o" for s in SOURCES if s.endswith(".c")]
 
 PAGE = 4096
@@ -103,10 +105,14 @@ def boot_img_v4(kernel, ramdisk, cmdline):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
+    cflags = list(CFLAGS)
+    if os.path.exists(LOGO_SRC):
+        run([sys.executable, "mklogo.py", LOGO_SRC, os.path.join("out", "logo.h")])
+        cflags += ["-DHAVE_LOGO_IMAGE", "-Iout"]
     objects = []
     for src in SOURCES:
         obj = os.path.join("out", os.path.splitext(src)[0] + ".o")
-        run(ZIG + ["cc"] + CFLAGS + ["-c", src, "-o", obj])
+        run(ZIG + ["cc"] + cflags + ["-c", src, "-o", obj])
         objects.append(obj)
 
     # The Image runs wherever LK puts it with no relocation pass: only the

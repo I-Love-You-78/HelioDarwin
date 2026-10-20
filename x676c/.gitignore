@@ -1,5 +1,7 @@
 # build output and device dumps (partition backups are personal data)
 out/
 backup/
+# local reference material and Apple artifacts (logo, device trees, IPSW parts)
+research/
 *.img
 *.bin

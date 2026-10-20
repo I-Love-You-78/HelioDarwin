@@ -1,5 +1,7 @@
 /*
- * Procedural apple, antialiased. The body outline is a closed Catmull-Rom
+ * Boot splash. With a logo image at build time (mklogo.py -> out/logo.h,
+ * HAVE_LOGO_IMAGE) the image is drawn as is; otherwise a procedural apple,
+ * antialiased. The body outline is a closed Catmull-Rom
  * spline through hand-placed control points (right half below, mirrored for
  * the left; the stem notch is part of it), flattened into a polygon; the
  * bite is a circle cut out of it, the leaf a lens tilted by 40 degrees.
@@ -129,7 +131,41 @@ static int32_t to_fix(int64_t sub_px)
 	return (int32_t)((2 * sub_px + 1) * 100 * FIX / (2 * LOGO_S * SUB));
 }
 
-void splash_draw(volatile uint32_t *fb, uint32_t stride_px, uint32_t w, uint32_t h)
+#ifdef HAVE_LOGO_IMAGE
+#include "logo.h"	/* mklogo.py: LOGO_W x LOGO_H alpha as (count, value) runs */
+
+/* White over black by the image's alpha, centred where the apple goes. */
+static void draw_image(volatile uint32_t *fb, uint32_t stride_px, uint32_t w, uint32_t h)
+{
+	uint32_t x0 = (w - LOGO_W) / 2, y0 = h * 9 / 20 - LOGO_H / 2;
+	const uint8_t *run = logo_rle;
+	uint32_t left = 0, g = 0;
+
+	for (uint32_t py = 0; py < h; py++) {
+		volatile uint32_t *row = fb + (uint64_t)py * stride_px;
+		int band = py >= y0 && py < y0 + LOGO_H;
+
+		for (uint32_t px = 0; px < w; px++) {
+			uint32_t v = 0;
+
+			if (band && px >= x0 && px < x0 + LOGO_W) {
+				if (!left) {
+					left = run[0];
+					g = run[1];
+					run += 2;
+				}
+				left--;
+				v = g;
+			}
+			row[px] = 0xff000000U | v << 16 | v << 8 | v;
+		}
+	}
+}
+#endif
+
+/* Fallback when the build has no logo image. */
+static void __attribute__((unused))
+draw_procedural(volatile uint32_t *fb, uint32_t stride_px, uint32_t w, uint32_t h)
 {
 	int64_t cx = w / 2, cy = h * 9 / 20;
 	int64_t x_lo = cx - 64 * LOGO_S / 100, x_hi = cx + 64 * LOGO_S / 100;
@@ -166,4 +202,13 @@ void splash_draw(volatile uint32_t *fb, uint32_t stride_px, uint32_t w, uint32_t
 			row[px] = 0xff000000U | g << 16 | g << 8 | g;
 		}
 	}
+}
+
+void splash_draw(volatile uint32_t *fb, uint32_t stride_px, uint32_t w, uint32_t h)
+{
+#ifdef HAVE_LOGO_IMAGE
+	draw_image(fb, stride_px, w, h);
+#else
+	draw_procedural(fb, stride_px, w, h);
+#endif
 }
