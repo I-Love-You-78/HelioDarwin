@@ -11,7 +11,7 @@ param(
     [string]$BootArgs = "debug=0xc serial=3 cpus=6 keepsyms=1 -v -enable_kprintf_spam wdt=-1 wdt_test=no_user_checkin rd=ufs ufsroot=iosroot ufsrw=iosroot unentitled_ios_sim_launch=1 ignition_level=1 launchd_unsecure_cache=1 cs_debug=1 sweet_amfi_debug=1 sweetsample=launchd,dyld,init,SpringBoard,backboardd ufsbeat=64 sweetnull=launchd,dyld,init,backboardd,SpringBoard"
 )
 $ErrorActionPreference = "Stop"
-$repo = "squeeeezy/ios-x676c"
+$repo = "squeeeezy/HelioDarwin"
 $x676c = Split-Path -Parent $PSScriptRoot
 $out = Join-Path $x676c "shim\out"
 $adb = Join-Path $env:LOCALAPPDATA "platform-tools-dl\platform-tools\adb.exe"
