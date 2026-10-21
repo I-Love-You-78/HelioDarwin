@@ -55,6 +55,31 @@ When an iOS framework calls `MTLCreateSystemDefaultDevice()`:
 
 ---
 
+## 5. Graphics Execution Sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor SpringBoard as SpringBoard (CoreAnimation)
+    participant Metal as Metal.framework
+    participant ICD as MaliMetal.bundle (ICD)
+    participant PanVK as Mesa panvk
+    participant Kernel as SweetMaliAccelerator (XNU)
+    participant Hardware as Mali-G57 MC2 Hardware
+
+    SpringBoard->>Metal: MTLCommandBuffer.commit()
+    Metal->>ICD: submitCommandBuffers()
+    ICD->>PanVK: vkQueueSubmit(VkCommandBuffer)
+    PanVK->>Kernel: IOConnectCallMethod(kMaliSubmitJob)
+    Kernel->>Hardware: Trigger GPU Ringbuffer Execution
+    Hardware-->>Kernel: Interrupt: JOB_COMPLETED
+    Kernel-->>PanVK: Signal Fence Completion
+    PanVK-->>ICD: Frame Rendered to IOSurface
+    ICD-->>SpringBoard: Command Buffer Done
+```
+
+---
+
 ## 5. Shader Translation Pipeline (AIR to SPIR-V)
 
 Apple's Metal compiler produces shaders in **Apple Intermediate Representation (AIR)**, which is serialized LLVM 14 bitcode with custom Apple intrinsics (`air.interpolate`, `air.sample_texture`).

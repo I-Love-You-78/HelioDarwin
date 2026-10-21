@@ -38,3 +38,15 @@ In the spirit of Linus Torvalds and classical Unix OS design:
 * **Storage:** 128 GB UFS 2.2 (`0x11270000`)
 * **Display:** 6.7" AMOLED (1080×2400) with ili7835 controller over MIPI DSI
 * **GPU:** ARM Mali-G57 MC2 (Valhall architecture, 2 execution cores, ID `0x9093`)
+
+---
+
+## Credits and Acknowledgments
+
+HelioDarwin stands on the shoulders of giants in the low-level open-source community:
+
+* **[dipa-studio/ios-sweet](https://github.com/dipa-studio/ios-sweet)** — The pioneering project that proved Apple's XNU kernel can boot on modern Android silicon (Qualcomm Snapdragon 730G / Redmi Note 10 Pro).
+* **[MakrSas/ios-topaz](https://github.com/MakrSas/ios-topaz) & [MakrSas/topaz-woa](https://github.com/MakrSas/topaz-woa)** — Groundbreaking hardware reverse engineering, bring-up scripts, and device drivers for the Redmi Note 12 platform.
+* **Apple Open Source** — Apple's release of the Darwin / XNU kernel source code (`xnu-8796`), `IOHIDFamily`, `libpthread`, and Apple Device Tree formats.
+* **Mesa 3D Project & Panfrost / PanVK Contributors** — For pioneering open-source Vulkan support for the ARM Mali Valhall architecture.
+* **Linux MediaTek Kernel Contributors** — Upstream device tree definitions, power domain architecture, and clock distribution documentation.
