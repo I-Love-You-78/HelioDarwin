@@ -24,7 +24,7 @@ We believe in radical engineering honesty. Every status in the table below is ba
 | **CPU & SMP** | 8 cores, 16K pages | **Verified** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | ARMv8.2-A, 16 KB page granules, LSE atomics, secondary cores up via PSCI. |
 | **Storage (UFS)** | UFS 2.2 host | **Verified** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | MTK UFS (`0x11270000`), SCSI command transport, journaled HFS+ read/write. |
 | **Display Scanout**| Native HW scanout | **Verified** | [`boot-0147`](logs/boot-0147-gpu-probe.log) | DSI0 (`0x14013000`) & DISP_MUTEX0 (`0x14001000`) 60 Hz HW scanout to AMOLED. |
-| **Userland Execution**| iOS 16 `launchd` | **Active Blocker** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | `launchd` executed, AMFI verified entitlements, dyld read shared cache from UFS; blocked in `vm_shared_region_start_address()`. |
+| **Userland Execution**| iOS 16 `launchd` | **Active Blocker** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | `launchd` executed, AMFI verified entitlements, `dyld4` read shared cache headers from UFS; blocker is in kernel-side VM allocation/scheduler path during `_kernelrpc_mach_vm_allocate_trap` (`x16 = -10`, size `0x44000`). |
 | **GPU Subsystem** | Mali-G57 MC2 | **Bus Gated (boot-0148)**| [`boot-0148`](logs/boot-0148-gpu-mfg.log) | Issued writes to 4 domains in `mfg_top_config` (`0x13fbf000`); readback `0x0` due to `topckgen` clock gating. |
 | **Metal-to-Vulkan**| Userspace ICD | **Research Proposal**| [MaliMetal](wiki/MaliMetal-Driver.md) | Study applying Darling/Indium AIR→SPIR-V translation to Mesa `panvk`. |
 | **Touchscreen** | AMOLED Touch IC | **Planned** | — | I2C/SPI bus mapping on MT6789. |
@@ -44,7 +44,7 @@ HelioDarwin is developed by **[@squeeeezy](https://github.com/squeeeezy)**. AI a
 
 All milestone achievements are backed by physical hardware logs captured via the SoC's hardware `pstore` RAM console (`0x4811f000`):
 
-* [**`logs/boot-0146-launchd-dyld.log`**](logs/boot-0146-launchd-dyld.log) — **Live iOS 16 Userland Execution**: Contains 59 consecutive SMP sampling traces of `launchd` and `dyld4` executing on physical Infinix hardware. Demonstrates Mach traps (`x16 = -10`), `vm_allocate` heap expansion, and Objective-C class registration.
+* [**`logs/boot-0146-launchd-dyld.log`**](logs/boot-0146-launchd-dyld.log) — **Live iOS 16 Userland Execution**: Contains 59 consecutive SMP sampling traces of `launchd` and `dyld4` executing on physical Infinix hardware. Demonstrates dyld entering Mach Trap #10 (`_kernelrpc_mach_vm_allocate_trap`, `x16 = -10`, size 272 KB, `VM_MEMORY_DYLD`), pinpointing the current blocker to the kernel-side VM allocator / scheduler dispatch path.
 * [**`logs/boot-0147-gpu-probe.log`**](logs/boot-0147-gpu-probe.log) — **Mali-G57 & DSI0 HW Probe**: Verifies MT6789 DSI0 / DISP_MUTEX0 scanout, MTCMOS SCPSYS power probe, and `IOAcceleratorES` registration.
 * [**`logs/boot-0148-gpu-mfg.log`**](logs/boot-0148-gpu-mfg.log) — **MFG_TOP_CONFIG 4-Domain Sequencing Attempt**: Issued register writes to MT6789 MFG_TOP_CONFIG at `0x13fbf000`. Hardware log confirms register readback remains dead (`0x0`) due to `topckgen` (`0x10000000`) bus clock gating. Hardware sequencing logic is implemented directly in the XNU kernel (`SweetFramebuffer.cpp`, patch 0148), while the boot shim handles purely EL1 and GIC hand-off.
 
