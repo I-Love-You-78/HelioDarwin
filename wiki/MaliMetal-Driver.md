@@ -12,35 +12,14 @@ On real Apple devices, Metal speaks directly to Apple's own GPU architecture (Ap
 
 ## 2. Architectural Stack
 
-```text
-+-------------------------------------------------------------------------+
-|                  iOS Compositing (CoreAnimation / UIKit)                |
-+-------------------------------------------------------------------------+
-|                         Apple Metal.framework                           |
-|              (MTLCreateSystemDefaultDevice() / MTLDevice)               |
-+-------------------------------------------------------------------------+
-|                    MaliMetal.bundle (Userspace ICD)                     |
-|                                                                         |
-|   +---------------------------------+---------------------------------+ |
-|   |         Metal API Bridge        |        Shader Translator        | |
-|   |  MTLCommandQueue  -> VkQueue    |   AIR (LLVM Bitcode) / MSL      | |
-|   |  MTLCommandBuffer -> VkCmdBuffer|              │                  | |
-|   |  MTLRenderEncoder -> VkPass/Cmd |              ▼                  | |
-|   |  MTLTexture       -> VkImage    |        SPIR-V Bytecode          | |
-|   |  MTLBuffer        -> VkBuffer   |              │                  | |
-|   +---------------------------------+              ▼                  | |
-|                                             VkShaderModule            | |
-+-------------------------------------------------------------------------+
-|                 Mesa panvk (ARM Mali Valhall Driver)                    |
-|             Translates SPIR-V to native Mali Valhall ISA               |
-+-------------------------------------------------------------------------+
-|                        Darwin Kernel (XNU)                              |
-|           SweetMaliAccelerator / SweetMaliUserClient                    |
-|             (Physical memory allocation, job dispatch)                  |
-+-------------------------------------------------------------------------+
-|                  Hardware: ARM Mali-G57 MC2 (MT6789)                    |
-+-------------------------------------------------------------------------+
-```
+| Layer | Subsystem | Functionality & Role |
+| :--- | :--- | :--- |
+| **Compositing** | `SpringBoard` & `CoreAnimation` | Renders the iOS 16 UI using the Apple Metal pipeline |
+| **Graphics API** | Apple `Metal.framework` | Provides the native `MTLDevice` endpoint for the OS |
+| **Userspace ICD** | `MaliMetal.bundle` (`MaliMetalDevice`) | Translates Metal API calls and AIR/MSL shaders into Vulkan 1.3 |
+| **Vulkan Driver** | Mesa `panvk` | Compiles SPIR-V shaders and emits native Mali Valhall machine code |
+| **Kernel Driver** | `SweetMaliAccelerator` (XNU) | Manages SCPSYS MTCMOS power, physical memory allocations, and job rings |
+| **Hardware** | ARM Mali-G57 MC2 (MT6789) | 2 Valhall cores (`0x9093`) executing GPU command queues |
 
 ---
 
