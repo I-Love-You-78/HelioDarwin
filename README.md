@@ -25,8 +25,8 @@ We believe in radical engineering honesty. Every status in the table below is ba
 | **Storage (UFS)** | UFS 2.2 host | **Verified** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | MTK UFS (`0x11270000`), SCSI command transport, journaled HFS+ read/write. |
 | **Display Scanout**| Native HW scanout | **Verified** | [`boot-0147`](logs/boot-0147-gpu-probe.log) | DSI0 (`0x14013000`) & DISP_MUTEX0 (`0x14001000`) 60 Hz HW scanout to AMOLED. |
 | **Userland Execution**| iOS 16 `launchd` | **Active Blocker** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | `launchd` executed, AMFI verified entitlements, dyld read shared cache from UFS; blocked in `vm_shared_region_start_address()`. |
-| **GPU Subsystem** | Mali-G57 MC2 | **Testing Patch 0148**| [`boot-0147`](logs/boot-0147-gpu-probe.log) | Probe in 0147 failed (`GPU_ID=0x0`); Patch 0148 adds real 4-domain `mfg_top_config` (`0x13fbf000`) power sequencer. |
-| **Metal-to-Vulkan**| Userspace ICD | **Design Proposal**| [MaliMetal](wiki/MaliMetal-Driver.md) | Architectural proposal bridging `Metal.framework` to Mesa `panvk` Vulkan 1.3. |
+| **GPU Subsystem** | Mali-G57 MC2 | **Bus Gated (boot-0148)**| [`boot-0148`](logs/boot-0148-gpu-mfg.log) | Sequenced 4 domains in `mfg_top_config` (`0x13fbf000`); reads `0x0` due to `topckgen` clock gating. |
+| **Metal-to-Vulkan**| Userspace ICD | **Research Proposal**| [MaliMetal](wiki/MaliMetal-Driver.md) | Study applying Darling/Indium AIR→SPIR-V translation to Mesa `panvk`. |
 | **Touchscreen** | AMOLED Touch IC | **Planned** | — | I2C/SPI bus mapping on MT6789. |
 | **Audio & Wireless**| Wi-Fi / BT / Sound | **Roadmap** | — | AudioReach / MT6631 wireless stack. |
 
@@ -46,17 +46,18 @@ All milestone achievements are backed by physical hardware logs captured via the
 
 * [**`logs/boot-0146-launchd-dyld.log`**](logs/boot-0146-launchd-dyld.log) — **Live iOS 16 Userland Execution**: Contains 59 consecutive SMP sampling traces of `launchd` and `dyld4` executing on physical Infinix hardware. Demonstrates Mach traps (`x16 = -10`), `vm_allocate` heap expansion, and Objective-C class registration.
 * [**`logs/boot-0147-gpu-probe.log`**](logs/boot-0147-gpu-probe.log) — **Mali-G57 & DSI0 HW Probe**: Verifies MT6789 DSI0 / DISP_MUTEX0 scanout, MTCMOS SCPSYS power probe, and `IOAcceleratorES` registration.
+* [**`logs/boot-0148-gpu-mfg.log`**](logs/boot-0148-gpu-mfg.log) — **MFG_TOP_CONFIG 4-Domain Sequencing**: Demonstrates live sequencing of the 4 MT6789 MFG power domains at `0x13fbf000`. Hardware log confirms register bus remains clock-gated (`0x0`) by `topckgen` (`0x10000000`).
 
 ---
 
-## Metal-to-Vulkan Architecture (`MaliMetal`) — Design & Roadmap
+## Metal-to-Vulkan Architecture (`MaliMetal`) — Research & Design Notes
 
 > [!NOTE]
-> `MaliMetal` is an architectural design and userspace ICD research implementation for bridging Apple's `Metal.framework` to Mesa's `panvk` Vulkan 1.3 driver. It is under active development and contingent on kernel-level GPU hardware domain bring-up.
+> `MaliMetal` is an architectural design and research proposal adapting the prior art of **[darlinghq/indium](https://github.com/darlinghq/indium)** and **Iridium** (`mtl2spv` AIR-to-SPIR-V translation) to native Darwin/XNU for ARM Mali Valhall GPUs via Mesa's `panvk`. This is a long-term research effort (estimated 6–12 engineering months after kernel GPU bring-up) and is currently in early conceptual stages.
 
 Standard iOS compositing (`CoreAnimation`, `backboardd`, `RenderServer`) strictly requires a Metal-capable hardware device. On non-Apple silicon, this has historically prevented native GUI execution.
 
-HelioDarwin approaches this via a two-tier hardware acceleration stack:
+HelioDarwin explores applying the Darling/Indium translation model within native XNU:
 
 1. **Kernel Driver (`SweetMaliAccelerator` & `SweetMaliUserClient`)**:
    * Sequences MTCMOS power domains in MediaTek SCPSYS (`0x10006000`).
@@ -79,15 +80,16 @@ HelioDarwin approaches this via a two-tier hardware acceleration stack:
 
 ---
 
-## Project Documentation & Wiki
+## Technical Reference & Wiki
 
-Exhaustive low-level documentation written in the OSDev Wiki standard is maintained in the [`wiki/`](wiki/Home.md) directory:
+Detailed hardware documentation and register maps are maintained in the [`wiki/`](wiki/Home.md):
 
-* [**Wiki Home**](wiki/Home.md) — Comprehensive technical reference index.
-* [**Hardware Architecture**](wiki/Hardware-Architecture.md) — MediaTek MT6789 silicon registers, SCPSYS power domains, memory maps.
+* [**Wiki Home**](wiki/Home.md) — Technical reference index.
+* [**Hardware Architecture**](wiki/Hardware-Architecture.md) — MediaTek MT6789 registers, SCPSYS power domains, memory maps.
 * [**Boot & Shim**](wiki/Boot-and-Shim.md) — Little Kernel hand-off, PSCI core boot, 16K translation granule initialization.
 * [**Display Pipeline**](wiki/Display-Pipeline.md) — MTK DSI0 and DISP_MUTEX0 hardware command-mode scanout to AMOLED.
-* [**MaliMetal Driver**](wiki/MaliMetal-Driver.md) — Complete Metal-to-Vulkan architectural specification.
+* [**MaliMetal Driver**](wiki/MaliMetal-Driver.md) — Metal-to-Vulkan architectural design notes.
+* [**Pstore Debugging**](wiki/Pstore-Debugging-on-MediaTek.md) — Zero-serial persistent RAM console debugging on MediaTek.
 * [**Dual-Boot Safety**](wiki/Dual-Boot-Safety.md) — Slot A/B isolation and non-destructive deployment.
 
 ---
@@ -119,6 +121,8 @@ HelioDarwin stands on the shoulders of giants in the low-level open-source commu
 
 * **[dipa-studio/ios-sweet](https://github.com/dipa-studio/ios-sweet)** — The pioneering project that proved Apple's XNU kernel can boot on modern Android silicon (Qualcomm Snapdragon 730G / Redmi Note 10 Pro).
 * **[MakrSas/ios-topaz](https://github.com/MakrSas/ios-topaz) & [MakrSas/topaz-woa](https://github.com/MakrSas/topaz-woa)** — Groundbreaking hardware reverse engineering, bring-up scripts, and device drivers for the Redmi Note 12 platform.
+* **[darlinghq/indium](https://github.com/darlinghq/indium)** & **Iridium** — Pioneering open-source Metal-over-Vulkan implementation and AIR-to-SPIR-V shader translation (`mtl2spv`), establishing the primary blueprint for Metal translation layers.
+* **[darlinghq/darling-metal](https://github.com/darlinghq/darling-metal)** & **[steelbrain/metal2vulkan](https://github.com/steelbrain/metal2vulkan)** — Foundational open-source research and ABI compatibility for Metal emulation on Vulkan.
 * **Apple Open Source** — Apple's release of the Darwin / XNU kernel source code (`xnu-8796`), `IOHIDFamily`, `libpthread`, and Apple Device Tree formats.
 * **Mesa 3D Project & Panfrost / PanVK Contributors** — For pioneering open-source Vulkan support for the ARM Mali Valhall architecture.
 * **Linux MediaTek Kernel Contributors** — Upstream device tree definitions, power domain architecture, and clock distribution documentation.

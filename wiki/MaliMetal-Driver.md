@@ -14,7 +14,21 @@ On genuine Apple hardware, Metal interacts directly with proprietary Apple Silic
 
 ---
 
-## 2. Architectural Stack
+## 2. Prior Art & Lineage in the Darwin Ecosystem
+
+The concept of running Apple's Metal API over Vulkan has an extensive and respected engineering history in the open-source community:
+
+* **[darlinghq/darling#390](https://github.com/darlinghq/darling/issues/390)** (June 2018): First conceptual discussion on implementing Metal API over Vulkan for macOS userland under Linux.
+* **[darlinghq/indium](https://github.com/darlinghq/indium)** & **Iridium** (2020–2023): The foundational open-source implementation of Metal on Vulkan 1.3, including `mtl2spv` (Apple Intermediate Representation / AIR LLVM bitcode to SPIR-V translation).
+* **[darlinghq/darling-metal](https://github.com/darlinghq/darling-metal)**: ABI-compatible implementations of `Metal.framework`, `MetalKit`, and `MetalPerformanceShaders`.
+* **[steelbrain/metal2vulkan](https://github.com/steelbrain/metal2vulkan)** & **Hi-Jiajun/metal-api-emulator**: Modern research in AIR-to-SPIR-V translation pipelines.
+* **Apple Metal Shader Converter** & **MoltenVK**: Upstream tools demonstrating production-grade translation between Apple graphics IR and industry standards (DXIL, Vulkan).
+
+`MaliMetal` adapts these foundational principles specifically to **native ARM Mali Valhall GPUs** driven by Mesa's `panvk`, operating as an Installable Client Driver loaded directly by Apple's stock `Metal.framework` via Darwin's IORegistry.
+
+---
+
+## 3. Architectural Stack
 
 | Layer | Subsystem | Functionality & Role |
 | :--- | :--- | :--- |

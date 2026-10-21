@@ -1,0 +1,643 @@
+x676c shim: xnu loader
+CurrentEL=0x0000000000000001
+load=0x0000000040000000
+dtb=0x0000000047c80000
+cntfrq=0x0000000000c65d40
+mpidr=0x0000000081000000
+midr=0x00000000412fd050
+sctlr_el1=0x0000000030d01800
+id_aa64mmfr0=0x0000000000101122
+-- ufshci std
+11270000: 3587071f 00000000 00000200 00000000
+11270010: 00000000 00000426 00000000 00000000
+11270020: 00000004 00030e75 00000000 00000000
+11270030: 0000010f 00000001 80000010 00000000
+11270040: 00000000 00000000 00000000 00000000
+11270050: 51252c00 00000000 00000000 00000000
+11270060: 00000001 00400000 00000000 00000000
+11270070: 00000000 00000000 00000000 00000000
+11270080: 00000001 00000000 00000000 00000000
+11270090: 00000002 15710000 00000000 00000000
+112700a0: 00000000 00000000 00000000 00000000
+112700b0: 00000000 00000000 00000000 00000000
+112700c0: 000a0a00 00000000 00000000 00000000
+112700d0: 20000000 00000000 00000000 00000000
+112700e0: 00000000 00000000 00000000 00000000
+112700f0: 00000800 00000000 00000000 0000010a
+-- ufshci mtk 0x140
+11270140: 00000100 00000003 00000000 00000000
+11270150: 00000000 00000000 00000000 00000000
+-- ufshci mtk 0x2100
+11272100: 00000000 00000000 00000000 00000000
+-- ufshci mtk 0x2200
+11272200: 00000007 000000cc 00800040 008000c0
+11272210: 00000000 00000000 00000000 00000000
+11272220: 00000000 00000000 00000000 00000000
+11272230: 00000000 00000000 00000000 00000000
+11272240: 20160706 00000000 00000001 00000000
+11272250: 00000000 00000000 00000000 00000000
+11272260: 00000000 00000000 00000000 00000000
+11272270: 00000000 00000000 00000000 00000000
+11272280: 0000d693 001642ee d016d754 d016dbae
+11272290: 0216d691 0216d72f 00000000 00000000
+112722a0: 0216d690 00168a6d 00168f7b 00000000
+112722b0: 00000000 00000000 00000000 00000000
+112722c0: 00000000 00000000 00000000 00000000
+pump psci=0x0000000000000000
+splash drawn
+initrd lo=0x0000000066f00000
+initrd hi=0x000000006991f712
+payload=0x00000000688b1a08
+phys base=0x0000000140000000
+mem size=0x00000000ffff0000
+virt base=0xfffffe0006000000
+entry va=0xfffffe00074b6488
+segments=0x000000000000000a
+boot_args=0x0000000142588000
+top=0x000000014258c000
+jump=0x00000001414b6488
+SWEET EARLY 1: arm_init entered (MMU on)
+SWEET EARLY 2: PE_init_platform done
+SWEET EARLY 3: ml_parse_cpu_topology done
+SWEET EARLY 4: cpu_bootstrap done
+SWEET EARLY 5: kernel_startup_bootstrap done
+SWEET EARLY 6: cpu_init done
+SWEET EARLY 7: entering arm_vm_init
+SWEET EARLY 8: leaving bootstrap TTBR0
+SWEET EARLY 9: kernel framebuffer VA live
+SWEET EARLY 10: TTBR0 off; TLB flushed
+SWEET EARLY 11: physmap table pointers rebound
+SWEET EARLY 12: calling pmap_bootstrap
+SWEET EARLY 13: pmap_bootstrap done
+SWEET EARLY 14: early I/O page tables ready
+SWEET EARLY 15: arm_vm_init returned
+SWEET EARLY 16: calling serial_init
+SWEET EARLY 17: fbcon config read; mapping
+SWEET EARLY 18: fbcon mapping returned
+SWEET EARLY 19: serial_init returned
+SWEET EARLY 20: kprintf startup complete
+Darwin Kernel Version 22.6.0: Mon Aug 14 05:06:07 UTC 2023; runner:xnu-8796.141.3
+pmap_startup() init/release time: 22057 microsec
+pmap_startup() delayed init/release of 0 pages
+vm_page_bootstrap: 258704 free pages, 3436 wired pages, (up to 0 of which are delayed free)
+VM boostrap: 97 maps, 204 entries and 512 holes available
+Maximum number of VM swap files: 100
+mb                      : 0xfffffe10000cc000 - 0xfffffe10040cc000 (64M)
+zones                   : 0xfffffe10040cc000 - 0xfffffe30040cc000 (128G)
+io_submap               : 0xfffffe30040cc000 - 0xfffffe30048cc000 (8M)
+ipc_kernel_map          : 0xfffffe30048cc000 - 0xfffffe30088cc000 (64M)
+zone_meta               : 0xfffffe30088cc000 - 0xfffffe30114d0000 (140M)
+kmem_ptr_range_meta     : 0xfffffe30114d0000 - 0xfffffe3011c4c000 (7M)
+kmem_data_range         : 0xfffffe3011c4c000 - 0xfffffe6b6ffd4000 (237G)
+gIOKitPageableFixed2    : 0xfffffe6b6ffd4000 - 0xfffffe6b75fd4000 (96M)
+bsd_pageable            : 0xfffffe6b75fd4000 - 0xfffffe6b7a2dc000 (67M)
+gIOKitPageableFixed0    : 0xfffffe6b7a2dc000 - 0xfffffe6b802dc000 (96M)
+ipc_kernel_copy_map     : 0xfffffe6b802dc000 - 0xfffffe6b80adc000 (8M)
+bufferhdr               : 0xfffffe6b80adc000 - 0xfffffe6b80da4000 (2848K)
+gIOKitPageableFixed3    : 0xfffffe6b80da4000 - 0xfffffe6b86da4000 (96M)
+kmem_sprayqtn_range     : 0xfffffe6b86da4000 - 0xfffffe6c05ac4000 (2029M)
+compressor              : 0xfffffe6c05ac4000 - 0xfffffe7c0603c000 (64G)
+kmem_ptr_range          : 0xfffffe7c0603c000 - 0xfffffe8ff9dfc000 (79G)
+gIOKitPageableFixed1    : 0xfffffe8ff9dfc000 - 0xfffffe8fffdfc000 (96M)
+kmem_large_ranges[1]    : 0 - 0 (0B)
+kmem_large_ranges[2]    : 0 - 0 (0B)
+kmem_large_ranges[3]    : 0 - 0 (0B)
+kmem_large_ranges[4]    : 0xfffffe6b96b48000 - 0xfffffe6c05ac4000 (1775M)
+kmem_large_ranges[5]    : 0xfffffe377d8bd000 - 0xfffffe6b6ffd4000 (207G)
+"vm_compressor_mode" is 4
+zone_init: pgzalloc  0xfffffe10040cc000:0xfffffe1006080000 (31M) [1014 slots]
+zone_init: map VM    0xfffffe1006080000:0xfffffe14d2888000 (19G)
+zone_init: map RO    0xfffffe14d2888000:0xfffffe166c08c000 (6G)
+zone_init: map GEN0  0xfffffe166c08c000:0xfffffe1b38898000 (19G)
+zone_init: map GEN1  0xfffffe1b38898000:0xfffffe20050a4000 (19G)
+zone_init: map GEN2  0xfffffe20050a4000:0xfffffe24d18b0000 (19G)
+zone_init: map GEN3  0xfffffe24d18b0000:0xfffffe299e0bc000 (19G)
+zone_init: map DATA  0xfffffe299e0bc000:0xfffffe30040cc000 (25G)
+zone_init: metadata  0xfffffe30088dc000:0xfffffe30108dc000 (128M)
+zone_init: metabits  0xfffffe30108dc000:0xfffffe30114c0000 (11M)
+zone_init: extra     0:0 (0B)
+VM bootstrap done: 85 maps, 165 entries and 501 holes left
+Long logs support configured: size: 16384
+Log queues configured: slot count: 48, per-slot size: 32768, total size: 1572864
+Firehose configured: 16 chunks, 8 io pages
+OSLog stream configured: stream: 8192 bytes, cache: 2112 bytes
+OSLog stream verification: 0
+standard timeslicing quantum is 10000 us
+standard background quantum is 2500 us
+mig_table_max_displ = 54 mach_kobj_count = 374
+debug_log_init: Error!! gPanicBase is still not initialized
+debug_log_init: Error!! gPanicBase is still not initialized
+kdp_core zlib memory 0x8000
+Serial requested, consistent debug disabled or debug boot arg not present, configuring debugging over serial
+iBoot version: x676c-shim
+"name" not a kext
+"AAPL,phandle" not a kext
+SWEET AMFI: built-in interface registered (XML entitlements)
+calling mpo_policy_init for vnguard
+Security policy loaded: Guarded vnode policy (vnguard)
+SWEET: trust caches unavailable (Image4/AMFI not installed)
+keepsyms boot arg specified; keeping linkedit segment for symbols.
+No POST boot-arg set.
+SWEET: starting device-tree platform expert
+SWEET: platform expert registered
+SWEET AKS: AppleKeyStore registered (no passcode, unlocked)
+SWEET WDT: IOWatchdog registered (accepts check-ins, never fires)
+SWEET SURF: IOCoreSurfaceRoot registered
+SWEET HID: buttons registered (test every 0 s)
+SWEET HID: touch registered
+SWEET BATTERY: static fallback, 100% 4200mV external=1 charging=0
+SWEET CPU: requested=6 selected=6 (limit=8)
+SWEET CPU: cpu=0 mpidr=0x0 came alive; SGI1 OK
+SWEET CPU: cpu=1 CPU_ON target=0x100 entry_pa=0x1414b8000 context=1
+SWEET CPU: cpu=1 PSCI CPU_ON rc=0
+SWEET CPU: cpu=1 mpidr=0x100 came alive; SGI1 OK
+SWEET FB: MT6789 DSI0 (0x14013000) and MUTEX0 (0x14001000) mapped for HW scanout
+SWEET CPU: cpu=2 CPU_ON target=0x200 entry_pa=0x1414b8000 context=2
+SWEET CPU: cpu=2 PSCI CPU_ON rc=0
+SWEET FB: empty IOAcceleratorES published (no 30 s wait in CAMetalContextCreate)
+SWEET GPU: powering on MT6789 Mali-G57 subsystem...
+SWEET GPU: SCPSYS initial: sta=0x00000000 con_338=0x00001112
+SWEET GPU: MFG_TOP_CONFIG at 0x13fbf000 initial: ctl[0..3]=0x00000000 0x00000000 0x00000000 0x00000000 sta=0x00000000 0x00000000
+SWEET CPU: cpu=2 mpidr=0x200 came alive; SGI1 OK
+SWEET GPU: MFG_TOP_CONFIG post-power: ctl0=0x00000000 ctl1=0x00000000 sta=0x00000000 0x00000000
+SWEET GPU: Mali-G57 ID=0x00000000 (Arch 0 Rev 0) L2=0x00000000 Tiler=0x00000000 Mem=0x00000000 MMU=0x00000000 AS=0x0 JS=0x0
+SWEET GPU: Mali-G57 registered as MaliMetal / MaliMetalDevice (vendor 0x13b5, device 0x9093)
+SWEET FB: AppleCLCD 1080x2400 stride 4320 at 0xfeabe000, default surface 1, presented as 1125x2436
+SWEET CPU: cpu=3 CPU_ON target=0x300 entry_pa=0x1414b8000 context=3
+SWEET CPU: cpu=3 PSCI CPU_ON rc=0
+SWEET CPU: cpu=3 mpidr=0x300 came alive; SGI1 OK
+SWEET CPU: cpu=4 CPU_ON target=0x400 entry_pa=0x1414b8000 context=4
+SWEET CPU: cpu=4 PSCI CPU_ON rc=0
+SWEET CPU: cpu=4 mpidr=0x400 came alive; SGI1 OK
+SWEET CPU: cpu=5 CPU_ON target=0x500 entry_pa=0x1414b8000 context=5
+SWEET CPU: cpu=5 PSCI CPU_ON rc=0
+SWEET CPU: cpu=5 mpidr=0x500 came alive; SGI1 OK
+SWEET CPU: 6/6 CPUs initialized, SGI1 verified
+Copyright (c) 1982, 1986, 1989, 1991, 1993
+	The Regents of the University of California. All rights reserved.
+
+MAC Framework successfully initialized
+using 5194 buffer headers and 4645 cluster IO buffer headers
+ktriage_register_subsystem_strings: set subsystem 8 strings
+calling mpo_policy_init for SWEET AMFI
+Security policy loaded: SWEET built-in Mobile File Integrity (SWEET AMFI)
+SWEET AMFI: platform binary policy registered (0)
+calling mpo_policy_init for Sandbox
+Security policy loaded: SWEET permissive sandbox stand-in (Sandbox)
+SWEET Sandbox: permissive policy registered (0)
+SWEET HFS: hfs-627.100.6 registered
+mcache: 6 CPU(s), 64 bytes CPU cache line size
+mbinit: done [64 MB total pool size, (42/21) split]
+dlil_init: Waiting for all the create dlil kernel threads to get scheduled at least once.
+dlil_init: All the created dlil kernel threads have been scheduled at least once. Proceeding.
+ifnet_attach: All kernel threads created for interface lo0 have been scheduled at least once. Proceeding.
+ifnet_attach: All kernel threads created for interface gif0 have been scheduled at least once. Proceeding.
+skip attaching fsw to lo0 using legacy TX modelifnet_attach: All kernel threads created for interface stf0 have been scheduled at least once. Proceeding.
+ufshci: MediaTek host, UFSHCI 2.0, 32 slots, CAP 0x3587071f, DMA at 0x1446f0000
+ufshci: as found: HCE 0x1 HCS 0x10f IS 0x4 DBR 0x0 RSR 0x1
+ufshci: UIC errors PA 0x0 DL 0x0 N 0x0 T 0x0 DME 0x0
+ufs_mtk: link up (probe 0x21500001), REFCLK_CTRL 0x3
+ufshci: UPIU 0x00 OCS 0x5
+ufshci: adopted link does not carry a NOP: HCE 0x1 HCS 0x501 IS 0x815 DBR 0x0 RSR 0x0
+ufshci: UIC errors PA 0x80000010 DL 0x80002002 N 0x0 T 0x0 DME 0x0
+ufs_mtk: link up (probe 0x25500001), REFCLK_CTRL 0x3
+ufshci: HS gear tx 3 rx 3, lanes tx 2 rx 2, rate B
+ufshci: ready (full init)
+ufs_disk: LU 0: 4 MiB, 4096-byte blocks, boot LU A
+ufs_disk: LU 1: 4 MiB, 4096-byte blocks, boot LU B
+ufs_disk: LU 2: 122032 MiB, 4096-byte blocks
+ufshci: 1 data commands, last op 0x9e lba 0
+ufshci: 2 data commands, last op 0x88 lba 1
+ufshci: 3 data commands, last op 0x88 lba 2
+ufs_disk: disk0s1 boot_para               1 MiB
+ufs_disk: disk0s2 proinfo                 3 MiB
+ufs_disk: disk0s3 misc                    0 MiB
+ufs_disk: disk0s4 para                    0 MiB
+ufs_disk: disk0s5 expdb                 128 MiB
+ufs_disk: disk0s6 frp                     1 MiB
+ufs_disk: disk0s7 nvcfg                  32 MiB
+ufs_disk: disk0s8 nvdata                 64 MiB
+ufs_disk: disk0s9 tkv_a                   1 MiB
+ufs_disk: disk0s10 vbmeta_a                8 MiB
+ufs_disk: disk0s11 vbmeta_system_a         8 MiB
+ufs_disk: disk0s12 vbmeta_vendor_a         8 MiB
+ufs_disk: disk0s13 tkv_b                   1 MiB
+ufs_disk: disk0s14 vbmeta_b                8 MiB
+ufs_disk: disk0s15 vbmeta_system_b         8 MiB
+ufs_disk: disk0s16 vbmeta_vendor_b         8 MiB
+ufs_disk: disk0s17 metadata               32 MiB
+ufs_disk: disk0s18 persist                55 MiB
+ufs_disk: disk0s19 protect1                8 MiB
+ufs_disk: disk0s20 protect2                8 MiB
+ufs_disk: disk0s21 seccfg                  8 MiB
+ufs_disk: disk0s22 otp                    48 MiB
+ufs_disk: disk0s23 md1img_a              200 MiB
+ufs_disk: disk0s24 spmfw_a                 1 MiB
+ufs_disk: disk0s25 pi_img_a                1 MiB
+ufs_disk: disk0s26 dpm_a                   4 MiB
+ufs_disk: disk0s27 scp_a                   6 MiB
+ufs_disk: disk0s28 sspm_a                  1 MiB
+ufs_disk: disk0s29 mcupm_a                 1 MiB
+ufs_disk: disk0s30 gz_a                   32 MiB
+ufs_disk: disk0s31 lk_a                    4 MiB
+ufs_disk: disk0s32 logo_a                 24 MiB
+ufs_disk: disk0s33 boot_a                 64 MiB
+ufs_disk: disk0s34 vendor_boot_a          64 MiB
+ufs_disk: disk0s35 dtbo_a                  8 MiB
+ufs_disk: disk0s36 tee_a                   5 MiB
+ufs_disk: disk0s37 sec1                    2 MiB
+ufs_disk: disk0s38 efuse                   0 MiB
+ufs_disk: disk0s39 nvram                  64 MiB
+ufs_disk: disk0s40 dram_para              25 MiB
+ufs_disk: disk0s41 connsys_bt_a            8 MiB
+ufs_disk: disk0s42 connsys_wifi_a          8 MiB
+ufs_disk: disk0s43 connsys_gnss_a         13 MiB
+ufs_disk: disk0s44 md1img_b              200 MiB
+ufs_disk: disk0s45 spmfw_b                 1 MiB
+ufs_disk: disk0s46 pi_img_b                1 MiB
+ufs_disk: disk0s47 dpm_b                   4 MiB
+ufs_disk: disk0s48 scp_b                   6 MiB
+ufs_disk: disk0s49 sspm_b                  1 MiB
+ufs_disk: disk0s50 mcupm_b                 1 MiB
+ufs_disk: disk0s51 gz_b                   32 MiB
+ufs_disk: disk0s52 lk_b                    4 MiB
+ufs_disk: disk0s53 logo_b                 24 MiB
+ufs_disk: disk0s54 boot_b                 64 MiB
+ufs_disk: disk0s55 vendor_boot_b          64 MiB
+ufs_disk: disk0s56 connsys_bt_b            8 MiB
+ufs_disk: disk0s57 connsys_wifi_b          8 MiB
+ufs_disk: disk0s58 connsys_gnss_b          8 MiB
+ufs_disk: disk0s59 dtbo_b                  8 MiB
+ufs_disk: disk0s60 tee_b                   6 MiB
+ufs_disk: disk0s61 super               10546 MiB
+ufs_disk: disk0s62 tranfs                301 MiB
+ufs_disk: disk0s63 userdata            89271 MiB
+ufs_disk: disk0s64 flashinfo              16 MiB
+ufs_disk: disk0s65 iosroot             20480 MiB (read-write)
+ufs_disk: LUN 2, 122032 MiB, 65 partitions
+SWEET SAMPLE: thread started
+BSD root: disk0s65, major 1, minor 64
+ufshci: 4 data commands, last op 0x88 lba 25992960
+ufshci: 5 data commands, last op 0x88 lba 25992960
+ufshci: 6 data commands, last op 0x88 lba 25995138
+ufshci: 7 data commands, last op 0x88 lba 26176642
+ufshci: 8 data commands, last op 0x88 lba 26176642
+ufshci: 9 data commands, last op 0x88 lba 25996418
+ufshci: 10 data commands, last op 0x88 lba 25996418
+ufshci: 11 data commands, last op 0x88 lba 27756389
+ufshci: 12 data commands, last op 0x88 lba 26177208
+ufshci: 13 data commands, last op 0x88 lba 26176648
+ufshci: 14 data commands, last op 0x88 lba 26176644
+ufshci: 15 data commands, last op 0x88 lba 25993089
+ufshci: 16 data commands, last op 0x88 lba 25992961
+ufshci: 17 data commands, last op 0x88 lba 25993090
+jnl: b(1, 64): journal start/end pointers reset! (s 0x1000 e 0x1000)
+ufshci: 18 data commands, last op 0x88 lba 25992961
+ufshci: 19 data commands, last op 0x88 lba 25992962
+ufshci: 20 data commands, last op 0x88 lba 25992963
+ufshci: 21 data commands, last op 0x88 lba 25992964
+ufshci: 22 data commands, last op 0x88 lba 25992965
+ufshci: 23 data commands, last op 0x88 lba 25992966
+ufshci: 24 data commands, last op 0x88 lba 25992967
+ufshci: 25 data commands, last op 0x88 lba 25992968
+ufshci: 26 data commands, last op 0x88 lba 25992969
+hfs: mounted iOSRoot on device b(1, 64)
+SWEET: root volume is not authenticated (error 25); continuing unsealed
+No POST boot-arg set.
+load_init_program: attempting to load /usr/appleinternal/sbin/launchd.development
+ufshci: 27 data commands, last op 0x88 lba 27755847
+load_init_program: attempting to load /sbin/launchd
+VM Swap Subsystem is ON
+ufshci: 28 data commands, last op 0x88 lba 27755809
+ufshci: 29 data commands, last op 0x88 lba 28087503
+ufshci: 30 data commands, last op 0x88 lba 28087627
+SWEET AMFI: com.apple.xpc.launchd: 22 entitlements (test: bool 0 string 0 array 0)
+ufshci: 31 data commands, last op 0x88 lba 27756387
+ufshci: 32 data commands, last op 0x88 lba 27755927
+ufshci: 33 data commands, last op 0x88 lba 27755853
+ufshci: 34 data commands, last op 0x88 lba 28088706
+ufshci: 35 data commands, last op 0x88 lba 28088922
+setting platform binary on task: pid = 1
+ufshci: 36 data commands, last op 0x88 lba 28088722
+ufshci: 37 data commands, last op 0x88 lba 28088846
+exec launchd
+ufshci: 38 data commands, last op 0x88 lba 28088810
+ufshci: 39 data commands, last op 0x88 lba 28088710
+ufshci: 40 data commands, last op 0x88 lba 28088782
+ufshci: 41 data commands, last op 0x88 lba 28088818
+ufshci: 42 data commands, last op 0x88 lba 28088714
+ufshci: 43 data commands, last op 0x88 lba 28088718
+ufshci: 44 data commands, last op 0x88 lba 28088822
+ufshci: 45 data commands, last op 0x88 lba 28088850
+ufshci: 46 data commands, last op 0x88 lba 28088790
+ufshci: 47 data commands, last op 0x88 lba 28088834
+ufshci: 48 data commands, last op 0x88 lba 28088838
+ufshci: 49 data commands, last op 0x88 lba 28088842
+ufshci: 50 data commands, last op 0x88 lba 28088802
+ufshci: 51 data commands, last op 0x88 lba 28088770
+ufshci: 52 data commands, last op 0x88 lba 28088794
+ufshci: 53 data commands, last op 0x88 lba 28088826
+ufshci: 54 data commands, last op 0x88 lba 28088746
+shared_region: 0xa36d41aa02cfc35 [1(launchd)] check_np(0x16ba3bbc0) vm_shared_region_start_address() failed
+ufshci: 55 data commands, last op 0x88 lba 28088754
+ufshci: 56 data commands, last op 0x88 lba 28088758
+SMP --- sample 0
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 1
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 2
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 3
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 4
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 5
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 6
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 7
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 8
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 9
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 10
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 11
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 12
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 13
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 14
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 15
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 16
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 17
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 18
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 19
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 20
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 21
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 22
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 23
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 24
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 25
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 26
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 27
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 28
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 29
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 30
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 31
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 32
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 33
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 34
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 35
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 36
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 37
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 38
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 39
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 40
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 41
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 42
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 43
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 44
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 45
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 46
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 47
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 48
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 49
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 50
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 51
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 52
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 53
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 54
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 55
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 56
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 57
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 58
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
+SMP --- sample 59
+SMP launchd[1] slide 0x0 mh 0x1043c4000 kslide 0x0
+SMP launchd t0 pc 0x1047b5990 lr 0x1047abf2c sp 0x16ba3b5b0 bt 0x1047d7778 0x1047d9ed0 0x1047b8238 0x0
+SMP launchd t0 regs [x16=-10/0xfffffffffffffff6 x0=0x203 x1=0x16ba3b5b0 x2=0x44000 x3=0x3c000001 x4=0x70 x5=0x73 cpsr=0x60000000]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0]
