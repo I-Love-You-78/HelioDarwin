@@ -149,8 +149,13 @@ def build(seed=None, d22ap=D22AP_ADT):
             ph(),
             ('device_type', cstr('display-subsystem')),
             ('compatible', cstr('sweet,display')),
-            ('canvas-width', u32(1125)),
-            ('canvas-height', u32(2436)),
+            # Match the real panel (FB_W x FB_H). Leaving the iPhone X
+            # canvas (1125x2436) here made AppleCLCD present that logical
+            # size over a 1080-wide buffer, so the console drew 1125 px per
+            # row into a 4320-byte (1080 px) stride -- skew and overflow off
+            # the bottom. Keep canvas == framebuffer for a clean console.
+            ('canvas-width', u32(FB_W)),
+            ('canvas-height', u32(FB_H)),
         ])])
 
     fbcon = node('sweet-fbcon', [
