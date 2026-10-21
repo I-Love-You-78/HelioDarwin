@@ -37,33 +37,66 @@ Unlike traditional emulator or compatibility layers, HelioDarwin executes Darwin
 
 ## System Architecture
 
-```text
-+-----------------------------------------------------------------------+
-|                       iOS 16.7.16 Userland                            |
-|        (SpringBoard, backboardd, launchd, dyld4, CoreAnimation)       |
-+-----------------------------------------------------------------------+
-|                             Graphics API                              |
-|                       Apple Metal.framework                           |
-+-----------------------------------------------------------------------+
-|                 MaliMetal ICD Driver (User Client)                    |
-|    - Conforms to MTLDeviceSPI / MTLDevice                             |
-|    - Translates Metal API calls & AIR/MSL shaders to Vulkan 1.3       |
-|    - Interfaces with Mesa panvk (Valhall Mali-G57 compiler & runtime) |
-+-----------------------------------------------------------------------+
-|                         Darwin Kernel (XNU)                           |
-|  +---------------------+---------------------+---------------------+  |
-|  |   SweetFramebuffer  | SweetMaliAccelerator|       SweetUFS      |  |
-|  | (DSI0 + DISP_MUTEX) | (MTCMOS / Mem / GPU)| (MT6789 UFS Host)   |  |
-|  +---------------------+---------------------+---------------------+  |
-|  |     AppleCLCD       |    IOSurface        |   HFS+ VFS Driver   |  |
-+--+---------------------+---------------------+---------------------+--+
-|                            Bootloader                                 |
-|                Stock Little Kernel (LK) -> Shim v4                    |
-+-----------------------------------------------------------------------+
-|                        Hardware (MT6789)                              |
-|     Cortex-A76/A55 | Mali-G57 MC2 | UFS 2.2 | DSI0 AMOLED Panel       |
-+-----------------------------------------------------------------------+
+```mermaid
+flowchart TD
+    subgraph Userland ["iOS 16.7.16 Userland"]
+        direction TB
+        SB["SpringBoard & backboardd (CoreAnimation)"]
+        LD["launchd & dyld4"]
+    end
+
+    subgraph Graphics ["Graphics Framework"]
+        MTL["Apple Metal.framework"]
+    end
+
+    subgraph Driver ["MaliMetal ICD Driver (Userspace)"]
+        direction TB
+        ICD["MaliMetalDevice (MTLDeviceSPI / MTLDevice)"]
+        Shader["AIR & MSL to Vulkan SPIR-V Translator"]
+        PanVK["Mesa panvk (Valhall Mali Runtime & Compiler)"]
+        ICD --> Shader --> PanVK
+    end
+
+    subgraph Kernel ["Darwin Kernel (XNU - xnu-8796)"]
+        direction TB
+        subgraph Drivers ["IOKit Hardware Drivers"]
+            FB["SweetFramebuffer / AppleCLCD<br>(DSI0 & DISP_MUTEX0 HW Scanout)"]
+            GPU["SweetMaliAccelerator<br>(SCPSYS MTCMOS & GPU MMIO)"]
+            UFS["SweetUFS<br>(MT6789 UFS 2.2 Host)"]
+        end
+        subgraph CoreOS ["Kernel Memory & VFS"]
+            IOSurf["IOSurface Zero-Copy Engine"]
+            HFS["HFS+ Journaled Volume"]
+        end
+    end
+
+    subgraph Boot ["Bootloader Chain"]
+        LK["Stock Little Kernel (LK)"] --> Shim["HelioDarwin Shim v4"]
+    end
+
+    subgraph Hardware ["MediaTek MT6789 Silicon"]
+        CPU["2x Cortex-A76 + 6x Cortex-A55 (ARMv8.2-A, 16K)"]
+        MALI["ARM Mali-G57 MC2 (Valhall r0p1 0x9093)"]
+        DSI["ili7835 1080x2400 AMOLED"]
+        UFSHW["128 GB UFS 2.2 Storage"]
+    end
+
+    Userland --> Graphics
+    Graphics --> Driver
+    Driver --> Kernel
+    Boot --> Kernel
+    Kernel --> Hardware
 ```
+
+| Layer | Subsystem | Components & Responsibilities |
+| :--- | :--- | :--- |
+| **Userland** | iOS 16.7.16 (`20H392`) | `SpringBoard`, `backboardd`, `launchd`, `dyld4`, `CoreAnimation` |
+| **Graphics API** | Apple Metal | `Metal.framework` (`MTLCreateSystemDefaultDevice()`) |
+| **Userspace ICD** | `MaliMetal.bundle` | `MaliMetalDevice`, AIR/MSL-to-SPIR-V translation, Mesa `panvk` |
+| **Kernel Drivers** | IOKit Subsystems | `SweetFramebuffer` (DSI0/MUTEX0), `SweetMaliAccelerator`, `SweetUFS` |
+| **Kernel Core** | Darwin Core (Mach/BSD) | 16 KB virtual memory, zero-copy `IOSurface`, HFS+ VFS |
+| **Bootloader** | MediaTek Boot Chain | Stock Little Kernel (LK) → HelioDarwin Shim v4 (boot image v4) |
+| **Hardware** | MediaTek Helio G99 | Cortex-A76/A55, Mali-G57 MC2, UFS 2.2, ili7835 AMOLED |
 
 ---
 
