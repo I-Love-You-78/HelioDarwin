@@ -4,68 +4,39 @@
 
 `HelioDarwin` is a standalone, bare-metal operating system project bringing Apple's open-source XNU kernel (`xnu-8796` / Darwin 22.x, iOS 16.7.16 `20H392` from iPhone X `D22AP`) to MediaTek ARM64 silicon, targeting the **MediaTek Helio G99 (MT6789)** on the **Infinix Note 12 2023 (`X676C`)**.
 
-Unlike traditional emulator or compatibility layers, HelioDarwin executes Darwin natively on bare metal, boots genuine iOS userland binaries (`launchd`, `dyld4`, `backboardd`, `SpringBoard`), drives display scanout directly through MediaTek hardware command-mode display controllers, and introduces the first native **Metal-to-Vulkan translation driver architecture** for ARM Mali Valhall GPUs.
+### Lineage & Upstream Roots
+
+HelioDarwin directly branches from and builds upon the pioneering work of the Darwin-on-Android community:
+* **[dipa-studio/ios-sweet](https://github.com/dipa-studio/ios-sweet)** by **dipa** — The breakthrough project that proved Apple's XNU kernel can boot on modern Android silicon (Qualcomm Snapdragon 730G / Redmi Note 10 Pro) and reach SpringBoard with display, touch, and Wi-Fi.
+* **[MakrSas/ios-topaz](https://github.com/MakrSas/ios-topaz)** by **MakrSas** — Pioneering bring-up scripts, device tree definitions, and driver architecture on Redmi Note 12 (Snapdragon 685).
+
+HelioDarwin takes these architectural lessons into completely uncharted territory: porting XNU to **MediaTek silicon** (MT6789) with command-mode DSI scanout, 4-domain MTCMOS power sequencing, and a proposed native Metal-to-Vulkan translation driver for ARM Mali Valhall GPUs.
 
 ---
 
-## Key Architectural Achievements
+## Engineering Transparency & Hardware Status
 
-* **First Darwin/XNU Port to MediaTek Silicon**: Brought up Apple's 64-bit kernel on the MediaTek MT6789 platform with full ARMv8.2-A support, native 16 KB translation granules, and GICv3 interrupt distribution across Cortex-A76 and Cortex-A55 clusters.
-* **Native MediaTek Hardware Scanout**: Driven by direct register-level integration with the MT6789 `DISP_MUTEX0` (`0x14001000`) and `DSI0` (`0x14013000`) controllers, pushing frames to the ili7835 1080×2400 AMOLED panel at 60 Hz without software display pump loops.
-* **Native UFS 2.2 Storage Controller**: Integrated kernel host driver for MediaTek UFS (`0x11270000`), executing SCSI command transport and mounting journaled HFS+ root filesystems.
-* **Verified iOS 16 Userland Execution**: Successfully loaded and executed genuine iOS 16 `launchd` and `dyld4`, completing initial memory allocator initialization (`vm_allocate`), thread setup, and Objective-C class registration.
-* **Native Metal-to-Vulkan Driver Stack (`MaliMetal`)**: Architecture-grade Metal Installable Client Driver (ICD) binding Apple's `Metal.framework` to Mesa's `panvk` Vulkan 1.3 implementation for ARM Mali-G57 MC2 (Valhall architecture), replacing slow software rasterization with hardware acceleration.
-* **Non-Destructive Dual-Boot**: Seamless coexistence with Android using Slot A/B isolation and a 1-try hardware bootloader watchdog, ensuring zero data loss on user partitions.
+We believe in radical engineering honesty. Every status in the table below is backed by physical hardware boot logs captured via the MT6789 `pstore` RAM console (`0x4811f000`) and committed directly to the [`logs/`](logs/) directory.
 
----
-
-## Hardware Specifications
-
-| Component | Target Specification |
-| :--- | :--- |
-| **Device** | Infinix Note 12 2023 (`X676C`) |
-| **SoC** | MediaTek Helio G99 (MT6789, 6nm TSMC) |
-| **CPU** | 2× Cortex-A76 @ 2.2 GHz (Big) + 6× Cortex-A55 @ 2.0 GHz (LITTLE) |
-| **Architecture** | ARMv8.2-A, 16 KB page granule support, LSE atomics, GIC-600 (GICv3) |
-| **RAM** | 8 GB LPDDR4X @ 2133 MHz (`0x40000000`) |
-| **Storage** | 128 GB UFS 2.2 (MediaTek UFS controller at `0x11270000`) |
-| **Display** | 6.7" AMOLED, 1080×2400, ili7835 controller, DSI command mode |
-| **GPU** | ARM Mali-G57 MC2 (Valhall architecture, 2 cores, ID `0x9003` / `0x9093`) |
-| **Power Domain** | SCPSYS MTCMOS (`0x10006000`), MFGCFG clock control (`0x13fbf000`) |
+| Subsystem | Target Scope | Hardware Status | Log Reference | Physical Verification Details |
+| :--- | :--- | :---: | :--- | :--- |
+| **Boot & Shim** | EL1 hand-off | **Verified** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | Shim v4 unpacks kernel payload, sets up GICv3, transfers control at EL1. |
+| **CPU & SMP** | 8 cores, 16K pages | **Verified** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | ARMv8.2-A, 16 KB page granules, LSE atomics, secondary cores up via PSCI. |
+| **Storage (UFS)** | UFS 2.2 host | **Verified** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | MTK UFS (`0x11270000`), SCSI command transport, journaled HFS+ read/write. |
+| **Display Scanout**| Native HW scanout | **Verified** | [`boot-0147`](logs/boot-0147-gpu-probe.log) | DSI0 (`0x14013000`) & DISP_MUTEX0 (`0x14001000`) 60 Hz HW scanout to AMOLED. |
+| **Userland Execution**| iOS 16 `launchd` | **Active Blocker** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | `launchd` executed, AMFI verified entitlements, dyld read shared cache from UFS; blocked in `vm_shared_region_start_address()`. |
+| **GPU Subsystem** | Mali-G57 MC2 | **Testing Patch 0148**| [`boot-0147`](logs/boot-0147-gpu-probe.log) | Probe in 0147 failed (`GPU_ID=0x0`); Patch 0148 adds real 4-domain `mfg_top_config` (`0x13fbf000`) power sequencer. |
+| **Metal-to-Vulkan**| Userspace ICD | **Design Proposal**| [MaliMetal](wiki/MaliMetal-Driver.md) | Architectural proposal bridging `Metal.framework` to Mesa `panvk` Vulkan 1.3. |
+| **Touchscreen** | AMOLED Touch IC | **Planned** | — | I2C/SPI bus mapping on MT6789. |
+| **Audio & Wireless**| Wi-Fi / BT / Sound | **Roadmap** | — | AudioReach / MT6631 wireless stack. |
 
 ---
 
-## System Architecture
+## Development Notes
 
-| Subsystem Layer | Components | Architectural Role & Implementation |
-| :--- | :--- | :--- |
-| **Userland** | `SpringBoard`, `backboardd`, `launchd`, `dyld4` | Genuine iOS 16.7.16 (`20H392`) binaries; CoreAnimation UI compositing |
-| **Graphics API** | Apple `Metal.framework` | Direct Metal SPI endpoint (`MTLCreateSystemDefaultDevice()`) |
-| **Userspace ICD** | `MaliMetal.bundle` | Translates Metal calls & AIR/MSL shaders to Vulkan 1.3 via Mesa `panvk` |
-| **Kernel Drivers** | `SweetFramebuffer`, `SweetMaliAccelerator` | IOKit DSI0/MUTEX0 60 Hz HW scanout, MTCMOS power sequencing, UFS 2.2 host |
-| **Kernel Core** | Darwin XNU (`xnu-8796`) | 16 KB virtual memory translation, zero-copy `IOSurface`, HFS+ VFS |
-| **Bootloader** | MediaTek LK → HelioDarwin Shim v4 | Unpacks kernel payload, PSCI core boot, 16K granule setup, GICv3 routing |
-| **Hardware** | MediaTek Helio G99 (`MT6789`) | 2× A76 + 6× A55, Mali-G57 MC2 (`0x9093`), UFS 2.2, ili7835 1080×2400 AMOLED |
+HelioDarwin is developed by **Egor Kulikovskiy**. AI assistance is utilized strictly for boilerplate generation, build script orchestration, and documentation formatting. All kernel architecture, register reverse engineering, driver implementations, and hardware test validation are conducted directly on physical Infinix Note 12 2023 (`X676C`) test hardware.
 
 ---
-
-## Hardware Bring-up Status
-
-We practice radical engineering transparency. Full console logs, register dumps, and UFS command traces from physical Infinix hardware runs are published directly in the [`logs/`](logs/) directory.
-
-| Subsystem | Status | Verification & Implementation Details |
-| :--- | :---: | :--- |
-| **Boot & Shim** | **Verified on Hardware** | Shim v4 unpacks kernel payload, sets up GIC, and hands off execution at EL1. |
-| **CPU & Cores** | **Verified on Hardware** | Full ARMv8.2-A, 16 KB pages, LSE atomics, all 8 cores activated via PSCI. |
-| **Interrupts** | **Verified on Hardware** | GIC-600 (GICv3) distributor (`0x0c000000`) and redistributors (`0x0c080000`). |
-| **UFS 2.2 Storage** | **Verified on Hardware** | MT6789 UFS controller (`0x11270000`), SCSI transport, journaled HFS+ read/write. |
-| **Display Scanout** | **Verified on Hardware** | Native DSI0 (`0x14013000`) & DISP_MUTEX0 (`0x14001000`) 60 Hz HW scanout to AMOLED. |
-| **Userland (Early)** | **Verified on Hardware** | `launchd` & `dyld4` run live ([log](logs/boot-0146-launchd-dyld.log)): `vm_allocate` heap initialized, Obj-C classes mapped. |
-| **GPU Power & Clocks**| **In Active Bring-up** | MTCMOS `mfg_top_config` (`0x13fbf000`) sequencing and PMIC `vgpu`/`vsram_gpu` rails. |
-| **Metal Accelerator** | **In Active Bring-up** | Kernel publishes `IOAcceleratorES` with `MaliMetal` & `MaliMetalDevice` properties. |
-| **Metal-to-Vulkan ICD**| **In Development** | `MaliMetal.bundle` userspace ICD translation to Mesa `panvk` (Vulkan 1.3). |
-| **Touchscreen** | **Planned** | Touch controller bus mapping on MT6789 (I2C/SPI). |
-| **Audio & Wireless** | **Roadmap** | AudioReach / MT6631 wireless stack bring-up. |
 
 ---
 
@@ -78,11 +49,14 @@ All milestone achievements are backed by physical hardware logs captured via the
 
 ---
 
-## The Metal-to-Vulkan Architecture (`MaliMetal`)
+## Metal-to-Vulkan Architecture (`MaliMetal`) — Design & Roadmap
+
+> [!NOTE]
+> `MaliMetal` is an architectural design and userspace ICD research implementation for bridging Apple's `Metal.framework` to Mesa's `panvk` Vulkan 1.3 driver. It is under active development and contingent on kernel-level GPU hardware domain bring-up.
 
 Standard iOS compositing (`CoreAnimation`, `backboardd`, `RenderServer`) strictly requires a Metal-capable hardware device. On non-Apple silicon, this has historically prevented native GUI execution.
 
-HelioDarwin resolves this via a two-tier hardware acceleration stack:
+HelioDarwin approaches this via a two-tier hardware acceleration stack:
 
 1. **Kernel Driver (`SweetMaliAccelerator` & `SweetMaliUserClient`)**:
    * Sequences MTCMOS power domains in MediaTek SCPSYS (`0x10006000`).

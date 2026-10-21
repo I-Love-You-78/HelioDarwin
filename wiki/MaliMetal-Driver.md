@@ -1,12 +1,16 @@
-# MaliMetal: Metal-to-Vulkan Driver Architecture for ARM Mali Valhall
+# MaliMetal: Metal-to-Vulkan Driver Architecture (Design Proposal)
 
-## 1. Overview in Plain English
+> [!NOTE]
+> **Status:** Architectural Design Specification & Work-in-Progress Research.
+> This document details the planned two-tier driver architecture bridging Apple's `Metal.framework` to Mesa's `panvk` Vulkan 1.3 implementation for ARM Mali Valhall GPUs. Development of the userspace ICD proceeds in parallel with kernel-level GPU hardware domain bring-up.
 
-In the Apple ecosystem, every visual element you see on screen — from the lock screen clock and smooth app-switching gestures to Safari web pages and 3D games — is drawn using Apple's proprietary graphics API: **Metal**.
+## 1. Overview & Architectural Motivation
 
-On real Apple devices, Metal speaks directly to Apple's own GPU architecture (Apple Silicon A-series / M-series). On non-Apple hardware, there has historically been no way to run hardware-accelerated iOS graphics. Emulators and previous hobby projects were forced to run CPU software rasterizers, resulting in single-digit frame rates, severe lag, and non-functional WebKit rendering.
+In the Apple ecosystem, visual elements and UI compositing (`RenderServer`, `backboardd`, `SpringBoard`) are rendered through Apple's graphics API: **Metal**.
 
-**HelioDarwin solves this through `MaliMetal`**: an architecture-grade, hardware-accelerated **Metal Installable Client Driver (ICD)** that bridges Apple's `Metal.framework` to **Vulkan 1.3** and Mesa's open-source `panvk` driver on the ARM Mali-G57 MC2 GPU.
+On genuine Apple hardware, Metal interacts directly with proprietary Apple Silicon GPUs (A-series / M-series). On third-party ARM platforms, running hardware-accelerated iOS graphics requires an Installable Client Driver (ICD) capable of bridging Metal calls to the platform's native GPU capabilities.
+
+**HelioDarwin proposes `MaliMetal`**: a two-tier graphics driver architecture bridging Apple's `Metal.framework` to **Vulkan 1.3** via Mesa's open-source `panvk` driver on ARM Mali-G57 MC2 hardware.
 
 ---
 

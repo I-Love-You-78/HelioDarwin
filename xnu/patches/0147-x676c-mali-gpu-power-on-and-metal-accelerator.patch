@@ -32,7 +32,7 @@ index 35d8217..b393d60 100644
 +					scpsys[0x0eb4 / 4] |= (1u << 3);           /* Set PWR_RST_B (release reset) */
 +					IODelay(20);
 +
-+					/* Also sequence 0x0338 in case MT6789 maps MFG control there */
++					/* Sequence SCPSYS SPM_MFG_PWR_CON (0x338) */
 +					scpsys[0x0338 / 4] |= (1u << 0) | (1u << 1) | (1u << 3);
 +					scpsys[0x0338 / 4] &= ~((1u << 2) | (0xful << 8));
 +					IODelay(20);
