@@ -67,7 +67,7 @@ if (-not ($r -match "flashed")) { throw "flash failed" }
 & $adb reboot
 "$(Get-Date -f HH:mm:ss) rebooted into the shim"
 Start-Sleep 20
-$deadline = (Get-Date).AddMinutes(3)
+$deadline = (Get-Date).AddMinutes(9)
 while ((Get-Date) -lt $deadline -and -not ((& $adb devices | Out-String) -match "`tdevice")) { Start-Sleep 3 }
 for ($i = 0; $i -lt 60 -and -not ((& $adb shell getprop sys.boot_completed 2>$null) -match '1'); $i++) { Start-Sleep 2 }
 $log = Join-Path $out "xnu-$Run.log"
