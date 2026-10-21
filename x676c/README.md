@@ -37,6 +37,15 @@ ready), LK's list at UTRLBA 0x51252c00 idle (DBR 0, RSR 1), last UIC command
 DME_SET PA_PWRMode (0x1571), REFCLK_CTRL 0x3 (requested and acked), MTK IP
 version 0x20160706. Clocks, regulators and the HS link are up.
 
+- **Milestone 5 (2026-10-21): iOS userland starts from internal flash.**
+  Dual boot: GPT grown to 128 entries, `iosroot` (20 GiB) carved from
+  userdata's tail (now 87 GiB), the 16 GiB iOS 16.7.16 HFS+ image written
+  there, Android still boots on slot B. With `rd=ufs ufsroot=iosroot
+  ufsrw=iosroot` xnu mounts iosroot read-write (HFS+ journal replayed —
+  the UFS driver's write path works on hardware) and `exec launchd`. Next:
+  dyld maps the shared cache (slow on one A55; the display pump's lifetime
+  bounds each attempt before the fall-back to Android).
+
 ## xnu boot flow
 
 ```
