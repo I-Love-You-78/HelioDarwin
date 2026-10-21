@@ -1,0 +1,63 @@
+From 109dd7dfb00f363c4d9b9ad69d9fa2ad1828c5e6 Mon Sep 17 00:00:00 2001
+From: Egor Kulikovskiy <xianel0x@gmail.com>
+Date: Thu, 22 Oct 2026 04:31:56 +0500
+Subject: [PATCH] x676c: mark platform execs in csflags, and clear the console
+ screen
+
+Two fixes. kern_exec: unsigned system binaries (akd, mediaserverd) are
+marked platform via the boot-arg path (task_set_platform_binary) but
+never reach the signature hook, so their proc cs_flags lacked
+CS_PLATFORM_BINARY; xpcproxy's csops(CS_OPS_STATUS) check then saw a
+non-platform binary and raised a fatal userspace panic. Set
+CS_PLATFORM_BINARY in proc cs_flags alongside the task flag. sweet_early:
+clear the whole panel when the console starts so text no longer overlaps
+the shim's boot splash (the top-of-screen artifacts).
+---
+ bsd/kern/kern_exec.c      | 10 ++++++++++
+ osfmk/arm64/sweet_early.c |  9 ++++++++-
+ 2 files changed, 18 insertions(+), 1 deletion(-)
+
+diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
+index 68612db..a320cd8 100644
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -1679,6 +1679,16 @@ grade:
+ 		 * switched to the new one.
+ 		 */
+ 		task_set_platform_binary(task, TRUE);
++
++		/*
++		 * x676c: unsigned system binaries (akd, mediaserverd) are marked
++		 * platform here via the boot-arg path, but never reach the
++		 * signature hook, so their proc cs_flags lack CS_PLATFORM_BINARY.
++		 * xpcproxy checks csops(CS_OPS_STATUS), sees a non-platform binary
++		 * and triggers a fatal userspace panic. Mirror the task flag into
++		 * the proc cs_flags so the csops query agrees.
++		 */
++		proc_csflags_set(p, CS_PLATFORM_BINARY);
+ 	} else {
+ 		if (cs_debug) {
+ 			printf("clearing platform binary on task: pid = %d\n", proc_getpid(p));
+diff --git a/osfmk/arm64/sweet_early.c b/osfmk/arm64/sweet_early.c
+index 8af0999..7264df2 100644
+--- a/osfmk/arm64/sweet_early.c
++++ b/osfmk/arm64/sweet_early.c
+@@ -109,7 +109,14 @@ sweet_early_putc(char c)
+ 	sweet_pstore_putc(c);
+ 	if (!early_started) {
+ 		early_started = 1;
+-		sweet_early_clear_row();
++		/* Clear the whole panel once, so the console starts on a clean
++		 * black screen instead of over the shim's boot splash. */
++		for (unsigned int y = 0; y < EARLY_HEIGHT; y++) {
++			volatile uint32_t *line = EARLY_FB + y * EARLY_STRIDE;
++			for (unsigned int x = 0; x < EARLY_WIDTH; x++) {
++				line[x] = 0xff000000u;
++			}
++		}
+ 	}
+ 	if (c == '\r') {
+ 		early_col = 0;
+-- 
+2.51.0.windows.1
+
