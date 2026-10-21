@@ -1,14 +1,19 @@
-From 6b761daef1d620ee826d1a09c47a62c94e7f60ba Mon Sep 17 00:00:00 2001
+From e9cc579aa5b9feb3898eae669a05333d345735f4 Mon Sep 17 00:00:00 2001
 From: Egor Kulikovskiy <xianel0x@gmail.com>
 Date: Thu, 22 Oct 2026 00:02:04 +0500
 Subject: [PATCH] x676c: unwind kernel stacks in SMP sampler, trace
  mach_vm_allocate phases, and un-gate infracfg_ao clock distribution
 
+exception.c now includes <kern/thread_kernel_state.h> directly for
+thread_get_kernel_state(). That header has an #ifndef guard but was
+missing its #define, so the second include (via arm/thread.h) redefined
+struct thread_kernel_state and broke the build. Add the missing define.
 ---
  iokit/Kernel/arm/SweetFramebuffer.cpp | 12 +++++++-
  osfmk/ipc/mach_kernelrpc.c            | 40 +++++++++++++++++++--------
  osfmk/kern/exception.c                | 27 ++++++++++++++++++
- 3 files changed, 67 insertions(+), 12 deletions(-)
+ osfmk/kern/thread_kernel_state.h      |  1 +
+ 4 files changed, 68 insertions(+), 12 deletions(-)
 
 diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
 index e4c1f78..48ae2da 100644
@@ -155,6 +160,18 @@ index b5ccab7..7c3a65e 100644
  	}
  	task_unlock(task);
  }
+diff --git a/osfmk/kern/thread_kernel_state.h b/osfmk/kern/thread_kernel_state.h
+index 36e95fb..18a0ac8 100644
+--- a/osfmk/kern/thread_kernel_state.h
++++ b/osfmk/kern/thread_kernel_state.h
+@@ -27,6 +27,7 @@
+  */
+ 
+ #ifndef _KERN_THREAD_KERNEL_STATE_H_
++#define _KERN_THREAD_KERNEL_STATE_H_
+ 
+ #include <vm/vm_kern.h>
+ 
 -- 
 2.51.0.windows.1
 
