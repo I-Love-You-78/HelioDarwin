@@ -20,7 +20,7 @@ Env: XNU_CC_EXTRA   extra flags (e.g. "-DKPERF -DKPC" for config changes)
 import concurrent.futures as cf, os, re, shlex, subprocess, sys
 from collections import Counter
 
-CI_DXB = '/Users/runner/work/ios-sweet/ios-sweet/dxb'
+CI_DXB = '/Users/runner/work/ios-x676c/ios-x676c/dxb'
 CI_SDK_PLATFORM = re.compile(r'/Applications/Xcode[^ ]*?\.sdk/+System/Library/Frameworks/Kernel\.framework/Versions/A/PrivateHeaders/platform')
 CLANG = os.path.expanduser('~/swift/usr/bin/clang')
 DROP = {'-c', '-g', '-MD', '-MMD'}
@@ -84,7 +84,8 @@ def component_dirs(bt):
     for root, _, files in os.walk(os.path.join(bt, 'build/xnu.obj')):
         if 'meta_features.h' in files:
             for c in COMPONENTS:
-                if f'/{c}/' in root + '/' and c not in out:
+                r = root.replace(os.sep, '/')
+                if f'/{c}/' in r + '/' and c not in out:
                     out[c] = root
     return out
 
@@ -107,8 +108,9 @@ def run(item, bt, cdirs):
         if a in DROP_WITH_ARG:
             skip = True
             continue
-        a = CI_SDK_PLATFORM.sub(os.path.join(bt, 'sdk-kernel-platform/platform'), a)
-        new.append(a.replace(CI_DXB, bt))
+        plat = os.path.join(bt, 'sdk-kernel-platform/platform').replace(os.sep, '/')
+        a = CI_SDK_PLATFORM.sub(lambda _: plat, a)
+        new.append(a.replace(CI_DXB, bt.replace(os.sep, '/')))
     new += os.environ.get('XNU_CC_POST', '').split()
     comp = next((c for c in COMPONENTS if f'/xnu/{c}/' in src), None) or \
         next((c for c in COMPONENTS if f'/{c}/' in src), None)

@@ -22,7 +22,7 @@ In the spirit of Linus Torvalds and classical Unix OS design:
 | [**Hardware Architecture**](Hardware-Architecture.md) | MediaTek MT6789 (Helio G99) silicon specifications, memory layout, SCPSYS power domains, and clock gates. |
 | [**Boot and Shim**](Boot-and-Shim.md) | Boot pipeline: Little Kernel (LK) → Shim v4 → PSCI multicore bring-up → 16 KB MMU translation → XNU entry. |
 | [**Display Pipeline**](Display-Pipeline.md) | Hardware scanout via MTK `DSI0` (`0x14013000`) and `DISP_MUTEX0` (`0x14001000`) to the ili7835 AMOLED panel at 60 Hz. |
-| [**MaliMetal Driver**](MaliMetal-Driver.md) | World-first Metal-to-Vulkan translation driver: IOKit accelerator, MTLDevice SPI, AIR-to-SPIR-V shader translation, Mesa panvk. |
+| [**MaliMetal Driver**](MaliMetal-Driver.md) | Metal-to-Vulkan translation proposal: IOKit accelerator, MTLDevice SPI, AIR-to-SPIR-V translation, Mesa panvk. |
 | [**Dual-Boot & Safety**](Dual-Boot-Safety.md) | Non-destructive dual-booting with Android using Slot A/B isolation and the 1-try watchdog mechanism. |
 
 ---
