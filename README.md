@@ -51,19 +51,30 @@ Unlike traditional emulator or compatibility layers, HelioDarwin executes Darwin
 
 ## Hardware Bring-up Status
 
-| Subsystem | Status | Implementation Details |
+We practice radical engineering transparency. Full console logs, register dumps, and UFS command traces from physical Infinix hardware runs are published directly in the [`logs/`](logs/) directory.
+
+| Subsystem | Status | Verification & Implementation Details |
 | :--- | :---: | :--- |
-| **Boot & Shim** | **Working** | Shim v4 loads kernel payload, configures GIC, executes core hand-off. |
-| **CPU & Cores** | **Working** | Full ARMv8.2-A, 16 KB pages, LSE atomics, SMP core activation via PSCI. |
-| **Interrupts** | **Working** | GIC-600 (GICv3) distributor at `0x0c000000`, redistributors at `0x0c080000`. |
-| **UFS Storage** | **Working** | MT6789 UFS 2.2 controller probed, SCSI transport active, HFS+ volume read/write. |
-| **Display Scanout** | **Working** | Hardware scanout via MTK `DSI0` (`0x14013000`) & `DISP_MUTEX0` (`0x14001000`) @ 60 Hz. |
-| **Userland (Early)** | **Working** | `launchd` and `dyld4` execution verified; VM heaps allocated, Obj-C mapped. |
-| **GPU Subsystem** | **Working** | MTCMOS power sequencing enabled in SCPSYS; clocks un-gated; ID probed. |
-| **Metal Accelerator** | **Working** | Kernel publishes `IOAcceleratorES` with `MaliMetal` & `MaliMetalDevice` properties. |
-| **Metal-to-Vulkan ICD** | **In Progress** | `MaliMetal.bundle` userland driver translation to Mesa `panvk`. |
-| **Touchscreen** | **Pending** | Touch controller bus mapping (I2C/SPI) on MT6789. |
+| **Boot & Shim** | **Verified on Hardware** | Shim v4 unpacks kernel payload, sets up GIC, and hands off execution at EL1. |
+| **CPU & Cores** | **Verified on Hardware** | Full ARMv8.2-A, 16 KB pages, LSE atomics, all 8 cores activated via PSCI. |
+| **Interrupts** | **Verified on Hardware** | GIC-600 (GICv3) distributor (`0x0c000000`) and redistributors (`0x0c080000`). |
+| **UFS 2.2 Storage** | **Verified on Hardware** | MT6789 UFS controller (`0x11270000`), SCSI transport, journaled HFS+ read/write. |
+| **Display Scanout** | **Verified on Hardware** | Native DSI0 (`0x14013000`) & DISP_MUTEX0 (`0x14001000`) 60 Hz HW scanout to AMOLED. |
+| **Userland (Early)** | **Verified on Hardware** | `launchd` & `dyld4` run live ([log](logs/boot-0146-launchd-dyld.log)): `vm_allocate` heap initialized, Obj-C classes mapped. |
+| **GPU Power & Clocks**| **In Active Bring-up** | MTCMOS `mfg_top_config` (`0x13fbf000`) sequencing and PMIC `vgpu`/`vsram_gpu` rails. |
+| **Metal Accelerator** | **In Active Bring-up** | Kernel publishes `IOAcceleratorES` with `MaliMetal` & `MaliMetalDevice` properties. |
+| **Metal-to-Vulkan ICD**| **In Development** | `MaliMetal.bundle` userspace ICD translation to Mesa `panvk` (Vulkan 1.3). |
+| **Touchscreen** | **Planned** | Touch controller bus mapping on MT6789 (I2C/SPI). |
 | **Audio & Wireless** | **Roadmap** | AudioReach / MT6631 wireless stack bring-up. |
+
+---
+
+## Verified Hardware Boot Logs
+
+All milestone achievements are backed by physical hardware logs captured via the SoC's hardware `pstore` RAM console (`0x4811f000`):
+
+* [**`logs/boot-0146-launchd-dyld.log`**](logs/boot-0146-launchd-dyld.log) — **Live iOS 16 Userland Execution**: Contains 59 consecutive SMP sampling traces of `launchd` and `dyld4` executing on physical Infinix hardware. Demonstrates Mach traps (`x16 = -10`), `vm_allocate` heap expansion, and Objective-C class registration.
+* [**`logs/boot-0147-gpu-probe.log`**](logs/boot-0147-gpu-probe.log) — **Mali-G57 & DSI0 HW Probe**: Verifies MT6789 DSI0 / DISP_MUTEX0 scanout, MTCMOS SCPSYS power probe, and `IOAcceleratorES` registration.
 
 ---
 
