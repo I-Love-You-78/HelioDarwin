@@ -1,4 +1,4 @@
-# MaliMetal: World-First Metal-to-Vulkan Driver Architecture
+# MaliMetal: Metal-to-Vulkan Driver Architecture for ARM Mali Valhall
 
 ## 1. Overview in Plain English
 

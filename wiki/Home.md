@@ -2,7 +2,7 @@
 
 Welcome to the **HelioDarwin Documentation & Hardware Architecture Wiki**.
 
-HelioDarwin is an engineering effort to run Apple's Darwin/XNU kernel (`xnu-8796`) and the genuine iOS 16 userland natively on MediaTek ARM64 silicon (MT6789 / Helio G99), alongside the first native **Metal-to-Vulkan** hardware graphics driver (`MaliMetal`) for ARM Mali Valhall GPUs.
+HelioDarwin is an engineering effort to run Apple's Darwin/XNU kernel (`xnu-8796`) and genuine iOS 16 userland binaries natively on MediaTek ARM64 silicon (MT6789 / Helio G99), alongside an experimental native **Metal-to-Vulkan** hardware graphics driver architecture (`MaliMetal`) for ARM Mali Valhall GPUs.
 
 ---
 
