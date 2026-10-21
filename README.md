@@ -42,7 +42,7 @@ flowchart TD
     subgraph Userland ["iOS 16.7.16 Userland"]
         direction TB
         SB["SpringBoard & backboardd (CoreAnimation)"]
-        LD["launchd & dyld4"]
+        LD["launchd & dyld4 (Init & Shared Cache)"]
     end
 
     subgraph Graphics ["Graphics Framework"]
@@ -75,10 +75,18 @@ flowchart TD
     end
 
     subgraph Hardware ["MediaTek MT6789 Silicon"]
-        CPU["2x Cortex-A76 + 6x Cortex-A55 (ARMv8.2-A, 16K)"]
-        MALI["ARM Mali-G57 MC2 (Valhall r0p1 0x9093)"]
-        DSI["ili7835 1080x2400 AMOLED"]
-        UFSHW["128 GB UFS 2.2 Storage"]
+        direction TB
+        subgraph HW_Compute ["Compute & Graphics"]
+            direction LR
+            CPU["2x Cortex-A76 + 6x Cortex-A55<br>(ARMv8.2-A, 16 KB Granule)"]
+            MALI["ARM Mali-G57 MC2<br>(Valhall r0p1 0x9093)"]
+        end
+        subgraph HW_IO ["Display & Storage"]
+            direction LR
+            DSI["ili7835 AMOLED Panel<br>(1080x2400 @ 60 Hz)"]
+            UFSHW["MediaTek UFS 2.2 Controller<br>(128 GB Storage)"]
+        end
+        HW_Compute ~~~ HW_IO
     end
 
     Userland --> Graphics
