@@ -8,7 +8,7 @@ Needs: gh (repo squeeeezy/ios-x676c), adb with root (Magisk), Python + ziglang.
 #>
 param(
     [Parameter(Mandatory)] [string]$Run,
-    [string]$BootArgs = "debug=0xc serial=3 cpus=6 keepsyms=1 -v -enable_kprintf_spam wdt=-1 wdt_test=no_user_checkin rd=ufs ufsroot=iosroot ufsrw=iosroot unentitled_ios_sim_launch=1 ignition_level=1 launchd_unsecure_cache=1 cs_debug=1 sweet_amfi_debug=1 sweetnull=launchd,dyld,init,backboardd,SpringBoard"
+    [string]$BootArgs = "debug=0xc serial=3 cpus=6 keepsyms=1 -v -enable_kprintf_spam wdt=-1 wdt_test=no_user_checkin rd=ufs ufsroot=iosroot ufsrw=iosroot unentitled_ios_sim_launch=1 ignition_level=1 launchd_unsecure_cache=1 cs_debug=1 sweet_amfi_debug=1 sweetsample=launchd,dyld,init,SpringBoard,backboardd ufsbeat=64 sweetnull=launchd,dyld,init,backboardd,SpringBoard"
 )
 $ErrorActionPreference = "Stop"
 $repo = "squeeeezy/ios-x676c"
@@ -67,7 +67,7 @@ if (-not ($r -match "flashed")) { throw "flash failed" }
 & $adb reboot
 "$(Get-Date -f HH:mm:ss) rebooted into the shim"
 Start-Sleep 20
-$deadline = (Get-Date).AddMinutes(17)
+$deadline = (Get-Date).AddMinutes(3)
 while ((Get-Date) -lt $deadline -and -not ((& $adb devices | Out-String) -match "`tdevice")) { Start-Sleep 3 }
 for ($i = 0; $i -lt 60 -and -not ((& $adb shell getprop sys.boot_completed 2>$null) -match '1'); $i++) { Start-Sleep 2 }
 $log = Join-Path $out "xnu-$Run.log"
