@@ -82,7 +82,7 @@ Baseline: Apple XNU `xnu-8796` (Darwin 22.x, iOS 16.7.16 `20H392` / iPhone X `D2
   * Mapped MT6789 I2C-0 controller at `0x11e00000`.
   * Configured communication with FocalTech FT3418/FT5452 touch controller at slave address `0x38`.
   * 100 Hz polling loop parsing multi-touch coordinates (1080×2400) and reporting to `sweet_hid_touch`.
-  * Removed simulated unlock swipe, enabling native finger swipe-to-unlock.
+  * Removed simulated unlock swipe; driver actively polls I2C (0x38), physical finger touch event validation pending clean log capture.
 
 ### Milestone 11: Userspace Metal ICD Driver Skeleton (`MaliMetal.bundle`)
 - Implemented native 64-bit arm64 Mach-O Metal ICD driver skeleton for ARM Mali-G57 MC2 Valhall GPU (`MaliMetal/`):
