@@ -98,7 +98,22 @@ Baseline: Apple XNU `xnu-8796` (Darwin 22.x, iOS 16.7.16 `20H392` / iPhone X `D2
 - Integrated synchronous MediaTek TOPRGU hardware watchdog kicks (`0x10007000 + 0x08`, key `0x1971`) on every frame scanout.
 - CPU 7 remains powered down in PSCI; display is driven natively by XNU.
 
-### Milestone 13: Thermal & Power Optimization
+### Milestone 13: GPU PMIC Power Sequencing, MMIO Mapping & HFS+ cprotect Resolution (Patches 0178 & 0179)
+- Discovered and addressed root cause of `launchd.log: fopen(...): 22` infinite loop across subsequent boots:
+  * In HFS+ Content Protection (`bsd/sweet_hfs/core/hfs_cprotect.c`), `newclass == PROTECTION_CLASS_F` returned `EINVAL` (22) if the file already had size > 0 (`cp->c_datafork->ff_size > 0`).
+  * On subsequent boots where `launchd.log` already exists on disk, `open_dprotected_np` returned `EINVAL`, causing `launchd` to recursively retry opening its log file, consuming 100% CPU on Core 0 and spamming the console (see `logs/boot-0177-hang.log`).
+  * Patch 0179 removed this restriction on SWEET, allowing `launchd` to cleanly append to existing log files across all reboots.
+- Implemented real MediaTek MT6789 PMIC Wrapper (`PWRAP` at `0x10026000`) power sequencing for Mali-G57 regulators (Patch 0178):
+  * WACS2 command channel sequences MT6366 `buck_vgpu` (0.800V) and `vsram_gpu` LDO.
+  * Replaced device ID spoofing with honest reporting: registers `offline-stub` (device-id 0) if the hardware bus returns 0.
+- Implemented `SweetMaliUserClient::clientMemoryForType` memory mapping:
+  * Type 0: maps physical Mali-G57 MMIO registers (`0x13000000`, 64 KB).
+  * Type 1: maps 1 MB shared command ringbuffer.
+- Upgraded `MaliMetal` from empty mock stubs to a functioning 2D rasterizer pipeline:
+  * Implemented bounding box quad clipping, scissor rect clipping, texture sampling, and 32-bit BGRA alpha blending in `MaliMetalVulkan.c`.
+  * Connected `MaliMetalDevice` to `SweetMaliUserClient` via `IOConnectMapMemory64`.
+
+### Milestone 14: Thermal & Power Optimization
 - Identified that CPU 7 (Cortex-A76 Big Core) was busy-spinning at 2.2 GHz in `wait_ms()` in the shim.
 - Enabled architectural ARMv8 counter event stream on `CNTKCTL_EL1` (bit 14 of `cntpct_el0`, ~1.2 ms pulse at 13 MHz) coupled with low-power standby `wfe`. Duty cycle dropped from 100% to 0.05%.
 - Disabled 8 unsupported/telemetry daemons in `launchd.plist` (`locationd`, `wifid`, `bluetoothd`, `analyticsd`, `awdd`, `passd`, `biometrickitd`, `ScreenTimeAgent`) to eliminate background CPU load.

@@ -5,6 +5,7 @@
 #pragma once
 
 #import "MaliMetalTypes.h"
+#import "MaliMetalVulkan.h"
 
 @class MaliMetalDevice;
 
@@ -36,5 +37,8 @@
 - (id<MTLRenderCommandEncoder>)renderCommandEncoderWithDescriptor:(MTLRenderPassDescriptor *)renderPassDescriptor;
 - (id<MTLComputeCommandEncoder>)computeCommandEncoder;
 - (id<MTLBlitCommandEncoder>)blitCommandEncoder;
+
+/* Internal: Enqueue a draw command from an encoder */
+- (void)enqueueDrawCommand:(const MaliMetalDrawCommand *)cmd forTexture:(id<MTLTexture>)texture;
 
 @end

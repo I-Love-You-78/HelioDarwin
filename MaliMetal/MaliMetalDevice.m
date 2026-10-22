@@ -162,23 +162,49 @@
     io_connect_t _userClient;
     uint32_t _gpuID;
     uint64_t _registryID;
+    volatile uint32_t *_hardwareRegisters;
+    void *_ringBuffer;
 }
 
 - (instancetype)initWithAcceleratorPort:(mach_port_t)acceleratorPort {
     self = [super init];
     if (self) {
         _accelPort = acceleratorPort;
-        _gpuID = 0x9093; /* ARM Mali-G57 MC2 Valhall r0p1 */
+        _gpuID = 0;
         _registryID = 0x13b59093ULL;
+        _hardwareRegisters = NULL;
+        _ringBuffer = NULL;
 
         /* Open connection to SweetMaliUserClient in XNU kernel */
         kern_return_t kr = IOServiceOpen(acceleratorPort, mach_task_self(), 0, &_userClient);
-        if (kr != KERN_SUCCESS) {
+        if (kr == KERN_SUCCESS) {
+            /* Map physical Mali-G57 MMIO registers (type 0, 0x13000000) */
+            mach_vm_address_t mmioAddr = 0;
+            mach_vm_size_t mmioSize = 0x10000;
+            kr = IOConnectMapMemory64(_userClient, 0, mach_task_self(), &mmioAddr, &mmioSize, kIOMapAnywhere);
+            if (kr == KERN_SUCCESS && mmioAddr != 0) {
+                _hardwareRegisters = (volatile uint32_t *)mmioAddr;
+                _gpuID = _hardwareRegisters[0x0000 / 4];
+                NSLog(@"[MaliMetal] Mapped hardware MMIO at %p, read GPU_ID=0x%08x", (void *)mmioAddr, _gpuID);
+            }
+
+            /* Map shared command ringbuffer (type 1) */
+            mach_vm_address_t ringAddr = 0;
+            mach_vm_size_t ringSize = 1024 * 1024;
+            kr = IOConnectMapMemory64(_userClient, 1, mach_task_self(), &ringAddr, &ringSize, kIOMapAnywhere);
+            if (kr == KERN_SUCCESS && ringAddr != 0) {
+                _ringBuffer = (void *)ringAddr;
+            }
+        } else {
             _userClient = MACH_PORT_NULL;
         }
     }
     return self;
 }
+
+- (volatile uint32_t *)hardwareRegisters { return _hardwareRegisters; }
+- (void *)ringBuffer { return _ringBuffer; }
+- (uint32_t)gpuID { return _gpuID; }
 
 - (void)dealloc {
     if (_userClient != MACH_PORT_NULL) {

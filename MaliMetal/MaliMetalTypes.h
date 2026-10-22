@@ -1,15 +1,21 @@
 #pragma once
 #include <stdint.h>
 #include <stddef.h>
+
+#ifdef __OBJC__
 #include <objc/runtime.h>
 #include <objc/message.h>
-
-#ifndef __OBJC__
-#error "MaliMetal requires Objective-C"
 #endif
 
 typedef unsigned long NSUInteger;
 typedef long NSInteger;
+#ifndef BOOL
+#ifndef _OBJC_OBJC_H_
+typedef signed char BOOL;
+#define YES ((BOOL)1)
+#define NO ((BOOL)0)
+#endif
+#endif
 
 typedef uint32_t mach_port_t;
 typedef mach_port_t io_connect_t;
@@ -18,9 +24,18 @@ typedef int kern_return_t;
 #define KERN_SUCCESS 0
 #define MACH_PORT_NULL 0
 
+typedef uint64_t mach_vm_address_t;
+typedef uint64_t mach_vm_size_t;
+#define kIOMapAnywhere 0x00000001
+
+#ifndef __OBJC__
+typedef void *id;
+#endif
+
 extern mach_port_t mach_task_self(void);
 extern kern_return_t IOServiceOpen(mach_port_t service, mach_port_t owningTask, uint32_t type, io_connect_t *connect);
 extern kern_return_t IOServiceClose(io_connect_t connect);
+extern kern_return_t IOConnectMapMemory64(io_connect_t connect, uint32_t memory_type, mach_port_t into_task, mach_vm_address_t *at_address, mach_vm_size_t *of_size, uint32_t options);
 extern void NSLog(id format, ...);
 
 typedef struct {
@@ -128,10 +143,12 @@ typedef enum {
     MTLPrimitiveTypeTriangleStrip = 4,
 } MTLPrimitiveType;
 
+#ifdef __OBJC__
 @interface NSObject
 + (id)alloc;
 - (id)init;
 - (void)dealloc;
+- (BOOL)respondsToSelector:(SEL)aSelector;
 @end
 
 @class NSString, NSError, NSDictionary, NSArray, NSData;
@@ -140,8 +157,20 @@ typedef void *dispatch_data_t;
 @protocol MTLDevice @end
 @protocol MTLCommandQueue @end
 @protocol MTLCommandBuffer @end
-@protocol MTLBuffer @end
-@protocol MTLTexture @end
+@protocol NSObject
+- (BOOL)respondsToSelector:(SEL)aSelector;
+@end
+
+@protocol MTLBuffer <NSObject>
+- (void *)contents;
+- (NSUInteger)length;
+@end
+
+@protocol MTLTexture <NSObject>
+- (NSUInteger)width;
+- (NSUInteger)height;
+- (void *)pixels;
+@end
 @protocol MTLSamplerState @end
 @protocol MTLLibrary @end
 @protocol MTLRenderPipelineState @end
@@ -156,4 +185,17 @@ typedef void *dispatch_data_t;
 @class MTLSamplerDescriptor;
 @class MTLCompileOptions;
 @class MTLRenderPipelineDescriptor;
-@class MTLRenderPassDescriptor;
+
+@interface MTLRenderPassColorAttachmentDescriptor : NSObject
+- (id<MTLTexture>)texture;
+- (void)setTexture:(id<MTLTexture>)texture;
+@end
+
+@interface MTLRenderPassColorAttachmentDescriptorArray : NSObject
+- (MTLRenderPassColorAttachmentDescriptor *)objectAtIndexedSubscript:(NSUInteger)attachmentIndex;
+@end
+
+@interface MTLRenderPassDescriptor : NSObject
+- (MTLRenderPassColorAttachmentDescriptorArray *)colorAttachments;
+@end
+#endif

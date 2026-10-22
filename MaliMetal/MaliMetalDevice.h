@@ -18,6 +18,9 @@
 @property (readonly) uint64_t recommendedMaxWorkingSetSize;
 @property (readonly) uint64_t currentAllocatedSize;
 @property (readonly) NSUInteger maxBufferLength;
+@property (readonly) volatile uint32_t *hardwareRegisters;
+@property (readonly) void *ringBuffer;
+@property (readonly) uint32_t gpuID;
 
 /* Lifecycle */
 - (instancetype)initWithAcceleratorPort:(mach_port_t)acceleratorPort;
