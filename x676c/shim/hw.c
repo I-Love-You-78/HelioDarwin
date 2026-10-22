@@ -37,9 +37,23 @@ void wait_ms(unsigned ms)
 
 	if (!freq)
 		freq = CNTFRQ_FALLBACK;
+
+	/*
+	 * Enable hardware timer event stream on CNTKCTL_EL1:
+	 * Bit 2: EVNTEN = 1 (enable automatic event pulses from counter)
+	 * Bits 7..4: EVNTI = 14 (bit 14 of cntpct_el0 pulses ~every 1.2 ms at 13 MHz)
+	 * This allows wfe to put the CPU into low-power standby instead of
+	 * busy-spinning at 2.2 GHz, completely preventing thermal throttling/overheating.
+	 */
+	uint64_t cntkctl = rsr("cntkctl_el1");
+	cntkctl |= (14ULL << 4) | (1ULL << 2);
+	__asm__ volatile("msr cntkctl_el1, %0\nisb" :: "r"(cntkctl) : "memory");
+
 	end = now() + freq / 1000 * ms;
-	while (now() < end)
+	while (now() < end) {
 		wdt_kick();
+		__asm__ volatile("wfe");
+	}
 }
 
 void reboot(void)
