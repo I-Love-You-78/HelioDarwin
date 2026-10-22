@@ -39,7 +39,7 @@ python -I (Join-Path $x676c "shim\build.py") "$out\payload.bin"
 & $adb wait-for-device
 Phone "dd if=/dev/block/by-name/misc of=/data/local/tmp/bctl.bin bs=1 skip=2048 count=32 2>/dev/null"
 & $adb pull /data/local/tmp/bctl.bin "$out\bctl_now.bin" | Out-Null
-$hex = [Convert]::ToHexString([IO.File]::ReadAllBytes("$out\bctl_now.bin"))
+$hex = [BitConverter]::ToString([IO.File]::ReadAllBytes("$out\bctl_now.bin")).Replace("-", "")
 python -I (Join-Path $x676c "tools\bootctl_block.py") set-active a $hex "$out\bctl_slot_a.bin" 1
 if ($LASTEXITCODE) { throw "bad boot_control block" }
 & $adb push "$out\shim-boot.img" /data/local/tmp/shim-boot.img | Out-Null
