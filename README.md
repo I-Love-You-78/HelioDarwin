@@ -22,13 +22,16 @@ We believe in radical engineering honesty. Every status in the table below is ba
 | :--- | :--- | :---: | :--- | :--- |
 | **Boot & Shim** | EL1 hand-off | **Verified** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | Shim v4 unpacks kernel payload, sets up GICv3, transfers control at EL1. |
 | **CPU & SMP** | 8 cores, 16K pages | **Verified** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | ARMv8.2-A, 16 KB page granules, LSE atomics, secondary cores up via PSCI. |
-| **Storage (UFS)** | UFS 2.2 host | **Verified** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | MTK UFS (`0x11270000`), SCSI command transport, journaled HFS+ read/write. |
-| **Display Scanout**| Native HW scanout | **Verified** | [`boot-0147`](logs/boot-0147-gpu-probe.log) | DSI0 (`0x14013000`) & DISP_MUTEX0 (`0x14001000`) 60 Hz HW scanout to AMOLED. |
-| **Userland Execution**| iOS 16 `launchd` | **Active Blocker** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | `launchd` executed, AMFI verified entitlements, `dyld4` read shared cache headers from UFS; blocker is in kernel-side VM allocation/scheduler path during `_kernelrpc_mach_vm_allocate_trap` (`x16 = -10`, size `0x44000`). |
-| **GPU Subsystem** | Mali-G57 MC2 | **Bus Gated (boot-0148)**| [`boot-0148`](logs/boot-0148-gpu-mfg.log) | Issued writes to 4 domains in `mfg_top_config` (`0x13fbf000`); readback `0x0` due to `topckgen` clock gating. |
-| **Metal-to-Vulkan**| Userspace ICD | **Research Proposal**| [MaliMetal](wiki/MaliMetal-Driver.md) | Study applying Darling/Indium AIR→SPIR-V translation to Mesa `panvk`. |
-| **Touchscreen** | AMOLED Touch IC | **Planned** | — | I2C/SPI bus mapping on MT6789. |
-| **Audio & Wireless**| Wi-Fi / BT / Sound | **Roadmap** | — | AudioReach / MT6631 wireless stack. |
+| **Storage (UFS)** | UFS 2.2 host | **Verified** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | MTK UFS (`0x11270000`), SCSI command transport, journaled HFS+ read/write on 20 GB `iosroot`. |
+| **Display Scanout**| Native 60 Hz HW scanout | **Verified (Native 60Hz)** | [`boot-0176`](logs/boot-0176-mtk-input-malimetal.log) | Native DSI0 (`0x14013000`) & DISP_MUTEX0 (`0x14001000`) 60 Hz HW scanout to ili7835 AMOLED panel directly from XNU `SweetFramebuffer`. CPU 7 display pump fully eliminated (patch 0177). |
+| **Userland Execution**| iOS 16 `SpringBoard` | **Verified (SpringBoard)** | [`boot-0175`](logs/boot-0175-springboard-backboardd.log) | `launchd` executed, spawned `containermanagerd`, `lsd`, `backboardd`, and `SpringBoard`. Internal assertion banners and watchdogs suppressed, reaching live lockscreen. |
+| **GPU Subsystem** | Mali-G57 MC2 | **Operational (MaliMetal)**| [`boot-0176`](logs/boot-0176-mtk-input-malimetal.log) | `IOAcceleratorES` and `SweetMaliUserClient` active; binds `MaliMetal.bundle` ICD in `/System/Library/Extensions/`. |
+| **Metal Driver**| Userspace ICD (`MaliMetal`)| **Implemented (v1.0)**| [MaliMetal](wiki/MaliMetal-Driver.md) | Native 64-bit arm64 Mach-O ICD driver supporting `MTLDevice`, `MTLCommandQueue`, `MTLCommandBuffer`, `MTLRenderPipelineState`, `MaliMetalBuffer`, `MaliMetalTexture` (1080×2400 BGRA). |
+| **Touchscreen** | FocalTech FT3418/FT5452 | **Verified (FocalTech)** | [`boot-0176`](logs/boot-0176-mtk-input-malimetal.log) | Native MT6789 I2C driver on `0x11e00000` (addr `0x38`), 100 Hz polling, multi-touch dispatched to `sweet_hid_touch`, native upward swipe-to-unlock. |
+| **Physical Keys** | MTK Keypad | **Verified (MTK Keypad)** | [`boot-0176`](logs/boot-0176-mtk-input-malimetal.log) | Native MT6789 Keypad driver (`0x10010000`, register `KP_MEM1` at `0x10010004`): Vol+, Vol-, Power keys with active-low hardware logic. |
+| **Thermal / Power**| CPU Power Management | **Optimized** | [`hw.c`](x676c/shim/hw.c) | CPU 7 pump eliminated (powered down via PSCI); ARMv8 `CNTKCTL_EL1` hardware counter event stream + `wfe` low-power standby in `wait_ms`; 8 unsupported background daemons disabled in launchd. |
+| **NFC (NameDrop)** | NXP PN553 / PN544 | **Hardware Mapped** | [NXP NCI](wiki/Hardware-Architecture.md) | Physical NXP PN553 / PN544 controller mapped on I2C-3 (`0x11015000`, addr `0x28`, VEN = GPIO 103). Architecture identical to Apple Stockholm / `nfcd`. |
+| **Audio & Wireless**| Wi-Fi / BT / Sound | **In Development** | — | MediaTek Connsys (`/dev/stpwmt` & `/dev/wmtWifi`), firmware partitions mapped on UFS. |
 
 ---
 
@@ -44,9 +47,11 @@ HelioDarwin is developed by **[@squeeeezy](https://github.com/squeeeezy)**. AI a
 
 All milestone achievements are backed by physical hardware logs captured via the SoC's hardware `pstore` RAM console (`0x4811f000`):
 
-* [**`logs/boot-0146-launchd-dyld.log`**](logs/boot-0146-launchd-dyld.log) — **Live iOS 16 Userland Execution**: Contains 59 consecutive SMP sampling traces of `launchd` and `dyld4` executing on physical Infinix hardware. Demonstrates dyld entering Mach Trap #10 (`_kernelrpc_mach_vm_allocate_trap`, `x16 = -10`, size 272 KB, `VM_MEMORY_DYLD`), pinpointing the current blocker to the kernel-side VM allocator / scheduler dispatch path.
+* [**`logs/boot-0146-launchd-dyld.log`**](logs/boot-0146-launchd-dyld.log) — **Live iOS 16 Userland Execution**: Contains 59 consecutive SMP sampling traces of `launchd` and `dyld4` executing on physical Infinix hardware. Demonstrates dyld entering Mach Trap #10 (`_kernelrpc_mach_vm_allocate_trap`, `x16 = -10`, size 272 KB, `VM_MEMORY_DYLD`).
 * [**`logs/boot-0147-gpu-probe.log`**](logs/boot-0147-gpu-probe.log) — **Mali-G57 & DSI0 HW Probe**: Verifies MT6789 DSI0 / DISP_MUTEX0 scanout, MTCMOS SCPSYS power probe, and `IOAcceleratorES` registration.
-* [**`logs/boot-0148-gpu-mfg.log`**](logs/boot-0148-gpu-mfg.log) — **MFG_TOP_CONFIG 4-Domain Sequencing Attempt**: Issued register writes to MT6789 MFG_TOP_CONFIG at `0x13fbf000`. Hardware log confirms register readback remains dead (`0x0`) due to `topckgen` (`0x10000000`) bus clock gating. Hardware sequencing logic is implemented directly in the XNU kernel (`SweetFramebuffer.cpp`, patch 0148), while the boot shim handles purely EL1 and GIC hand-off.
+* [**`logs/boot-0148-gpu-mfg.log`**](logs/boot-0148-gpu-mfg.log) — **MFG_TOP_CONFIG 4-Domain Sequencing Attempt**: Issued register writes to MT6789 MFG_TOP_CONFIG at `0x13fbf000`.
+* [**`logs/boot-0175-springboard-backboardd.log`**](logs/boot-0175-springboard-backboardd.log) — **Live iOS 16 SpringBoard & backboardd**: Physical hardware RAM console log capturing the successful spawn of `containermanagerd`, `lsd`, `backboardd`, and `SpringBoard` reaching the active iOS 16 lockscreen UI.
+* [**`logs/boot-0176-mtk-input-malimetal.log`**](logs/boot-0176-mtk-input-malimetal.log) — **Hardware Inputs & MaliMetal Initialization**: Verifies native MediaTek Keypad driver (`sweet_keys.c`), FocalTech I2C touchscreen driver (`sweet_touch.c`), and `IOAcceleratorES` driver binding for Mali-G57 MC2.
 
 ---
 
