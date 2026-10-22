@@ -50,9 +50,9 @@ Baseline: Apple XNU `xnu-8796` (Darwin 22.x, iOS 16.7.16 `20H392` / iPhone X `D2
 - In `x676c/shim/main.c`, set `PUMP_LIFETIME_S = 420` (7-minute execution window) to allow dyld uninterrupted time to map the multi-hundred-megabyte `dyld_shared_cache` over UFS.
 - Eliminated early sampling deadlock in `osfmk/kern/exception.c`.
 - Captured 59 consecutive live user execution samples on physical device (see `logs/boot-0146-launchd-dyld.log`):
-  * `pc = 0x104941990` (`ret` at `+0x11990` in `/usr/lib/dyld`)
-  * `lr = 0x104937f2c` (`+0x7f2c` in `_vm_allocate`)
-  * `x16 = -10` (Mach trap `_kernelrpc_mach_vm_allocate_trap`)
+  * `pc = 0x102ded990` (`ret` at `+0xd990` in `/usr/lib/dyld`)
+  * `lr = 0x102de3f2c` (`+0x3f2c` in `_vm_allocate`)
+  * `sp = 0x16d3175b0`, `x16 = -10` (Mach trap `_kernelrpc_mach_vm_allocate_trap`)
   * `x0 = 0x203` (task_self), `x2 = 0x44000` (272 KB allocation), `x3 = 0x3c000001` (`VM_FLAGS_ANYWHERE | VM_MAKE_TAG(VM_MEMORY_DYLD)`)
   * Call stack: `lsl::MemoryManager::vm_allocate_bytes` -> `dyld4::APIs::_dyld_for_each_objc_class`.
   * **Result**: `dyld` initialized its memory heaps and is actively mapping Objective-C classes.
@@ -84,12 +84,13 @@ Baseline: Apple XNU `xnu-8796` (Darwin 22.x, iOS 16.7.16 `20H392` / iPhone X `D2
   * 100 Hz polling loop parsing multi-touch coordinates (1080×2400) and reporting to `sweet_hid_touch`.
   * Removed simulated unlock swipe, enabling native finger swipe-to-unlock.
 
-### Milestone 11: Hardware Graphics Acceleration (`MaliMetal.bundle`)
-- Implemented native 64-bit arm64 Mach-O Metal ICD driver for ARM Mali-G57 MC2 Valhall GPU (`MaliMetal/`):
-  * Implemented `MTLDevice`, `MTLCommandQueue`, `MTLCommandBuffer`, `MTLRenderPipelineState`, `MaliMetalBuffer`, `MaliMetalTexture` (1080×2400 BGRA surface).
+### Milestone 11: Userspace Metal ICD Driver Skeleton (`MaliMetal.bundle`)
+- Implemented native 64-bit arm64 Mach-O Metal ICD driver skeleton for ARM Mali-G57 MC2 Valhall GPU (`MaliMetal/`):
+  * Implemented core Objective-C protocols: `MTLDevice`, `MTLCommandQueue`, `MTLCommandBuffer`, `MTLRenderPipelineState`, `MaliMetalBuffer`, `MaliMetalTexture` (1080×2400 BGRA surface).
+  * Buffers backed by in-memory storage (`calloc`) to satisfy `Metal.framework` / `CoreAnimation` validation checks during early boot.
   * Packaged bundle deployed to `/System/Library/Extensions/MaliMetal.bundle`.
-  * In `SweetFramebuffer.cpp`, delayed `accel->registerService()` until `MetalPluginName` and `MetalPluginClassName` are populated, allowing `Metal.framework` to bind immediately on boot.
-  * Eliminates CPU software rendering, activates GPU-accelerated compositor, restores desktop wallpaper and vibrancy.
+  * In `SweetFramebuffer.cpp`, delayed `accel->registerService()` until `MetalPluginName` and `MetalPluginClassName` are populated, allowing `Metal.framework` to bind immediately on boot without crashing `CAMetalContextCreate`.
+  * Serves as the userland foundation for subsequent Mesa `panvk` Vulkan shader translation integration.
 
 ### Milestone 12: Display Pump Elimination & Native 60 Hz DSI Scanout (Patch 0177)
 - Eliminated legacy background display pump thread on CPU 7 (`pump_start` completely removed from shim).

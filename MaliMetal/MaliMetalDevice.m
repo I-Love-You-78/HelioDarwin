@@ -1,6 +1,8 @@
 /*
- * MaliMetal: Core MTLDevice Implementation
- * Translates Metal calls to Mesa panvk / Vulkan runtime on ARM Mali-G57 MC2.
+ * MaliMetal: In-Memory Metal ICD Driver Skeleton
+ * Provides mock MTLDevice, command queues, and surface buffers to satisfy
+ * CoreAnimation / Metal.framework validation on ARM Mali-G57 MC2.
+ * Long-term roadmap: Bridge to Mesa panvk / Vulkan runtime.
  */
 
 #import "MaliMetalDevice.h"
