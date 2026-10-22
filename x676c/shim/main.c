@@ -56,7 +56,7 @@ void shim_main(uint64_t dtb)
 	plog_str("x676c shim: xnu loader\n");
 	log_cpu(dtb);
 	log_ufs();
-	plog_hex("pump psci", (uint64_t)pump_start(PUMP_LIFETIME_S));
+	dsi_push_frame();
 	splash_draw((volatile uint32_t *)FB_BASE, FB_STRIDE / 4, FB_W, FB_H);
 	plog_str("splash drawn\n");
 
