@@ -5,7 +5,6 @@
 
 #import "MaliMetalDevice.h"
 #import "MaliMetalCommandQueue.h"
-#include <IOKit/IOKitLib.h>
 
 @implementation MaliMetalDevice {
     mach_port_t _accelPort;
@@ -24,10 +23,7 @@
         /* Open connection to SweetMaliUserClient in XNU kernel */
         kern_return_t kr = IOServiceOpen(acceleratorPort, mach_task_self(), 0, &_userClient);
         if (kr != KERN_SUCCESS) {
-            NSLog(@"[MaliMetal] Warning: IOServiceOpen failed (0x%x), running with direct memory mapping", kr);
             _userClient = MACH_PORT_NULL;
-        } else {
-            NSLog(@"[MaliMetal] Connected to SweetMaliUserClient (port 0x%x)", _userClient);
         }
     }
     return self;
@@ -37,11 +33,10 @@
     if (_userClient != MACH_PORT_NULL) {
         IOServiceClose(_userClient);
     }
-    [super dealloc];
 }
 
 - (NSString *)name {
-    return @"Apple Metal on ARM Mali-G57 (HelioDarwin)";
+    return (NSString *)@"Apple Metal on ARM Mali-G57 (HelioDarwin)";
 }
 
 - (uint64_t)registryID {
@@ -94,42 +89,57 @@
 
 /* Buffer Allocation */
 - (id<MTLBuffer>)newBufferWithLength:(NSUInteger)length options:(MTLResourceOptions)options {
-    /* Buffers are page-aligned (16 KB) for hardware DMA */
-    return nil;
+    (void)length;
+    (void)options;
+    return (id)0;
 }
 
 - (id<MTLBuffer>)newBufferWithBytes:(const void *)pointer length:(NSUInteger)length options:(MTLResourceOptions)options {
-    return nil;
+    (void)pointer;
+    (void)length;
+    (void)options;
+    return (id)0;
 }
 
 /* Texture Allocation */
 - (id<MTLTexture>)newTextureWithDescriptor:(MTLTextureDescriptor *)descriptor {
-    return nil;
+    (void)descriptor;
+    return (id)0;
 }
 
 - (id<MTLSamplerState>)newSamplerStateWithDescriptor:(MTLSamplerDescriptor *)descriptor {
-    return nil;
+    (void)descriptor;
+    return (id)0;
 }
 
 /* Library Compilation */
 - (id<MTLLibrary>)newDefaultLibrary {
-    return nil;
+    return (id)0;
 }
 
 - (id<MTLLibrary>)newLibraryWithSource:(NSString *)source options:(MTLCompileOptions *)options error:(NSError **)error {
-    return nil;
+    (void)source;
+    (void)options;
+    if (error) *error = (NSError *)0;
+    return (id)0;
 }
 
 - (id<MTLLibrary>)newLibraryWithData:(dispatch_data_t)data error:(NSError **)error {
-    return nil;
+    (void)data;
+    if (error) *error = (NSError *)0;
+    return (id)0;
 }
 
 - (id<MTLRenderPipelineState>)newRenderPipelineStateWithDescriptor:(MTLRenderPipelineDescriptor *)descriptor error:(NSError **)error {
-    return nil;
+    (void)descriptor;
+    if (error) *error = (NSError *)0;
+    return (id)0;
 }
 
 - (id<MTLComputePipelineState>)newComputePipelineStateWithFunction:(id<MTLFunction>)computeFunction error:(NSError **)error {
-    return nil;
+    (void)computeFunction;
+    if (error) *error = (NSError *)0;
+    return (id)0;
 }
 
 @end

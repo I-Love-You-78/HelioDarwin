@@ -8,6 +8,7 @@
 @implementation MaliMetalCommandQueue {
     MaliMetalDevice *_device;
     NSUInteger _maxCount;
+    NSString *_label;
 }
 
 - (instancetype)initWithDevice:(MaliMetalDevice *)device maxCommandBufferCount:(NSUInteger)count {
@@ -15,16 +16,25 @@
     if (self) {
         _device = device;
         _maxCount = count;
+        _label = (NSString *)0;
     }
     return self;
 }
 
 - (id<MTLDevice>)device {
-    return _device;
+    return (id<MTLDevice>)_device;
+}
+
+- (NSString *)label {
+    return _label;
+}
+
+- (void)setLabel:(NSString *)label {
+    _label = label;
 }
 
 - (id<MTLCommandBuffer>)commandBuffer {
-    return [[MaliMetalCommandBuffer alloc] initWithQueue:self];
+    return (id<MTLCommandBuffer>)[[MaliMetalCommandBuffer alloc] initWithQueue:self];
 }
 
 - (id<MTLCommandBuffer>)commandBufferWithUnretainedReferences {
@@ -36,6 +46,7 @@
 @implementation MaliMetalCommandBuffer {
     MaliMetalCommandQueue *_queue;
     MTLCommandBufferStatus _status;
+    NSString *_label;
 }
 
 - (instancetype)initWithQueue:(MaliMetalCommandQueue *)queue {
@@ -43,6 +54,7 @@
     if (self) {
         _queue = queue;
         _status = MTLCommandBufferStatusNotEnqueued;
+        _label = (NSString *)0;
     }
     return self;
 }
@@ -52,7 +64,7 @@
 }
 
 - (id<MTLCommandQueue>)commandQueue {
-    return _queue;
+    return (id<MTLCommandQueue>)_queue;
 }
 
 - (MTLCommandBufferStatus)status {
@@ -60,7 +72,15 @@
 }
 
 - (NSError *)error {
-    return nil;
+    return (NSError *)0;
+}
+
+- (NSString *)label {
+    return _label;
+}
+
+- (void)setLabel:(NSString *)label {
+    _label = label;
 }
 
 - (void)enqueue {
@@ -69,28 +89,28 @@
 
 - (void)commit {
     _status = MTLCommandBufferStatusCommitted;
-    /* Dispatch command buffer to Mesa panvk / Vulkan command queue */
+    /* Completed signal */
     _status = MTLCommandBufferStatusCompleted;
 }
 
 - (void)waitUntilCompleted {
-    /* Wait on Vulkan fence / GPU interrupt */
 }
 
 - (void)presentDrawable:(id<MTLDrawable>)drawable {
-    /* Zero-copy flip into AppleCLCD framebuffer */
+    (void)drawable;
 }
 
 - (id<MTLRenderCommandEncoder>)renderCommandEncoderWithDescriptor:(MTLRenderPassDescriptor *)renderPassDescriptor {
-    return nil;
+    (void)renderPassDescriptor;
+    return (id)0;
 }
 
 - (id<MTLComputeCommandEncoder>)computeCommandEncoder {
-    return nil;
+    return (id)0;
 }
 
 - (id<MTLBlitCommandEncoder>)blitCommandEncoder {
-    return nil;
+    return (id)0;
 }
 
 @end

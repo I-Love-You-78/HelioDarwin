@@ -4,8 +4,7 @@
 
 #pragma once
 
-#import <Foundation/Foundation.h>
-#import <Metal/Metal.h>
+#import "MaliMetalTypes.h"
 
 @class MaliMetalDevice;
 

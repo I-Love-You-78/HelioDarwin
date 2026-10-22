@@ -7,9 +7,7 @@
 
 #pragma once
 
-#import <Foundation/Foundation.h>
-#import <Metal/Metal.h>
-#include <mach/mach.h>
+#import "MaliMetalTypes.h"
 
 @interface MaliMetalDevice : NSObject <MTLDevice>
 
@@ -23,6 +21,10 @@
 
 /* Lifecycle */
 - (instancetype)initWithAcceleratorPort:(mach_port_t)acceleratorPort;
+
+/* Feature Queries */
+- (BOOL)supportsFeatureSet:(MTLFeatureSet)featureSet;
+- (BOOL)supportsFamily:(MTLGPUFamily)gpuFamily;
 
 /* Command Queue Creation */
 - (id<MTLCommandQueue>)newCommandQueue;
