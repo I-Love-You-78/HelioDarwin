@@ -23,10 +23,10 @@ function Push-Lf([string]$path, [string]$text) {
 }
 
 # 1. kernel from CI
-gh run watch $Run -R $repo --exit-status --interval 30 *> $null
-if ($LASTEXITCODE) { throw "build $Run failed: gh run view $Run -R $repo --log-failed" }
 $k = Join-Path $out "k-$Run"
 if (-not (Test-Path "$k\kernel.development.sweet")) {
+    gh run watch $Run -R $repo --exit-status --interval 30 *> $null
+    if ($LASTEXITCODE) { throw "build $Run failed: gh run view $Run -R $repo --log-failed" }
     gh run download $Run -R $repo -n xnu-kernel -D $k
 }
 
@@ -67,7 +67,7 @@ if (-not ($r -match "flashed")) { throw "flash failed" }
 & $adb reboot
 "$(Get-Date -f HH:mm:ss) rebooted into the shim"
 Start-Sleep 20
-$deadline = (Get-Date).AddMinutes(9)
+$deadline = (Get-Date).AddMinutes(12)
 while ((Get-Date) -lt $deadline -and -not ((& $adb devices | Out-String) -match "`tdevice")) { Start-Sleep 3 }
 for ($i = 0; $i -lt 60 -and -not ((& $adb shell getprop sys.boot_completed 2>$null) -match '1'); $i++) { Start-Sleep 2 }
 $log = Join-Path $out "xnu-$Run.log"
