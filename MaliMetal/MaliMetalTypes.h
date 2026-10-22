@@ -104,6 +104,30 @@ typedef enum {
     MTLCommandBufferStatusError = 5,
 } MTLCommandBufferStatus;
 
+typedef struct {
+    double originX;
+    double originY;
+    double width;
+    double height;
+    double znear;
+    double zfar;
+} MTLViewport;
+
+typedef struct {
+    NSUInteger x;
+    NSUInteger y;
+    NSUInteger width;
+    NSUInteger height;
+} MTLScissorRect;
+
+typedef enum {
+    MTLPrimitiveTypePoint = 0,
+    MTLPrimitiveTypeLine = 1,
+    MTLPrimitiveTypeLineStrip = 2,
+    MTLPrimitiveTypeTriangle = 3,
+    MTLPrimitiveTypeTriangleStrip = 4,
+} MTLPrimitiveType;
+
 @interface NSObject
 + (id)alloc;
 - (id)init;
