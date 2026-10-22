@@ -1,4 +1,4 @@
-From add2eb1fc7bad0ddbd427b01e5107cd471258454 Mon Sep 17 00:00:00 2001
+From 0b3afb9ef016d421f2899b07b19aad1f4ed02f2b Mon Sep 17 00:00:00 2001
 From: Egor Kulikovskiy <xianel0x@gmail.com>
 Date: Thu, 22 Oct 2026 23:49:22 +0500
 Subject: [PATCH] x676c: mute video console, clear fb on GUI takeover, and
@@ -6,8 +6,8 @@ Subject: [PATCH] x676c: mute video console, clear fb on GUI takeover, and
 
 ---
  iokit/Kernel/arm/SweetFramebuffer.cpp | 51 ++++++++++++++++++++-------
- osfmk/console/video_console.c         |  7 ++++
- 2 files changed, 45 insertions(+), 13 deletions(-)
+ osfmk/console/video_console.c         |  6 ++++
+ 2 files changed, 44 insertions(+), 13 deletions(-)
 
 diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
 index 9cab548..fbd4add 100644
@@ -100,16 +100,15 @@ index 9cab548..fbd4add 100644
  		}
  		if (src != 0 && bpe == 4) {
 diff --git a/osfmk/console/video_console.c b/osfmk/console/video_console.c
-index 4193f57..6f6075d 100644
+index 4193f57..fb57d88 100644
 --- a/osfmk/console/video_console.c
 +++ b/osfmk/console/video_console.c
-@@ -1250,6 +1250,13 @@ gc_update_color(int color, boolean_t fore)
+@@ -1250,6 +1250,12 @@ gc_update_color(int color, boolean_t fore)
  void
  vcputc_options(char c, __unused bool poll)
  {
 +#if defined(ARM64_BOARD_CONFIG_SWEET)
 +	extern int sweet_console_muted;
-+	extern int panic_active(void);
 +	if (sweet_console_muted && !panic_active()) {
 +		return;
 +	}
