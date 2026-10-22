@@ -8,7 +8,7 @@ Needs: gh (repo squeeeezy/ios-x676c), adb with root (Magisk), Python + ziglang.
 #>
 param(
     [Parameter(Mandatory)] [string]$Run,
-    [string]$BootArgs = "debug=0xc serial=3 cpus=6 keepsyms=1 -v -enable_kprintf_spam wdt=-1 wdt_test=no_user_checkin rd=ufs ufsroot=iosroot ufsrw=iosroot unentitled_ios_sim_launch=1 ignition_level=1 launchd_unsecure_cache=1 cs_debug=1 sweet_amfi_debug=1 sweetsample=- ufsbeat=64 sweetnull=launchd,dyld,init,backboardd,SpringBoard"
+    [string]$BootArgs = "debug=0xc serial=3 cpus=6 keepsyms=1 -v -enable_kprintf_spam wdt=-1 wdt_test=no_user_checkin rd=ufs ufsroot=iosroot ufsrw=iosroot unentitled_ios_sim_launch=1 ignition_level=1 launchd_unsecure_cache=1 cs_debug=1 sweet_amfi_debug=1 sweetsample=- ufsbeat=64 sweetnull=launchd,dyld,init,SpringBoard launchd_log_serial=1 sweetfb_noconsole=1"
 )
 $ErrorActionPreference = "Stop"
 $repo = "squeeeezy/HelioDarwin"
