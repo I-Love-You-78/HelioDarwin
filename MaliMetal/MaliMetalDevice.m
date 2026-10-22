@@ -59,6 +59,11 @@
 
 @end
 
+extern void *IOSurfaceGetBaseAddress(void *token) __attribute__((weak_import));
+extern size_t IOSurfaceGetWidth(void *token) __attribute__((weak_import));
+extern size_t IOSurfaceGetHeight(void *token) __attribute__((weak_import));
+extern size_t IOSurfaceGetBytesPerRow(void *token) __attribute__((weak_import));
+
 /*
  * MaliMetalTexture: Memory-backed Metal Texture for CoreAnimation
  */
@@ -68,8 +73,10 @@
     NSUInteger _height;
     void *_pixels;
     NSUInteger _bytesPerRow;
+    BOOL _isIOSurface;
 }
 - (instancetype)initWithDescriptor:(MTLTextureDescriptor *)descriptor device:(id<MTLDevice>)device;
+- (instancetype)initWithDescriptor:(MTLTextureDescriptor *)descriptor iosurface:(void *)iosurface plane:(NSUInteger)plane device:(id<MTLDevice>)device;
 - (NSUInteger)width;
 - (NSUInteger)height;
 - (id<MTLDevice>)device;
@@ -89,12 +96,36 @@
         _height = 2400;
         _bytesPerRow = _width * 4;
         _pixels = calloc(1, _bytesPerRow * _height);
+        _isIOSurface = NO;
+    }
+    return self;
+}
+
+- (instancetype)initWithDescriptor:(MTLTextureDescriptor *)descriptor iosurface:(void *)iosurface plane:(NSUInteger)plane device:(id<MTLDevice>)device {
+    self = [super init];
+    if (self) {
+        (void)descriptor;
+        (void)plane;
+        _device = device;
+        _isIOSurface = YES;
+        if (iosurface != NULL && IOSurfaceGetBaseAddress != NULL) {
+            _pixels = IOSurfaceGetBaseAddress(iosurface);
+            _width = IOSurfaceGetWidth ? IOSurfaceGetWidth(iosurface) : 1080;
+            _height = IOSurfaceGetHeight ? IOSurfaceGetHeight(iosurface) : 2400;
+            _bytesPerRow = IOSurfaceGetBytesPerRow ? IOSurfaceGetBytesPerRow(iosurface) : (_width * 4);
+        } else {
+            _width = 1080;
+            _height = 2400;
+            _bytesPerRow = _width * 4;
+            _pixels = calloc(1, _bytesPerRow * _height);
+            _isIOSurface = NO;
+        }
     }
     return self;
 }
 
 - (void)dealloc {
-    if (_pixels) {
+    if (_pixels && !_isIOSurface) {
         free(_pixels);
         _pixels = NULL;
     }
