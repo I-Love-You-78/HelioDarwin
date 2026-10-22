@@ -136,7 +136,30 @@ def main():
     merge_pref(root, 'com.apple.springboard', {
         'BKNoWatchdogs': True,
         'FBLaunchWatchdogExceptions': {'com.apple.purplebuddy': 100.0},
-        'MCForceShowCloudConfigurationUI': False})
+        'MCForceShowCloudConfigurationUI': False,
+        'SBShowInternalAssertionBanners': False,
+        'SBDontShowInternalAssertionBanners': True,
+        'SBShowInternalBanner': False,
+        'SBShowNonFatalAssertionBanners': False,
+        'SBEnableAssertionAlerts': False,
+        'SBShowNonFatalAssertionAlerts': False})
+    dm_dir = os.path.join(root, 'private/var/mobile/Library/DataMigration')
+    os.makedirs(dm_dir, exist_ok=True)
+    with open(os.path.join(dm_dir, 'BuildVersion'), 'w') as f:
+        f.write(BUILD + '\n')
+    with open(os.path.join(dm_dir, 'DataMigrationCompleted'), 'w') as f:
+        f.write('')
+    os.chown(dm_dir, MOBILE, MOBILE)
+    os.chmod(dm_dir, 0o755)
+    mali_src = '/mnt/d/MTK ios/topaz/MaliMetal/MaliMetal.bundle'
+    if not os.path.isdir(mali_src):
+        mali_src = os.path.join(os.path.dirname(__file__), '../MaliMetal/MaliMetal.bundle')
+    mali_dst = os.path.join(root, 'System/Library/Extensions/MaliMetal.bundle')
+    if os.path.isdir(mali_src):
+        if os.path.exists(mali_dst):
+            shutil.rmtree(mali_dst)
+        shutil.copytree(mali_src, mali_dst)
+        print('MaliMetal.bundle installed to System/Library/Extensions')
     merge_pref(root, 'com.apple.purplebuddy', {
         'SetupDone': True, 'SetupFinishedAllSteps': True, 'SetupVersion': 11,
         'daemonizeNeedsToRun': False})
