@@ -1,0 +1,160 @@
+From 22d25157e7984ff6b30f9e2d42b664ad1b2c8540 Mon Sep 17 00:00:00 2001
+From: Egor Kulikovskiy <xianel0x@gmail.com>
+Date: Fri, 23 Oct 2026 12:45:52 +0500
+Subject: [PATCH] x676c: retry UFS commands and settle OCS to stop
+ demand-paging SIGBUS
+
+A UFS read command intermittently completed with OCS=0xf (the pre-set
+UFS_OCS_INVALID): the controller clears the doorbell but its OCS writeback to
+the UTRD can lag, so the single invalidate+read raced and saw the stale 0xf
+(also seen alongside UIC link errors). ufs_exec then returned EIO, a demand
+page-in from the iosroot failed, and the VM surfaced it as SIGBUS inside dyld,
+killing daemons -- backboardd first, so the UI never composed and the screen
+stayed on the boot splash.
+
+ufs_exec now: (1) after the doorbell clears, re-invalidate and re-read the UTRD
+until the OCS leaves UFS_OCS_INVALID, and (2) retry the whole command up to
+UFS_EXEC_RETRIES on timeout/abort/OCS error. These requests are reads, writes
+of the same buffer, or idempotent queries, so retrying is safe.
+---
+ bsd/dev/ufs/ufshci.c | 107 +++++++++++++++++++++++++++----------------
+ 1 file changed, 67 insertions(+), 40 deletions(-)
+
+diff --git a/bsd/dev/ufs/ufshci.c b/bsd/dev/ufs/ufshci.c
+index 6cb65d0..ed64674 100644
+--- a/bsd/dev/ufs/ufshci.c
++++ b/bsd/dev/ufs/ufshci.c
+@@ -52,6 +52,7 @@ static LCK_GRP_DECLARE(ufs_lck_grp, "ufshci");
+ #define INIT_FLAG_TIMEOUT_US    (1500 * 1000)
+ #define SPIN_US                 50
+ #define SLEEP_US                100
++#define UFS_EXEC_RETRIES        4
+ 
+ _Static_assert(sizeof(struct ufs_utrd) == 32, "UTRD layout");
+ _Static_assert(sizeof(struct ufs_prd) == 16, "PRD layout");
+@@ -294,56 +295,82 @@ ufs_exec(struct ufs_hba *hba, const uint8_t req[32], unsigned req_len, uint8_t d
+ 		}
+ 	}
+ 
+-	bzero(d, sizeof(*d));
+-	d->dw0 = (1u << 28) | ((uint32_t)dir << 25);
+-	d->dw2 = UFS_OCS_INVALID;
+-	d->ucdba = (uint32_t)ucd_pa(hba, slot);
+-	d->ucdbau = (uint32_t)(ucd_pa(hba, slot) >> 32);
+-	d->resp = (UCD_RESP / 4) << 16 | (UFS_UPIU_SIZE / 4);
+-	d->prdt = nprd ? ((UCD_PRDT / 4) << 16 | nprd) : 0;
++	/*
++	 * Issue with bounded retries. A failed completion (timeout/abort, or an OCS
++	 * that never leaves the pre-set UFS_OCS_INVALID) made a single demand page-in
++	 * fail with EIO, which the VM surfaced as a SIGBUS in dyld and killed daemons
++	 * (backboardd first, so the UI never composed). These requests are read/write
++	 * of the same buffer or idempotent queries, so retrying is safe.
++	 */
++	uint32_t ocs = UFS_OCS_INVALID;
++	for (int tryno = 0; tryno < UFS_EXEC_RETRIES; tryno++) {
++		bzero(d, sizeof(*d));
++		d->dw0 = (1u << 28) | ((uint32_t)dir << 25);
++		d->dw2 = UFS_OCS_INVALID;
++		d->ucdba = (uint32_t)ucd_pa(hba, slot);
++		d->ucdbau = (uint32_t)(ucd_pa(hba, slot) >> 32);
++		d->resp = (UCD_RESP / 4) << 16 | (UFS_UPIU_SIZE / 4);
++		d->prdt = nprd ? ((UCD_PRDT / 4) << 16 | nprd) : 0;
++
++		flush_dcache64((addr64_t)ucd_pa(hba, slot), UFS_UCD_SIZE, TRUE);
++		flush_dcache64((addr64_t)(hba->dma_pa + DMA_UTRL + slot * sizeof(*d)), sizeof(*d), TRUE);
++		for (unsigned i = 0; i < nsegs; i++) {
++			if (dir == UFS_DD_TO_DEVICE) {
++				clean_dcache64((addr64_t)segs[i].pa, segs[i].len, TRUE);
++			} else {
++				flush_dcache64((addr64_t)segs[i].pa, segs[i].len, TRUE);
++			}
++		}
++		__builtin_arm_dsb(0xf);
+ 
+-	flush_dcache64((addr64_t)ucd_pa(hba, slot), UFS_UCD_SIZE, TRUE);
+-	flush_dcache64((addr64_t)(hba->dma_pa + DMA_UTRL + slot * sizeof(*d)), sizeof(*d), TRUE);
+-	for (unsigned i = 0; i < nsegs; i++) {
+-		if (dir == UFS_DD_TO_DEVICE) {
+-			clean_dcache64((addr64_t)segs[i].pa, segs[i].len, TRUE);
+-		} else {
+-			flush_dcache64((addr64_t)segs[i].pa, segs[i].len, TRUE);
++		ufs_wr(hba, UFS_REG_UTRLDBR, 1u << slot);
++		error = ufs_slot_wait(hba, slot);
++		if (error) {
++			/* UTRLCLR: a 0 bit aborts that slot */
++			ufs_wr(hba, UFS_REG_UTRLCLR, ~(1u << slot));
++			ufs_wait_reg(hba, UFS_REG_UTRLDBR, 1u << slot, 0, UIC_TIMEOUT_US);
++			printf("ufshci: slot %u (UPIU 0x%02x op 0x%02x) %s (try %d)\n", slot, req[0],
++			    req_len > 16 ? (unsigned)req[16] : 0u, error == ETIMEDOUT ? "timed out" : "aborted", tryno);
++			continue;
++		}
++		__builtin_arm_dsb(0xf);
++
++		/*
++		 * The controller DMA-writes the UTRD overall-command-status (OCS) and
++		 * clears the doorbell. On this MediaTek host the OCS writeback can lag
++		 * the doorbell clear, so re-invalidate and re-read the descriptor until
++		 * the OCS settles rather than racing and seeing the pre-set 0xf.
++		 */
++		for (unsigned t = 0; t < 2000; t++) {
++			flush_dcache64((addr64_t)(hba->dma_pa + DMA_UTRL + slot * sizeof(*d)), sizeof(*d), TRUE);
++			ocs = d->dw2 & 0xff;
++			if (ocs != UFS_OCS_INVALID) {
++				break;
++			}
++			delay(SPIN_US);
++			__builtin_arm_dsb(0xf);
+ 		}
+-	}
+-	__builtin_arm_dsb(0xf);
+ 
+-	ufs_wr(hba, UFS_REG_UTRLDBR, 1u << slot);
+-	error = ufs_slot_wait(hba, slot);
+-	if (error) {
+-		/* UTRLCLR: a 0 bit aborts that slot */
+-		ufs_wr(hba, UFS_REG_UTRLCLR, ~(1u << slot));
+-		ufs_wait_reg(hba, UFS_REG_UTRLDBR, 1u << slot, 0, UIC_TIMEOUT_US);
+-		printf("ufshci: slot %u (UPIU 0x%02x op 0x%02x) %s\n", slot, req[0],
+-		    req_len > 16 ? (unsigned)req[16] : 0u, error == ETIMEDOUT ? "timed out" : "aborted");
+-		ufs_slot_put(hba, slot);
+-		return error;
+-	}
+-	__builtin_arm_dsb(0xf);
++		flush_dcache64((addr64_t)(ucd_pa(hba, slot) + UCD_RESP), UFS_UPIU_SIZE, TRUE);
++		if (dir == UFS_DD_FROM_DEVICE) {
++			for (unsigned i = 0; i < nsegs; i++) {
++				flush_dcache64((addr64_t)segs[i].pa, segs[i].len, TRUE);
++			}
++		}
+ 
+-	flush_dcache64((addr64_t)(hba->dma_pa + DMA_UTRL + slot * sizeof(*d)), sizeof(*d), TRUE);
+-	flush_dcache64((addr64_t)(ucd_pa(hba, slot) + UCD_RESP), UFS_UPIU_SIZE, TRUE);
+-	if (dir == UFS_DD_FROM_DEVICE) {
+-		for (unsigned i = 0; i < nsegs; i++) {
+-			flush_dcache64((addr64_t)segs[i].pa, segs[i].len, TRUE);
++		if (ocs == UFS_OCS_SUCCESS) {
++			error = 0;
++			break;
+ 		}
++		printf("ufshci: UPIU 0x%02x OCS 0x%x (try %d)\n", req[0], ocs, tryno);
++		error = EIO;
+ 	}
+ 
+-	uint32_t ocs = d->dw2 & 0xff;
+-	if (resp) {
++	if (error == 0 && resp) {
+ 		memcpy(resp, cd + UCD_RESP, MIN(resp_len, UFS_UPIU_SIZE));
+ 	}
+ 	ufs_slot_put(hba, slot);
+-	if (ocs != UFS_OCS_SUCCESS) {
+-		printf("ufshci: UPIU 0x%02x OCS 0x%x\n", req[0], ocs);
+-		return EIO;
+-	}
+-	return 0;
++	return error;
+ }
+ 
+ static int
+-- 
+2.51.0.windows.1
+
