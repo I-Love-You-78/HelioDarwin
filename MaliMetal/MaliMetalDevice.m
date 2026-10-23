@@ -310,6 +310,10 @@ extern size_t IOSurfaceGetBytesPerRow(void *token) __attribute__((weak_import));
     return (id<MTLTexture>)[[MaliMetalTexture alloc] initWithDescriptor:descriptor device:self];
 }
 
+- (id<MTLTexture>)newTextureWithDescriptor:(MTLTextureDescriptor *)descriptor iosurface:(void *)iosurface plane:(NSUInteger)plane {
+    return (id<MTLTexture>)[[MaliMetalTexture alloc] initWithDescriptor:descriptor iosurface:iosurface plane:plane device:self];
+}
+
 - (id<MTLSamplerState>)newSamplerStateWithDescriptor:(MTLSamplerDescriptor *)descriptor {
     (void)descriptor;
     return (id)0;

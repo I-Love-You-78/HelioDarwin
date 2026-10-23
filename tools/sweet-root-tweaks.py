@@ -74,6 +74,10 @@ def launchd(root):
         'com.apple.passd',
         'com.apple.biometrickitd',
         'com.apple.ScreenTimeAgent',
+        'com.apple.nanotimekitcompaniond',
+        'com.apple.fairplayd.H2',
+        'com.apple.ptpd',
+        'com.apple.searchd',
     }
     removed = [k for k, j in jobs.items() if j.get('Label') in disabled_labels]
     for k in removed:

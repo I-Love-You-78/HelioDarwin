@@ -9,7 +9,14 @@
 
 #import "MaliMetalTypes.h"
 
-@interface MaliMetalDevice : NSObject <MTLDevice>
+/* Forward-declare Metal.framework's base device class */
+@interface _MTLDevice : NSObject <MTLDevice>
+- (instancetype)init;
+- (void)initLimits;
+- (void)initFeatureQueries;
+@end
+
+@interface MaliMetalDevice : _MTLDevice
 
 @property (readonly) NSString *name;
 @property (readonly) uint64_t registryID;
