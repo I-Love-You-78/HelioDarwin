@@ -158,6 +158,8 @@
     MaliMetalDrawCommand _drawCommands[MAX_COMMANDS_PER_BUFFER];
     id<MTLTexture> _targetTextures[MAX_COMMANDS_PER_BUFFER];
     NSUInteger _drawCommandCount;
+    id<MTLDrawable> _drawablesToPresent[16];
+    NSUInteger _drawableCount;
 }
 
 - (instancetype)initWithQueue:(MaliMetalCommandQueue *)queue {
@@ -167,11 +169,15 @@
         _status = MTLCommandBufferStatusNotEnqueued;
         _label = (NSString *)0;
         _drawCommandCount = 0;
+        _drawableCount = 0;
     }
     return self;
 }
 
 - (void)dealloc {
+    for (NSUInteger i = 0; i < _drawableCount; i++) {
+        [(id)_drawablesToPresent[i] release];
+    }
     [super dealloc];
 }
 
@@ -237,6 +243,17 @@
         }
     }
 
+    /* Present all queued drawables (triggers CAMetalDrawable layer_private_present -> CATransaction commit) */
+    for (NSUInteger i = 0; i < _drawableCount; i++) {
+        id d = (id)_drawablesToPresent[i];
+        if (d && [d respondsToSelector:@selector(present)]) {
+            [d present];
+        }
+        [d release];
+        _drawablesToPresent[i] = (id<MTLDrawable>)0;
+    }
+    _drawableCount = 0;
+
     _drawCommandCount = 0;
     _status = MTLCommandBufferStatusCompleted;
 }
@@ -245,7 +262,9 @@
 }
 
 - (void)presentDrawable:(id<MTLDrawable>)drawable {
-    (void)drawable;
+    if (drawable && _drawableCount < 16) {
+        _drawablesToPresent[_drawableCount++] = (id<MTLDrawable>)[(id)drawable retain];
+    }
 }
 
 - (id<MTLRenderCommandEncoder>)renderCommandEncoderWithDescriptor:(MTLRenderPassDescriptor *)renderPassDescriptor {
