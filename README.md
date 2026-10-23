@@ -24,9 +24,9 @@ We believe in radical engineering honesty. Every status in the table below is ba
 | **CPU & SMP** | 8 cores, 16K pages | **Verified** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | ARMv8.2-A, 16 KB page granules, LSE atomics, secondary cores up via PSCI. |
 | **Storage (UFS)** | UFS 2.2 host | **Verified** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | MTK UFS (`0x11270000`), SCSI command transport, journaled HFS+ read/write on 20 GB `iosroot`. |
 | **Display Scanout**| Native 60 Hz HW scanout | **Verified (Native 60Hz)** | [`boot-0176`](logs/boot-0176-mtk-input-malimetal.log) | Native DSI0 (`0x14013000`) & DISP_MUTEX0 (`0x14001000`) 60 Hz HW scanout to ili7835 AMOLED panel directly from XNU `SweetFramebuffer`. CPU 7 display pump fully eliminated (patch 0177). |
-| **Userland Execution**| iOS 16 `SpringBoard` | **Verified (SpringBoard)** | [`boot-0175`](logs/boot-0175-springboard-backboardd.log) | `launchd` executed, spawned `containermanagerd`, `lsd`, `backboardd`, and `SpringBoard`. Internal assertion banners and watchdogs suppressed, reaching live lockscreen. |
-| **GPU Subsystem** | Mali-G57 MC2 | **PWRAP Power + MMIO** | [`boot-0176`](logs/boot-0176-mtk-input-malimetal.log) | MT6789 PWRAP (`0x10026000`) sequences MT6366 regulators (`buck_vgpu` & `vsram_gpu`). `SweetMaliUserClient` provides `IOConnectMapMemory64` to `0x13000000` (patch 0178). |
-| **Metal Driver**| Userspace ICD (`MaliMetal`)| **2D Software Rasterizer** | [MaliMetal](wiki/MaliMetal-Driver.md) | In-memory 64-bit arm64 Mach-O ICD with hardware MMIO mapping and 2D quad clipping, texture sampling, and BGRA alpha blending. 0% hardware 3D; Mesa panvk bridge is in development. |
+| **Userland Execution**| iOS 16 `SpringBoard` | **launchd → backboardd/SpringBoard** | [`boot-0175`](logs/boot-0175-springboard-backboardd.log) | `launchd` executes and spawns `lsd`, `backboardd`, and `SpringBoard` (IOKit activity visible in the log). Internal assertion banners and watchdogs suppressed. A fully composed, verified lockscreen is not yet claimed. |
+| **GPU Subsystem** | Mali-G57 MC2 | **Power bring-up in progress** | [`boot-0148`](logs/boot-0148-gpu-mfg.log) | MFG power-on sequence reverse-engineered from the stock `mtk_gpufreq_mt6789.ko` (AP-direct MTCMOS in SPM `0x10006308+`) and rewritten in `SweetFramebuffer.cpp`. `SweetMaliUserClient` maps `0x13000000` via `IOConnectMapMemory64`. The GPU register bank still reads `0x0` (power/clock bring-up not yet confirmed on hardware); see [MT6789 GPU Power Sequence](wiki/MT6789-GPU-Power-Sequence.md). |
+| **Metal Driver**| Userspace ICD (`MaliMetal`)| **2D Software Rasterizer only** | [MaliMetal](wiki/MaliMetal-Driver.md) | 64-bit arm64 Mach-O ICD exposing `MTLDevice`/`MTLCommandQueue`/etc. with a CPU 2D compositor (quad clipping, texture sampling, BGRA alpha blending). No GPU-accelerated 3D, no Vulkan/panvk yet; those are a design proposal, not working code. |
 | **Touchscreen** | FocalTech FT3418/FT5452 | **Driver Active (Polling I2C)** | [`boot-0176`](logs/boot-0176-mtk-input-malimetal.log) | Native MT6789 I2C driver on `0x11e00000` (addr `0x38`), 100 Hz polling loop active. Synthetic unlock swipe removed; physical finger touch coordinate capture pending dedicated log. |
 | **Physical Keys** | MTK Keypad | **Verified (MTK Keypad)** | [`boot-0176`](logs/boot-0176-mtk-input-malimetal.log) | Native MT6789 Keypad driver (`0x10010000`, register `KP_MEM1` at `0x10010004`): Vol+, Vol-, Power keys with active-low hardware logic. |
 | **Thermal / Power**| CPU Power Management | **Optimized** | [`hw.c`](x676c/shim/hw.c) | CPU 7 pump eliminated (powered down via PSCI); ARMv8 `CNTKCTL_EL1` hardware counter event stream + `wfe` low-power standby in `wait_ms`; 8 unsupported background daemons disabled in launchd. |
@@ -69,20 +69,23 @@ HelioDarwin explores applying the Darling/Indium translation model within native
    * Sequences MTCMOS power domains in MediaTek SCPSYS (`0x10006000`).
    * Un-gates graphics clock distribution via `MFGCFG` (`0x13fbf000`).
    * Exposes physical memory mapping and GPU command ringbuffers to user space.
-   * Registers `IOAcceleratorES` in the IORegistry with:
+   * Registers `IOAcceleratorES` in the IORegistry. The real hardware ID (ARM
+     vendor `0x13b5`, Mali-G57 product `0x9093`, reported by the vendor Mali
+     driver's sysfs on this device) is only published once the GPU answers;
+     until then the kernel honestly registers `device-id = 0` (offline-stub):
      ```text
      MetalPluginName = "MaliMetal"
      MetalPluginClassName = "MaliMetalDevice"
      vendor-id = 0x13b5 (ARM)
-     device-id = 0x9003 (Mali-G57 Valhall)
+     device-id = 0x9093 when live, else 0 (offline-stub)
      ```
 
-2. **Userspace ICD (`MaliMetal.bundle`)**:
+2. **Userspace ICD (`MaliMetal.bundle`)** *(proposed — not yet implemented)*:
    * Dynamically loaded by Apple's `Metal.framework` via `CFBundle`.
-   * Implements the `MTLDevice` protocol.
-   * Bridges Metal state, command buffers, and render passes directly into **Vulkan 1.3** primitives.
-   * Compiles Apple Intermediate Representation (AIR / LLVM bitcode) and Metal Shading Language (MSL) into SPIR-V shaders executed by Mesa's `panvk` Valhall driver.
-   * Backs framebuffers with zero-copy `IOSurface` memory mapped directly into the MediaTek DSI scanout hardware.
+   * Implements the `MTLDevice` protocol (today: enough to satisfy early boot, with a CPU 2D compositor).
+   * *Would* bridge Metal state, command buffers, and render passes into **Vulkan 1.3** primitives.
+   * *Would* compile Apple Intermediate Representation (AIR / LLVM bitcode) and MSL into SPIR-V shaders run by Mesa's `panvk` Valhall driver.
+   * *Would* back framebuffers with zero-copy `IOSurface` memory mapped into the MediaTek DSI scanout hardware.
 
 ---
 

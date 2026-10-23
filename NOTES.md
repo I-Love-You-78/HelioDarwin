@@ -57,21 +57,29 @@ Baseline: Apple XNU `xnu-8796` (Darwin 22.x, iOS 16.7.16 `20H392` / iPhone X `D2
   * Call stack: `lsl::MemoryManager::vm_allocate_bytes` -> `dyld4::APIs::_dyld_for_each_objc_class`.
   * **Result**: `dyld` initialized its memory heaps and is actively mapping Objective-C classes.
 
-### Milestone 8: Mali-G57 MC2 Valhall GPU Reverse Engineering & Bring-up
-- Disassembled MediaTek GPU power driver (`mtk_gpufreq_mt6789.ko`) using Capstone:
-  * Identified GPU clock configuration base: `mfg_top_config` at physical address `0x13fbf000` (size `0x1000`).
-  * Identified core power control registers: Core 0 at `0x13fbf000 + 0x308`, Core 1 at `0x13fbf000 + 0x30c`.
-  * Identified status registers: `0x13fbf000 + 0x16c` and `+ 0x170`.
-  * Confirmed live GPU identity via device sysfs: `Mali-G57 2 cores r0p1 0x9093`.
-  * Identified PMIC voltage rails: `vgpu` (regulator 8, target ~0.75V) and `vsram_gpu` (regulator 23, target ~0.75V).
-- Published `IOAcceleratorES` in IORegistry with properties `MetalPluginName = "MaliMetal"` and `MetalPluginClassName = "MaliMetalDevice"`.
+### Milestone 8: Mali-G57 MC2 GPU identity & first (incorrect) power attempt
+- Vendor Mali driver sysfs on the device reports the real GPU identity:
+  `Mali-G57 2 cores r0p1 0x9093` (`/sys/devices/platform/soc/13000000.mali/gpuinfo`).
+  This is the ARM product ID; our XNU has **not** read it live yet (the bank reads `0x0`).
+- Published `IOAcceleratorES` in IORegistry (`MetalPluginName = "MaliMetal"`,
+  `MetalPluginClassName = "MaliMetalDevice"`); `device-id` is registered as `0`
+  (offline-stub) until the hardware actually answers.
+- **Correction (see Milestone 15):** the first bring-up assumed the MFG power-domain
+  control registers lived in `MFG_TOP` at `0x13fbf000 + 0x308/0x30c` with status at
+  `+0x16c/+0x170`, and VGPU at ~0.8V. That was wrong. The `*_PWR_CON` registers are in
+  the **SPM** bank at `0x10006308+`; `0x16c/0x170` are SPM `PWR_STATUS`; VGPU is
+  0.575–0.725 V. The old writes to `0x13fbf000` power bits did nothing.
 
-### Milestone 9: Full iOS 16 SpringBoard & backboardd Execution
-- Spanned `launchd`, `containermanagerd`, `lsd`, `backboardd`, and `SpringBoard`.
+### Milestone 9: iOS 16 SpringBoard & backboardd execution
+- `launchd` executes and spawns `lsd`, `backboardd`, and `SpringBoard` (IOKit activity
+  for these is visible in the log). `containermanagerd` reliably launching was a known
+  blocker earlier in bring-up; do not claim it as settled without a log that shows it.
 - Applied system root tweaks via `sweet-root-tweaks.py`:
   * Configured `com.apple.springboard` preferences to disable `SBShowInternalAssertionBanners`, `SBShowInternalBanner`, `SBEnableAssertionAlerts`, and `BKNoWatchdogs`.
   * Prepopulated DataMigration markers (`BuildVersion = 20H392`, `DataMigrationCompleted`, `com.apple.migration.plist`) to bypass `com.apple.datamigrator` white folder screen.
-- Verified live iOS 16 lockscreen composition on 1080×2400 AMOLED display (see `logs/boot-0175-springboard-backboardd.log`).
+- SpringBoard/backboardd reach UI composition on the 1080×2400 AMOLED panel via the
+  CPU 2D compositor path (see `logs/boot-0175-springboard-backboardd.log`). A fully
+  rendered, interactive lockscreen is not independently verified here.
 
 ### Milestone 10: Native Physical Input Drivers (MTK Keypad & FocalTech I2C)
 - Implemented native MediaTek Keypad driver (`bsd/dev/sweet_keys.c`, patch 0175/0176):
@@ -104,7 +112,9 @@ Baseline: Apple XNU `xnu-8796` (Darwin 22.x, iOS 16.7.16 `20H392` / iPhone X `D2
   * On subsequent boots where `launchd.log` already exists on disk, `open_dprotected_np` returned `EINVAL`, causing `launchd` to recursively retry opening its log file, consuming 100% CPU on Core 0 and spamming the console (see `logs/boot-0177-hang.log`).
   * Patch 0179 removed this restriction on SWEET, allowing `launchd` to cleanly append to existing log files across all reboots.
 - Implemented real MediaTek MT6789 PMIC Wrapper (`PWRAP` at `0x10026000`) power sequencing for Mali-G57 regulators (Patch 0178):
-  * WACS2 command channel sequences MT6366 `buck_vgpu` (0.800V) and `vsram_gpu` LDO.
+  * WACS2 command channel targets the MT6366 `buck_vgpu` / `vsram_gpu` rails. Note: the
+    device OPP table gives VGPU 0.575–0.725 V and VSRAM_GPU 0.75 V (the earlier "0.800V"
+    was a guess); the exact MT6366 register encoding over PWRAP is not yet re-verified.
   * Replaced device ID spoofing with honest reporting: registers `offline-stub` (device-id 0) if the hardware bus returns 0.
 - Implemented `SweetMaliUserClient::clientMemoryForType` memory mapping:
   * Type 0: maps physical Mali-G57 MMIO registers (`0x13000000`, 64 KB).
@@ -126,6 +136,25 @@ Baseline: Apple XNU `xnu-8796` (Darwin 22.x, iOS 16.7.16 `20H392` / iPhone X `D2
 - Mapped MediaTek Connsys wireless core:
   * STP WMT (`/dev/stpwmt`) and Wi-Fi (`/dev/wmtWifi`).
   * Dedicated firmware partitions on UFS: `connsys_wifi` and `connsys_bt`.
+
+### Milestone 15: Authoritative GPU power-on from stock-driver RE (IDA)
+- Pulled the stock proprietary/GPL blobs off the device and reversed them in IDA:
+  `mtk_gpufreq_mt6789.ko` (power path), `clk-mt6789.ko` / `clk-mt6789-mfgcfg.ko`
+  (MFG mux, MFGPLL, bg3d CG). `/proc/gpufreqv2` reports `GPUEB Support: Off`, so the
+  AP drives MTCMOS/BUCK/CG directly — the sequence XNU must replicate.
+- Exact sequence (`__gpufreq_power_control` + `__gpufreq_mfg[0-3]_control`):
+  VGPU → VSRAM_GPU → MFG0 → MFG1 (+ infracfg bus-protect release) → ref-clk-mux →
+  MFG2 → MFG3 → bg3d CG + external CG. `*_PWR_CON` in SPM `0x10006308/30c/310/314`,
+  status in `PWR_STATUS 0x16c`/`0x170` (bits `0x4/0x8/0x10/0x20`).
+- bg3d subsys CG: mfgcfg `syscon@13fbf000` (confirmed in DT), SETCLR gate
+  `{sta 0x0, clr 0x8, set 0x4}`, enable via CLR bit0.
+- Rewrote the GPU power-on in `SweetFramebuffer.cpp` to this sequence and corrected the
+  Mali register map (`MaliMetal/MaliValhallHw.h`) to the kbase Job-Manager layout
+  (`AS_PRESENT 0x18`, `JS_PRESENT 0x1c`, job slots at `0x1800 + n*0x80`, MMU/AS at
+  `0x2000`/`0x2400`). Full map: [MT6789 GPU Power Sequence](wiki/MT6789-GPU-Power-Sequence.md).
+- Still open (to confirm from the next boot log, which can read these regs from XNU):
+  whether MTCMOS + bg3d CG + boot-default clock make `GPU_ID` readable; MFGPLL/mux
+  parent-select for real DVFS; exact MT6366 VGPU encoding.
 
 ---
 

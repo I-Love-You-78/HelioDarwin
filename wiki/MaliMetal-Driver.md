@@ -36,8 +36,12 @@ The concept of running Apple's Metal API over Vulkan has an extensive and respec
 | **Graphics API** | Apple `Metal.framework` | Provides the native `MTLDevice` endpoint for the OS |
 | **Userspace ICD** | `MaliMetal.bundle` (`MaliMetalDevice`) | Translates Metal API calls and AIR/MSL shaders into Vulkan 1.3 |
 | **Vulkan Driver** | Mesa `panvk` | Compiles SPIR-V shaders and emits native Mali Valhall machine code |
-| **Kernel Driver** | `SweetMaliAccelerator` (XNU) | Manages SCPSYS MTCMOS power, physical memory allocations, and job rings |
-| **Hardware** | ARM Mali-G57 MC2 (MT6789) | 2 Valhall cores (`0x9093`) executing GPU command queues |
+| **Kernel Driver** | `SweetMaliAccelerator` (XNU) | Sequences MFG MTCMOS power (SPM `0x10006308+`), maps MMIO, *will* own job rings |
+| **Hardware** | ARM Mali-G57 MC2 (MT6789) | 2 Valhall cores; vendor product ID `0x9093`. Not yet powered/responding under XNU |
+
+> **Reality check.** Rows marked *will* / *would* below are the design target, not
+> working code. Today only the kernel power-on (being brought up) and a userspace CPU
+> 2D compositor exist. There is no Vulkan/panvk, no AIR→SPIR-V, no GPU-accelerated draw.
 
 ---
 
@@ -45,17 +49,21 @@ The concept of running Apple's Metal API over Vulkan has an extensive and respec
 
 When an iOS framework calls `MTLCreateSystemDefaultDevice()`:
 1. `Metal.framework` queries the Darwin kernel's IORegistry for any service of class `IOAccelerator`.
-2. The kernel's `SweetMaliAccelerator` service answers with the following properties:
+2. The kernel's `SweetMaliAccelerator` service answers with its properties. The real
+   hardware ID (`0x13b5`/`0x9093`, read from the vendor Mali driver's sysfs) is only
+   published once the GPU answers on the bus; until then `device-id` is `0`:
    ```text
    MetalPluginName      = "MaliMetal"
    MetalPluginClassName = "MaliMetalDevice"
    vendor-id            = 0x13b5 (ARM Ltd.)
-   device-id            = 0x9093 (Mali-G57 Valhall r0p1)
+   device-id            = 0x9093 (Mali-G57 Valhall r0p1) when live, else 0 (offline-stub)
    gpu-core-count       = 2
    ```
 3. `Metal.framework` locates and dynamically loads `/System/Library/Extensions/MaliMetal.bundle` via `CFBundle`.
 4. It instantiates the principal class `MaliMetalDevice`, which conforms to the internal `<MTLDeviceSPI>` protocol.
-5. From that moment forward, all Metal drawing commands from iOS applications flow directly through our driver into Vulkan!
+5. Today the bundle satisfies `Metal.framework` during boot and composites UI on the CPU
+   (`MaliMetalVulkan.c` is a software 2D rasterizer). The GPU/Vulkan path below is the
+   design target, **not** what runs today.
 
 ---
 

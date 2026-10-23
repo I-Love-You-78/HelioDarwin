@@ -380,7 +380,10 @@ extern size_t IOSurfaceGetBytesPerRow(void *token) __attribute__((weak_import));
     if (self) {
         _accelPort = acceleratorPort;
         _gpuID = 0;
-        _registryID = 0x13b59093ULL;
+        /* ARM vendor in the high bits; the low 16 are filled from the real GPU_ID
+         * once the hardware actually answers (see below). Do not bake in a product
+         * ID the hardware has not reported. */
+        _registryID = 0x13b50000ULL;
         _hardwareRegisters = NULL;
         _ringBuffer = NULL;
 
@@ -394,6 +397,11 @@ extern size_t IOSurfaceGetBytesPerRow(void *token) __attribute__((weak_import));
             if (kr == KERN_SUCCESS && mmioAddr != 0) {
                 _hardwareRegisters = (volatile uint32_t *)mmioAddr;
                 _gpuID = _hardwareRegisters[0x0000 / 4];
+                /* Reflect only what the hardware actually returned (0 while the GPU
+                 * is unpowered); no spoofed product ID. */
+                if (_gpuID != 0 && _gpuID != ~0u) {
+                    _registryID = 0x13b50000ULL | (uint64_t)((_gpuID >> 16) & 0xffff);
+                }
                 NSLog(@"[MaliMetal] Mapped hardware MMIO at %p, read GPU_ID=0x%08x", (void *)mmioAddr, _gpuID);
             }
 
