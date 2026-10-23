@@ -17,6 +17,8 @@ typedef signed char BOOL;
 #endif
 #endif
 
+typedef double CFTimeInterval;
+
 typedef uint32_t mach_port_t;
 typedef mach_port_t io_connect_t;
 typedef mach_port_t io_service_t;
@@ -105,6 +107,29 @@ typedef enum {
 } MTLFeatureSet;
 
 typedef enum {
+    MTLPixelFormatInvalid = 0,
+    MTLPixelFormatRGBA8Unorm = 70,
+    MTLPixelFormatRGBA8Unorm_sRGB = 71,
+    MTLPixelFormatBGRA8Unorm = 80,
+    MTLPixelFormatBGRA8Unorm_sRGB = 81,
+    MTLPixelFormatRGB10A2Unorm = 90,
+    MTLPixelFormatBGR10A2Unorm = 91,
+} MTLPixelFormat;
+
+typedef enum {
+    MTLTextureType2D = 2,
+    MTLTextureType2DMultisample = 4,
+} MTLTextureType;
+
+typedef enum {
+    MTLTextureUsageUnknown = 0x0000,
+    MTLTextureUsageShaderRead = 0x0001,
+    MTLTextureUsageShaderWrite = 0x0002,
+    MTLTextureUsageRenderTarget = 0x0004,
+    MTLTextureUsagePixelFormatView = 0x0010,
+} MTLTextureUsage;
+
+typedef enum {
     MTLResourceCPUCacheModeDefaultCache = 0,
     MTLResourceStorageModeShared = 0 << 4,
     MTLResourceHazardTrackingModeDefault = 0 << 8,
@@ -143,45 +168,107 @@ typedef enum {
     MTLPrimitiveTypeTriangleStrip = 4,
 } MTLPrimitiveType;
 
+typedef enum {
+    MTLFunctionTypeVertex = 1,
+    MTLFunctionTypeFragment = 2,
+    MTLFunctionTypeKernel = 3,
+} MTLFunctionType;
+
 #ifdef __OBJC__
+
+@class NSMethodSignature;
+@class NSInvocation;
+
 @interface NSObject
 + (id)alloc;
 - (id)init;
 - (void)dealloc;
+- (id)retain;
+- (oneway void)release;
+- (id)copy;
 - (BOOL)respondsToSelector:(SEL)aSelector;
+- (NSMethodSignature *)methodSignatureForSelector:(SEL)aSelector;
+- (void)forwardInvocation:(NSInvocation *)anInvocation;
+@end
+
+@interface NSMethodSignature : NSObject
++ (NSMethodSignature *)signatureWithObjCTypes:(const char *)types;
+- (NSUInteger)methodReturnLength;
+- (const char *)methodReturnType;
+@end
+
+@interface NSInvocation : NSObject
+- (NSMethodSignature *)methodSignature;
+- (void)setReturnValue:(void *)retLoc;
+- (void)invoke;
 @end
 
 @class NSString, NSError, NSDictionary, NSArray, NSData;
 typedef void *dispatch_data_t;
 
+/*
+ * Base class for all MaliMetal objects providing:
+ * 1. NSString *label support
+ * 2. Invocation forwarding for unhandled/undocumented Metal selectors to prevent crashes
+ */
+@interface MaliMetalObject : NSObject {
+    NSString *_label;
+}
+@property (copy) NSString *label;
+- (NSString *)label;
+- (void)setLabel:(NSString *)label;
+@end
+
 @protocol MTLDevice @end
 @protocol MTLCommandQueue @end
 @protocol MTLCommandBuffer @end
+@protocol MTLResource @end
 @protocol NSObject
 - (BOOL)respondsToSelector:(SEL)aSelector;
 @end
 
-@protocol MTLBuffer <NSObject>
+@protocol MTLBuffer <MTLResource>
 - (void *)contents;
 - (NSUInteger)length;
+- (uint64_t)gpuAddress;
 @end
 
-@protocol MTLTexture <NSObject>
+@protocol MTLTexture <MTLResource>
 - (NSUInteger)width;
 - (NSUInteger)height;
 - (void *)pixels;
+- (MTLPixelFormat)pixelFormat;
+- (MTLTextureType)textureType;
+- (MTLTextureUsage)usage;
+- (BOOL)isFramebufferOnly;
+- (void *)iosurface;
+- (NSUInteger)iosurfacePlane;
 @end
+
 @protocol MTLSamplerState @end
 @protocol MTLLibrary @end
 @protocol MTLRenderPipelineState @end
 @protocol MTLComputePipelineState @end
 @protocol MTLFunction @end
-@protocol MTLDrawable @end
+@protocol MTLDrawable
+- (void)present;
+- (void)presentAtTime:(CFTimeInterval)presentationTime;
+@end
 @protocol MTLRenderCommandEncoder @end
 @protocol MTLComputeCommandEncoder @end
 @protocol MTLBlitCommandEncoder @end
 
-@class MTLTextureDescriptor;
+typedef void (^MTLCommandBufferHandler)(id<MTLCommandBuffer>);
+
+@interface MTLTextureDescriptor : NSObject
+@property (nonatomic) NSUInteger width;
+@property (nonatomic) NSUInteger height;
+@property (nonatomic) MTLPixelFormat pixelFormat;
+@property (nonatomic) MTLTextureType textureType;
+@property (nonatomic) MTLTextureUsage usage;
++ (MTLTextureDescriptor *)texture2DDescriptorWithPixelFormat:(MTLPixelFormat)pixelFormat width:(NSUInteger)width height:(NSUInteger)height mipmapped:(BOOL)mipmapped;
+@end
+
 @class MTLSamplerDescriptor;
 @class MTLCompileOptions;
 @class MTLRenderPipelineDescriptor;

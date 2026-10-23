@@ -8,11 +8,13 @@
 #include <string.h>
 
 #define MAX_COMMANDS_PER_BUFFER 512
+#define MAX_DRAWABLES_PER_BUFFER 16
+#define MAX_HANDLERS_PER_BUFFER 16
 
 /*
  * Render Command Encoder
  */
-@interface MaliMetalRenderCommandEncoder : NSObject <MTLRenderCommandEncoder> {
+@interface MaliMetalRenderCommandEncoder : MaliMetalObject <MTLRenderCommandEncoder> {
     MaliMetalCommandBuffer *_commandBuffer;
     MTLRenderPassDescriptor *_renderPassDescriptor;
     MaliMetalDrawCommand _currentCmd;
@@ -37,8 +39,6 @@
 }
 
 - (id<MTLDevice>)device { return [_commandBuffer device]; }
-- (NSString *)label { return (NSString *)0; }
-- (void)setLabel:(NSString *)label { (void)label; }
 - (void)setRenderPipelineState:(id<MTLRenderPipelineState>)pipelineState { (void)pipelineState; }
 
 - (void)setVertexBuffer:(id<MTLBuffer>)buffer offset:(NSUInteger)offset atIndex:(NSUInteger)index {
@@ -50,7 +50,7 @@
 
 - (void)setFragmentTexture:(id<MTLTexture>)texture atIndex:(NSUInteger)index {
     if (index < MALI_MAX_TEXTURES) {
-        if ([texture respondsToSelector:@selector(pixels)]) {
+        if ([(id)texture respondsToSelector:@selector(pixels)]) {
             _currentCmd.fragmentTexturePtr[index] = [(id)texture pixels];
         }
         _currentCmd.textureWidth[index] = (uint32_t)[texture width];
@@ -97,7 +97,7 @@
 /*
  * Blit Command Encoder
  */
-@interface MaliMetalBlitCommandEncoder : NSObject <MTLBlitCommandEncoder>
+@interface MaliMetalBlitCommandEncoder : MaliMetalObject <MTLBlitCommandEncoder>
 @end
 
 @implementation MaliMetalBlitCommandEncoder
@@ -108,7 +108,7 @@
 /*
  * Compute Command Encoder
  */
-@interface MaliMetalComputeCommandEncoder : NSObject <MTLComputeCommandEncoder>
+@interface MaliMetalComputeCommandEncoder : MaliMetalObject <MTLComputeCommandEncoder>
 @end
 
 @implementation MaliMetalComputeCommandEncoder
@@ -154,12 +154,15 @@
 @implementation MaliMetalCommandBuffer {
     MaliMetalCommandQueue *_queue;
     MTLCommandBufferStatus _status;
-    NSString *_label;
     MaliMetalDrawCommand _drawCommands[MAX_COMMANDS_PER_BUFFER];
     id<MTLTexture> _targetTextures[MAX_COMMANDS_PER_BUFFER];
     NSUInteger _drawCommandCount;
-    id<MTLDrawable> _drawablesToPresent[16];
+    id<MTLDrawable> _drawablesToPresent[MAX_DRAWABLES_PER_BUFFER];
     NSUInteger _drawableCount;
+    MTLCommandBufferHandler _scheduledHandlers[MAX_HANDLERS_PER_BUFFER];
+    NSUInteger _scheduledHandlerCount;
+    MTLCommandBufferHandler _completedHandlers[MAX_HANDLERS_PER_BUFFER];
+    NSUInteger _completedHandlerCount;
 }
 
 - (instancetype)initWithQueue:(MaliMetalCommandQueue *)queue {
@@ -167,9 +170,10 @@
     if (self) {
         _queue = queue;
         _status = MTLCommandBufferStatusNotEnqueued;
-        _label = (NSString *)0;
         _drawCommandCount = 0;
         _drawableCount = 0;
+        _scheduledHandlerCount = 0;
+        _completedHandlerCount = 0;
     }
     return self;
 }
@@ -177,6 +181,12 @@
 - (void)dealloc {
     for (NSUInteger i = 0; i < _drawableCount; i++) {
         [(id)_drawablesToPresent[i] release];
+    }
+    for (NSUInteger i = 0; i < _scheduledHandlerCount; i++) {
+        [_scheduledHandlers[i] release];
+    }
+    for (NSUInteger i = 0; i < _completedHandlerCount; i++) {
+        [_completedHandlers[i] release];
     }
     [super dealloc];
 }
@@ -197,16 +207,20 @@
     return (NSError *)0;
 }
 
-- (NSString *)label {
-    return _label;
-}
-
-- (void)setLabel:(NSString *)label {
-    _label = label;
-}
-
 - (void)enqueue {
     _status = MTLCommandBufferStatusEnqueued;
+}
+
+- (void)addScheduledHandler:(MTLCommandBufferHandler)block {
+    if (block && _scheduledHandlerCount < MAX_HANDLERS_PER_BUFFER) {
+        _scheduledHandlers[_scheduledHandlerCount++] = [block copy];
+    }
+}
+
+- (void)addCompletedHandler:(MTLCommandBufferHandler)block {
+    if (block && _completedHandlerCount < MAX_HANDLERS_PER_BUFFER) {
+        _completedHandlers[_completedHandlerCount++] = [block copy];
+    }
 }
 
 - (void)enqueueDrawCommand:(const MaliMetalDrawCommand *)cmd forTexture:(id<MTLTexture>)texture {
@@ -219,6 +233,17 @@
 
 - (void)commit {
     _status = MTLCommandBufferStatusCommitted;
+
+    /* Execute scheduled handlers */
+    _status = MTLCommandBufferStatusScheduled;
+    for (NSUInteger i = 0; i < _scheduledHandlerCount; i++) {
+        if (_scheduledHandlers[i]) {
+            _scheduledHandlers[i](self);
+            [_scheduledHandlers[i] release];
+            _scheduledHandlers[i] = nil;
+        }
+    }
+    _scheduledHandlerCount = 0;
 
     MaliMetalDevice *dev = (MaliMetalDevice *)[_queue device];
     volatile uint32_t *hw = [dev respondsToSelector:@selector(hardwareRegisters)] ? [dev hardwareRegisters] : NULL;
@@ -234,7 +259,7 @@
     /* Execute all recorded draw commands */
     for (NSUInteger i = 0; i < _drawCommandCount; i++) {
         id<MTLTexture> targetTex = _targetTextures[i];
-        if (targetTex && [targetTex respondsToSelector:@selector(pixels)]) {
+        if (targetTex && [(id)targetTex respondsToSelector:@selector(pixels)]) {
             void *dstPixels = [(id)targetTex pixels];
             uint32_t w = (uint32_t)[targetTex width];
             uint32_t h = (uint32_t)[targetTex height];
@@ -253,18 +278,35 @@
         _drawablesToPresent[i] = (id<MTLDrawable>)0;
     }
     _drawableCount = 0;
-
     _drawCommandCount = 0;
+
+    /* Mark completed and fire completed callbacks */
     _status = MTLCommandBufferStatusCompleted;
+    for (NSUInteger i = 0; i < _completedHandlerCount; i++) {
+        if (_completedHandlers[i]) {
+            _completedHandlers[i](self);
+            [_completedHandlers[i] release];
+            _completedHandlers[i] = nil;
+        }
+    }
+    _completedHandlerCount = 0;
+}
+
+- (void)waitUntilScheduled {
 }
 
 - (void)waitUntilCompleted {
 }
 
 - (void)presentDrawable:(id<MTLDrawable>)drawable {
-    if (drawable && _drawableCount < 16) {
+    if (drawable && _drawableCount < MAX_DRAWABLES_PER_BUFFER) {
         _drawablesToPresent[_drawableCount++] = (id<MTLDrawable>)[(id)drawable retain];
     }
+}
+
+- (void)presentDrawable:(id<MTLDrawable>)drawable atTime:(CFTimeInterval)presentationTime {
+    (void)presentationTime;
+    [self presentDrawable:drawable];
 }
 
 - (id<MTLRenderCommandEncoder>)renderCommandEncoderWithDescriptor:(MTLRenderPassDescriptor *)renderPassDescriptor {

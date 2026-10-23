@@ -1,19 +1,63 @@
 /*
  * MaliMetal: In-Memory Metal ICD Driver Skeleton
- * Provides mock MTLDevice, command queues, and surface buffers to satisfy
+ * Provides MTLDevice, command queues, and surface buffers to satisfy
  * CoreAnimation / Metal.framework validation on ARM Mali-G57 MC2.
- * Long-term roadmap: Bridge to Mesa panvk / Vulkan runtime.
+ * Roadmap: Bridge to Mesa panvk / Vulkan runtime.
  */
 
 #import "MaliMetalDevice.h"
 #import "MaliMetalCommandQueue.h"
 #include <stdlib.h>
 #include <string.h>
+#include <alloca.h>
+
+@implementation MaliMetalObject
+
+- (void)dealloc {
+    [_label release];
+    [super dealloc];
+}
+
+- (NSString *)label {
+    return _label;
+}
+
+- (void)setLabel:(NSString *)label {
+    if (_label != label) {
+        [_label release];
+        _label = [label copy];
+    }
+}
+
+- (BOOL)respondsToSelector:(SEL)aSelector {
+    if ([super respondsToSelector:aSelector]) return YES;
+    return YES;
+}
+
+- (NSMethodSignature *)methodSignatureForSelector:(SEL)aSelector {
+    NSMethodSignature *sig = [super methodSignatureForSelector:aSelector];
+    if (!sig) {
+        /* Generic fallback signature returning pointer/integer/zero */
+        sig = [NSMethodSignature signatureWithObjCTypes:"@@:@@@@@@@@"];
+    }
+    return sig;
+}
+
+- (void)forwardInvocation:(NSInvocation *)anInvocation {
+    NSUInteger retLen = [[anInvocation methodSignature] methodReturnLength];
+    if (retLen > 0) {
+        void *buf = alloca(retLen);
+        memset(buf, 0, retLen);
+        [anInvocation setReturnValue:buf];
+    }
+}
+
+@end
 
 /*
  * MaliMetalBuffer: Memory-backed Metal Buffer
  */
-@interface MaliMetalBuffer : NSObject <MTLBuffer> {
+@interface MaliMetalBuffer : MaliMetalObject <MTLBuffer> {
     void *_pointer;
     NSUInteger _length;
     id<MTLDevice> _device;
@@ -23,6 +67,7 @@
 - (void *)contents;
 - (NSUInteger)length;
 - (id<MTLDevice>)device;
+- (uint64_t)gpuAddress;
 @end
 
 @implementation MaliMetalBuffer
@@ -56,6 +101,7 @@
 - (void *)contents { return _pointer; }
 - (NSUInteger)length { return _length; }
 - (id<MTLDevice>)device { return _device; }
+- (uint64_t)gpuAddress { return (uint64_t)_pointer; }
 
 @end
 
@@ -67,18 +113,35 @@ extern size_t IOSurfaceGetBytesPerRow(void *token) __attribute__((weak_import));
 /*
  * MaliMetalTexture: Memory-backed Metal Texture for CoreAnimation
  */
-@interface MaliMetalTexture : NSObject <MTLTexture> {
+@interface MaliMetalTexture : MaliMetalObject <MTLTexture> {
     id<MTLDevice> _device;
     NSUInteger _width;
     NSUInteger _height;
     void *_pixels;
     NSUInteger _bytesPerRow;
     BOOL _isIOSurface;
+    void *_iosurface;
+    NSUInteger _iosurfacePlane;
+    MTLPixelFormat _pixelFormat;
+    MTLTextureType _textureType;
+    MTLTextureUsage _usage;
 }
 - (instancetype)initWithDescriptor:(MTLTextureDescriptor *)descriptor device:(id<MTLDevice>)device;
 - (instancetype)initWithDescriptor:(MTLTextureDescriptor *)descriptor iosurface:(void *)iosurface plane:(NSUInteger)plane device:(id<MTLDevice>)device;
 - (NSUInteger)width;
 - (NSUInteger)height;
+- (NSUInteger)depth;
+- (NSUInteger)mipmapLevelCount;
+- (NSUInteger)sampleCount;
+- (NSUInteger)arrayLength;
+- (MTLPixelFormat)pixelFormat;
+- (MTLTextureType)textureType;
+- (MTLTextureUsage)usage;
+- (BOOL)isFramebufferOnly;
+- (void *)iosurface;
+- (NSUInteger)iosurfacePlane;
+- (id<MTLResource>)rootResource;
+- (id<MTLTexture>)parentTexture;
 - (id<MTLDevice>)device;
 - (void *)pixels;
 - (void)getBytes:(void *)pixelBytes bytesPerRow:(NSUInteger)bytesPerRow fromRegion:(MTLRegion)region mipmapLevel:(NSUInteger)level;
@@ -90,13 +153,19 @@ extern size_t IOSurfaceGetBytesPerRow(void *token) __attribute__((weak_import));
 - (instancetype)initWithDescriptor:(MTLTextureDescriptor *)descriptor device:(id<MTLDevice>)device {
     self = [super init];
     if (self) {
-        (void)descriptor;
         _device = device;
-        _width = 1080;
-        _height = 2400;
+        _width = descriptor ? [descriptor width] : 1080;
+        _height = descriptor ? [descriptor height] : 2400;
+        if (_width == 0) _width = 1080;
+        if (_height == 0) _height = 2400;
+        _pixelFormat = descriptor ? [descriptor pixelFormat] : MTLPixelFormatBGRA8Unorm;
+        _textureType = descriptor ? [descriptor textureType] : MTLTextureType2D;
+        _usage = descriptor ? [descriptor usage] : MTLTextureUsageRenderTarget;
         _bytesPerRow = _width * 4;
         _pixels = calloc(1, _bytesPerRow * _height);
         _isIOSurface = NO;
+        _iosurface = NULL;
+        _iosurfacePlane = 0;
     }
     return self;
 }
@@ -104,9 +173,12 @@ extern size_t IOSurfaceGetBytesPerRow(void *token) __attribute__((weak_import));
 - (instancetype)initWithDescriptor:(MTLTextureDescriptor *)descriptor iosurface:(void *)iosurface plane:(NSUInteger)plane device:(id<MTLDevice>)device {
     self = [super init];
     if (self) {
-        (void)descriptor;
-        (void)plane;
         _device = device;
+        _iosurface = iosurface;
+        _iosurfacePlane = plane;
+        _pixelFormat = descriptor ? [descriptor pixelFormat] : MTLPixelFormatBGRA8Unorm;
+        _textureType = descriptor ? [descriptor textureType] : MTLTextureType2D;
+        _usage = descriptor ? [descriptor usage] : MTLTextureUsageRenderTarget;
         _isIOSurface = YES;
         if (iosurface != NULL && IOSurfaceGetBaseAddress != NULL) {
             _pixels = IOSurfaceGetBaseAddress(iosurface);
@@ -114,8 +186,10 @@ extern size_t IOSurfaceGetBytesPerRow(void *token) __attribute__((weak_import));
             _height = IOSurfaceGetHeight ? IOSurfaceGetHeight(iosurface) : 2400;
             _bytesPerRow = IOSurfaceGetBytesPerRow ? IOSurfaceGetBytesPerRow(iosurface) : (_width * 4);
         } else {
-            _width = 1080;
-            _height = 2400;
+            _width = descriptor ? [descriptor width] : 1080;
+            _height = descriptor ? [descriptor height] : 2400;
+            if (_width == 0) _width = 1080;
+            if (_height == 0) _height = 2400;
             _bytesPerRow = _width * 4;
             _pixels = calloc(1, _bytesPerRow * _height);
             _isIOSurface = NO;
@@ -134,6 +208,18 @@ extern size_t IOSurfaceGetBytesPerRow(void *token) __attribute__((weak_import));
 
 - (NSUInteger)width { return _width; }
 - (NSUInteger)height { return _height; }
+- (NSUInteger)depth { return 1; }
+- (NSUInteger)mipmapLevelCount { return 1; }
+- (NSUInteger)sampleCount { return 1; }
+- (NSUInteger)arrayLength { return 1; }
+- (MTLPixelFormat)pixelFormat { return _pixelFormat; }
+- (MTLTextureType)textureType { return _textureType; }
+- (MTLTextureUsage)usage { return _usage; }
+- (BOOL)isFramebufferOnly { return NO; }
+- (void *)iosurface { return _iosurface; }
+- (NSUInteger)iosurfacePlane { return _iosurfacePlane; }
+- (id<MTLResource>)rootResource { return (id<MTLResource>)self; }
+- (id<MTLTexture>)parentTexture { return (id<MTLTexture>)0; }
 - (id<MTLDevice>)device { return _device; }
 - (void *)pixels { return _pixels; }
 
@@ -160,9 +246,75 @@ extern size_t IOSurfaceGetBytesPerRow(void *token) __attribute__((weak_import));
 @end
 
 /*
+ * MaliMetalFunction: Function Stub
+ */
+@interface MaliMetalFunction : MaliMetalObject <MTLFunction> {
+    NSString *_name;
+    id<MTLDevice> _device;
+    MTLFunctionType _functionType;
+}
+- (instancetype)initWithName:(NSString *)name device:(id<MTLDevice>)device functionType:(MTLFunctionType)type;
+- (NSString *)name;
+- (id<MTLDevice>)device;
+- (MTLFunctionType)functionType;
+@end
+
+@implementation MaliMetalFunction
+
+- (instancetype)initWithName:(NSString *)name device:(id<MTLDevice>)device functionType:(MTLFunctionType)type {
+    self = [super init];
+    if (self) {
+        _name = [name copy];
+        _device = device;
+        _functionType = type;
+    }
+    return self;
+}
+
+- (void)dealloc {
+    [_name release];
+    [super dealloc];
+}
+
+- (NSString *)name { return _name; }
+- (id<MTLDevice>)device { return _device; }
+- (MTLFunctionType)functionType { return _functionType; }
+
+@end
+
+/*
+ * MaliMetalLibrary: Library Stub
+ */
+@interface MaliMetalLibrary : MaliMetalObject <MTLLibrary> {
+    id<MTLDevice> _device;
+}
+- (instancetype)initWithDevice:(id<MTLDevice>)device;
+- (id<MTLDevice>)device;
+- (id<MTLFunction>)newFunctionWithName:(NSString *)functionName;
+@end
+
+@implementation MaliMetalLibrary
+
+- (instancetype)initWithDevice:(id<MTLDevice>)device {
+    self = [super init];
+    if (self) {
+        _device = device;
+    }
+    return self;
+}
+
+- (id<MTLDevice>)device { return _device; }
+
+- (id<MTLFunction>)newFunctionWithName:(NSString *)functionName {
+    return (id<MTLFunction>)[[MaliMetalFunction alloc] initWithName:functionName device:_device functionType:MTLFunctionTypeVertex];
+}
+
+@end
+
+/*
  * MaliMetalRenderPipelineState: Pipeline State Stub
  */
-@interface MaliMetalRenderPipelineState : NSObject <MTLRenderPipelineState> {
+@interface MaliMetalRenderPipelineState : MaliMetalObject <MTLRenderPipelineState> {
     id<MTLDevice> _device;
 }
 - (instancetype)initWithDevice:(id<MTLDevice>)device;
@@ -171,6 +323,32 @@ extern size_t IOSurfaceGetBytesPerRow(void *token) __attribute__((weak_import));
 @end
 
 @implementation MaliMetalRenderPipelineState
+
+- (instancetype)initWithDevice:(id<MTLDevice>)device {
+    self = [super init];
+    if (self) {
+        _device = device;
+    }
+    return self;
+}
+
+- (id<MTLDevice>)device { return _device; }
+- (NSUInteger)maxTotalThreadsPerThreadgroup { return 1024; }
+
+@end
+
+/*
+ * MaliMetalComputePipelineState: Compute Pipeline State Stub
+ */
+@interface MaliMetalComputePipelineState : MaliMetalObject <MTLComputePipelineState> {
+    id<MTLDevice> _device;
+}
+- (instancetype)initWithDevice:(id<MTLDevice>)device;
+- (id<MTLDevice>)device;
+- (NSUInteger)maxTotalThreadsPerThreadgroup;
+@end
+
+@implementation MaliMetalComputePipelineState
 
 - (instancetype)initWithDevice:(id<MTLDevice>)device {
     self = [super init];
@@ -218,16 +396,6 @@ extern size_t IOSurfaceGetBytesPerRow(void *token) __attribute__((weak_import));
                 _gpuID = _hardwareRegisters[0x0000 / 4];
                 NSLog(@"[MaliMetal] Mapped hardware MMIO at %p, read GPU_ID=0x%08x", (void *)mmioAddr, _gpuID);
             }
-
-            /* Map shared command ringbuffer (type 1) */
-            mach_vm_address_t ringAddr = 0;
-            mach_vm_size_t ringSize = 1024 * 1024;
-            kr = IOConnectMapMemory64(_userClient, 1, mach_task_self(), &ringAddr, &ringSize, kIOMapAnywhere);
-            if (kr == KERN_SUCCESS && ringAddr != 0) {
-                _ringBuffer = (void *)ringAddr;
-            }
-        } else {
-            _userClient = MACH_PORT_NULL;
         }
     }
     return self;
@@ -253,17 +421,14 @@ extern size_t IOSurfaceGetBytesPerRow(void *token) __attribute__((weak_import));
 }
 
 - (MTLSize)maxThreadsPerThreadgroup {
-    /* Mali-G57 supports up to 1024 threads per workgroup */
     return MTLSizeMake(1024, 1024, 64);
 }
 
 - (BOOL)hasUnifiedMemory {
-    /* MT6789 features unified LPDDR4X memory shared by CPU and Mali GPU */
     return YES;
 }
 
 - (uint64_t)recommendedMaxWorkingSetSize {
-    /* Up to 6 GiB working set out of 8 GiB physical DRAM */
     return 6ULL * 1024 * 1024 * 1024;
 }
 
@@ -272,7 +437,7 @@ extern size_t IOSurfaceGetBytesPerRow(void *token) __attribute__((weak_import));
 }
 
 - (NSUInteger)maxBufferLength {
-    return 1024ULL * 1024 * 1024; /* 1 GiB single buffer limit */
+    return 1024ULL * 1024 * 1024;
 }
 
 - (BOOL)supportsFeatureSet:(MTLFeatureSet)featureSet {
@@ -321,20 +486,20 @@ extern size_t IOSurfaceGetBytesPerRow(void *token) __attribute__((weak_import));
 
 /* Library & Pipeline Compilation */
 - (id<MTLLibrary>)newDefaultLibrary {
-    return (id)0;
+    return (id<MTLLibrary>)[[MaliMetalLibrary alloc] initWithDevice:self];
 }
 
 - (id<MTLLibrary>)newLibraryWithSource:(NSString *)source options:(MTLCompileOptions *)options error:(NSError **)error {
     (void)source;
     (void)options;
     if (error) *error = (NSError *)0;
-    return (id)0;
+    return (id<MTLLibrary>)[[MaliMetalLibrary alloc] initWithDevice:self];
 }
 
 - (id<MTLLibrary>)newLibraryWithData:(dispatch_data_t)data error:(NSError **)error {
     (void)data;
     if (error) *error = (NSError *)0;
-    return (id)0;
+    return (id<MTLLibrary>)[[MaliMetalLibrary alloc] initWithDevice:self];
 }
 
 - (id<MTLRenderPipelineState>)newRenderPipelineStateWithDescriptor:(MTLRenderPipelineDescriptor *)descriptor error:(NSError **)error {
@@ -346,7 +511,30 @@ extern size_t IOSurfaceGetBytesPerRow(void *token) __attribute__((weak_import));
 - (id<MTLComputePipelineState>)newComputePipelineStateWithFunction:(id<MTLFunction>)computeFunction error:(NSError **)error {
     (void)computeFunction;
     if (error) *error = (NSError *)0;
-    return (id)0;
+    return (id<MTLComputePipelineState>)[[MaliMetalComputePipelineState alloc] initWithDevice:self];
+}
+
+/* Forward unhandled device queries gracefully */
+- (BOOL)respondsToSelector:(SEL)aSelector {
+    if ([super respondsToSelector:aSelector]) return YES;
+    return YES;
+}
+
+- (NSMethodSignature *)methodSignatureForSelector:(SEL)aSelector {
+    NSMethodSignature *sig = [super methodSignatureForSelector:aSelector];
+    if (!sig) {
+        sig = [NSMethodSignature signatureWithObjCTypes:"@@:@@@@@@@@"];
+    }
+    return sig;
+}
+
+- (void)forwardInvocation:(NSInvocation *)anInvocation {
+    NSUInteger retLen = [[anInvocation methodSignature] methodReturnLength];
+    if (retLen > 0) {
+        void *buf = alloca(retLen);
+        memset(buf, 0, retLen);
+        [anInvocation setReturnValue:buf];
+    }
 }
 
 @end
