@@ -1,0 +1,206 @@
+x676c: serialize command-mode DSI triggers and use TOPRGU diagnostic reset
+
+The captured source and panel-memory hashes match and the final thumbnail has
+a clock/home indicator, but the physical panel stays at the logo. DSI INTSTA
+retains BUSY. Follow the vendor trigger's mutex enable, DSI engine reset and
+START ordering; avoid retriggering while busy and the duplicate present/vsync
+trigger. Register writes use explicit barriers. Physical output still requires
+validation after this change.
+
+The diagnostic PSCI reset returned unchanged. Use the MT6789 vendor watchdog
+software-reset key after syncing, restricted to the X676C compatible string.
+The new reset path still requires hardware validation.
+
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -36,6 +36,7 @@
+  */
+ #include "SweetSurface.h"
+ #include "SweetBoard.h"
++#include <kern/clock.h>
+ 
+ extern "C" int sweet_console_muted;     /* osfmk/console/serial_console.c */
+ extern "C" void sweet_console_retarget(vm_offset_t va);   /* osfmk/console/video_console.c */
+@@ -81,14 +82,25 @@
+ static volatile uint32_t *sMtkDsi = NULL;
+ static volatile uint32_t *sMtkMutex = NULL;
+ static volatile uint32_t *sMtkWdt = NULL;
++static volatile UInt32 sMtkPushActive;
++static uint64_t sMtkBusySince;
++static uint32_t sMtkRecoveries;
++
++static void
++mtk_display_write(volatile uint32_t *base, uint32_t offset, uint32_t value)
++{
++	__asm__ volatile("dsb sy" ::: "memory");
++	base[offset / 4] = value;
++	__asm__ volatile("dsb sy" ::: "memory");
++}
+ 
+ static void
+ mtk_dsi_push_hw(void)
+ {
+-	/*
+-	 * Native MT6789 DSI scanout on ili7835 panel at 60 Hz VSYNC.
+-	 * Replaces the bare-metal shim CPU 7 display pump.
+-	 */
++	/* The panic console must never wait for another display caller. */
++	if (!OSCompareAndSwap(0, 1, &sMtkPushActive)) {
++		return;
++	}
+ 	if (sMtkDsi == NULL) {
+ 		sMtkDsi = (volatile uint32_t *)ml_io_map(0x14013000, 0x1000);
+ 	}
+@@ -102,11 +114,41 @@
+ 		sMtkWdt[0x08 / 4] = 0x1971; /* Kick MTK TOPRGU watchdog */
+ 	}
+ 	if (sMtkDsi != NULL && sMtkMutex != NULL) {
+-		sMtkDsi[0x0c / 4] = 0;   /* DSI_INTSTA */
+-		sMtkMutex[0x20 / 4] = 1; /* MUTEX0_EN */
+-		sMtkDsi[0x00 / 4] = 0;   /* DSI_START = 0 */
+-		sMtkDsi[0x00 / 4] = 1;   /* DSI_START = 1 */
+-	}
++		uint32_t status = sMtkDsi[0x0c / 4];
++		if ((status & (1u << 31)) != 0) {
++			uint64_t now, timeout;
++			clock_get_uptime(&now);
++			clock_interval_to_absolutetime_interval(100, NSEC_PER_MSEC, &timeout);
++			if (sMtkBusySince == 0) {
++				sMtkBusySince = now;
++			} else if (now - sMtkBusySince >= timeout) {
++				/* Vendor wait-for-IRQ timeout recovery enables and resets DSI. */
++				uint32_t control = sMtkDsi[0x10 / 4] | 2u;
++				mtk_display_write(sMtkDsi, 0x10, control | 1u);
++				mtk_display_write(sMtkDsi, 0x10, control & ~1u);
++				sMtkBusySince = now;
++				sMtkRecoveries++;
++				status = sMtkDsi[0x0c / 4];
++			}
++		}
++		if ((status & (1u << 31)) != 0) {
++			OSMemoryBarrier();
++			sMtkPushActive = 0;
++			return;
++		}
++		sMtkBusySince = 0;
++		/* Match the vendor command-mode trigger: mutex, engine reset, start.
++		 * Rewriting START while BUSY can interrupt an in-flight frame. */
++		mtk_display_write(sMtkMutex, 0x20, 0);
++		mtk_display_write(sMtkMutex, 0x20, 1);
++		uint32_t control = sMtkDsi[0x10 / 4];
++		mtk_display_write(sMtkDsi, 0x10, control | 1u);
++		mtk_display_write(sMtkDsi, 0x10, control & ~1u);
++		mtk_display_write(sMtkDsi, 0x00, 0);
++		mtk_display_write(sMtkDsi, 0x00, 1);
++	}
++	OSMemoryBarrier();
++	sMtkPushActive = 0;
+ }
+ 
+ #if defined(SWEET)
+@@ -121,7 +163,6 @@
+ #include <IOKit/IOTimerEventSource.h>
+ #include <IOKit/system.h>
+ #include <pexpert/pexpert.h>
+-#include <kern/clock.h>
+ #include <sys/proc.h>
+ 
+ /* Opt-in observations only: do not change the display programming sequence. */
+@@ -1208,11 +1249,11 @@
+ 	static volatile uint32_t *ovl = NULL, *ovl2 = NULL;
+ 	if (ovl == NULL) ovl = (volatile uint32_t *)ml_io_map(0x14005000, 0x1000);
+ 	if (ovl2 == NULL) ovl2 = (volatile uint32_t *)ml_io_map(0x14006000, 0x1000);
+-	IOLog("SWEET FB TRACE: frame %u panel 0x%llx hash 0x%08x DSI start 0x%x sta 0x%x intsta 0x%x cmdq 0x%x mutex 0x%x\n",
++	IOLog("SWEET FB TRACE: frame %u panel 0x%llx hash 0x%08x DSI start 0x%x inten 0x%x intsta 0x%x cmdq 0x%x mutex 0x%x recoveries %u\n",
+ 	    frame, fPhys, sweet_fb_sample_hash((const uint8_t *)fPixels, fWidth, fHeight, fRowBytes),
+ 	    fMtkDsi ? fMtkDsi[0] : 0, fMtkDsi ? fMtkDsi[1] : 0,
+ 	    fMtkDsi ? fMtkDsi[3] : 0, fMtkDsi ? fMtkDsi[0xd00 / 4] : 0,
+-	    fMtkMutex ? fMtkMutex[0x20 / 4] : 0);
++	    fMtkMutex ? fMtkMutex[0x20 / 4] : 0, sMtkRecoveries);
+ 	if (ovl != NULL && ovl2 != NULL) {
+ 		IOLog("SWEET FB TRACE: OVL src 0x%x L0 0x%x/%u L1 0x%x/%u; OVL2 src 0x%x L0 0x%x/%u\n",
+ 		    ovl[0x2c / 4], ovl[0xf40 / 4], ovl[0x44 / 4], ovl[0xf60 / 4], ovl[0x64 / 4],
+@@ -1524,7 +1565,7 @@
+ 			sweet_dcache_clean((vm_offset_t)fPixels, (unsigned)((size_t)fRowBytes * fHeight));
+ 		}
+ 		traceFrame();
+-		mtkDsiPush();
++		/* The vsync callback triggers this frame once after present returns. */
+ 	}
+ }
+ 
+diff --git a/bsd/dev/sweet_sample.c b/bsd/dev/sweet_sample.c
+--- a/bsd/dev/sweet_sample.c
++++ b/bsd/dev/sweet_sample.c
+@@ -22,6 +22,7 @@
+ #include <kern/clock.h>
+ #include <mach/mach_time.h>
+ #include <pexpert/pexpert.h>
++#include <pexpert/device_tree.h>
+ 
+ extern task_t proc_task(proc_t);
+ extern int hz;
+@@ -30,6 +31,28 @@
+ static char sweet_sample_names[128];
+ 
+ extern int sync_internal(void);
++extern vm_offset_t ml_io_map(vm_offset_t phys_addr, vm_size_t size);
++
++static bool
++sweet_diagnostic_reset_supported(void)
++{
++	static const char board[] = "infinix,x676c";
++	DTEntry root;
++	const void *property;
++	unsigned int size;
++	if (SecureDTLookupEntry(NULL, "/", &root) != kSuccess ||
++	    SecureDTGetProperty(root, "compatible", &property, &size) != kSuccess) {
++		return false;
++	}
++	const char *compatible = property;
++	for (unsigned int i = 0; i + sizeof(board) <= size; i++) {
++		if ((i == 0 || compatible[i - 1] == '\0') &&
++		    memcmp(compatible + i, board, sizeof(board)) == 0) {
++			return true;
++		}
++	}
++	return false;
++}
+ 
+ /* Opt-in timed diagnostic boot; the normal boot has no reset deadline. */
+ static void
+@@ -46,13 +69,18 @@
+ 	}
+ 	printf("SWEET BOOT: syncing filesystems before diagnostic reset\n");
+ 	(void)sync_internal();
+-	printf("SWEET BOOT: diagnostic PSCI SYSTEM_RESET\n");
+-	/* Same SMCCC convention and PSCI function as the shim; this path is diagnostic. */
+-	register uint64_t x0 __asm__("x0") = 0x84000009;
+-	__asm__ volatile("dsb sy; smc #0" : "+r"(x0) : :
+-	    "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9",
+-	    "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "cc", "memory");
+-	printf("SWEET BOOT: PSCI reset returned %lld\n", (int64_t)x0);
++	/* MT6789 vendor mtk_wdt_restart writes SWRST_KEY to TOPRGU_SWRST.
++	 * PSCI SYSTEM_RESET returned without resetting on the diagnostic boot. */
++	volatile uint32_t *wdt = (volatile uint32_t *)ml_io_map(0x10007000, 0x1000);
++	if (wdt == NULL) {
++		printf("SWEET BOOT: cannot map diagnostic reset controller\n");
++		return;
++	}
++	printf("SWEET BOOT: diagnostic TOPRGU software reset\n");
++	__asm__ volatile("dsb sy" ::: "memory");
++	wdt[0x14 / 4] = 0x1209;
++	__asm__ volatile("dsb sy" ::: "memory");
++	printf("SWEET BOOT: TOPRGU software reset returned\n");
+ }
+ 
+ static bool
+@@ -119,6 +147,7 @@
+ 	uint32_t reboot_seconds = 0;
+ 	if (PE_parse_boot_argn("sweetreboot", &reboot_seconds, sizeof(reboot_seconds)) &&
+ 	    reboot_seconds > 0 && reboot_seconds <= 1800 &&
++	    sweet_diagnostic_reset_supported() &&
+ 	    kernel_thread_start(sweet_reboot_thread, (void *)(uintptr_t)reboot_seconds, &thread) == KERN_SUCCESS) {
+ 		thread_deallocate(thread);
+ 	}
