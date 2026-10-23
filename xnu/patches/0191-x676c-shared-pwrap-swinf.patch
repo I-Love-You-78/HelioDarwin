@@ -1,0 +1,230 @@
+Subject: [PATCH] x676c: serialize MT6789 PWRAP SWINF transactions
+
+Use the MT6789 split command/data registers and FSM layout for PMIC
+access, with bounded waits, errno results and one shared mutex. Input
+and GPU clients can access the PMIC without racing the same channel.
+
+diff --git a/bsd/conf/files b/bsd/conf/files
+index c340a71..90e3e44 100644
+--- a/bsd/conf/files
++++ b/bsd/conf/files
+@@ -110,6 +110,7 @@ bsd/dev/ufs/ufs_mtk.c			standard
+ bsd/dev/ufs/ufs_disk.c			standard
+ bsd/dev/sweet_sample.c			standard
+ bsd/dev/sweet_keys.c			standard
++bsd/dev/sweet_pwrap.c			standard
+ bsd/dev/sweet_touch.c			standard
+ bsd/dev/sweet_i2c1.c			standard
+ bsd/dev/sweet_cpufreq.c			standard
+diff --git a/bsd/dev/sweet_input_mtk.h b/bsd/dev/sweet_input_mtk.h
+new file mode 100644
+--- /dev/null
++++ b/bsd/dev/sweet_input_mtk.h
+@@ -0,0 +1,77 @@
++/* X676C input MMIO. Pin fields are from pinctrl-mt6789.ko. */
++#ifndef _SWEET_INPUT_MTK_H_
++#define _SWEET_INPUT_MTK_H_
++
++#include <pexpert/device_tree.h>
++
++static inline bool
++sweet_input_is_mtk(void)
++{
++	DTEntry root;
++	void const *prop;
++	unsigned int size;
++	static const char compatible[] = "infinix,x676c";
++	if (SecureDTLookupEntry(NULL, "/", &root) != kSuccess ||
++	    SecureDTGetProperty(root, "compatible", &prop, &size) != kSuccess) {
++		return false;
++	}
++	const char *s = (const char *)prop;
++	for (unsigned int i = 0; i < size;) {
++		unsigned int n = 0;
++		while (i + n < size && n < sizeof(compatible) && s[i + n] == compatible[n]) {
++			if (compatible[n++] == '\0') {
++				return true;
++			}
++		}
++		while (i < size && s[i] != '\0') {
++			i++;
++		}
++		i++;
++	}
++	return false;
++}
++
++static inline uint32_t
++sweet_input_read32(vm_offset_t base, uint32_t offset)
++{
++	uint32_t value = *(volatile uint32_t *)(base + offset);
++	__asm__ volatile("dmb oshld" ::: "memory");
++	return value;
++}
++
++static inline void
++sweet_input_write32(vm_offset_t base, uint32_t offset, uint32_t value)
++{
++	__asm__ volatile("dmb oshst" ::: "memory");
++	*(volatile uint32_t *)(base + offset) = value;
++	__asm__ volatile("dsb osh" ::: "memory");
++}
++
++/* MODE fields have four bits per pin; DIR/DOUT/DIN have one. */
++static inline void
++sweet_input_pin_mode(vm_offset_t gpio, unsigned pin, unsigned mode)
++{
++	unsigned offset = 0x300u + (pin / 8u) * 0x10u;
++	unsigned shift = (pin % 8u) * 4u;
++	sweet_input_write32(gpio, offset + 8u, 15u << shift);
++	sweet_input_write32(gpio, offset + 4u, mode << shift);
++}
++
++static inline void
++sweet_input_pin_output(vm_offset_t gpio, unsigned pin, bool high)
++{
++	unsigned bank = (pin / 32u) * 0x10u;
++	uint32_t bit = 1u << (pin % 32u);
++	/* Set the latch before enabling the output driver. */
++	sweet_input_write32(gpio, 0x100u + bank + (high ? 4u : 8u), bit);
++	sweet_input_write32(gpio, bank + 4u, bit);
++}
++
++static inline bool
++sweet_input_pin_high(vm_offset_t gpio, unsigned pin)
++{
++	return (sweet_input_read32(gpio, 0x200u + (pin / 32u) * 0x10u) &
++	       (1u << (pin % 32u))) != 0;
++}
++
++#endif
+diff --git a/bsd/dev/sweet_pwrap.h b/bsd/dev/sweet_pwrap.h
+new file mode 100644
+--- /dev/null
++++ b/bsd/dev/sweet_pwrap.h
+@@ -0,0 +1,17 @@
++#ifndef _SWEET_PWRAP_H_
++#define _SWEET_PWRAP_H_
++
++#include <stdint.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++/* MT6789 SWINF transactions; thread context, errno result, aligned registers. */
++int sweet_pwrap_read(uint16_t reg, uint16_t *value);
++int sweet_pwrap_write(uint16_t reg, uint16_t value);
++
++#ifdef __cplusplus
++}
++#endif
++#endif
+diff --git a/bsd/dev/sweet_pwrap.c b/bsd/dev/sweet_pwrap.c
+new file mode 100644
+--- /dev/null
++++ b/bsd/dev/sweet_pwrap.c
+@@ -0,0 +1,103 @@
++/*
++ * MT6789 PWRAP SWINF, shared by input and regulator clients.
++ * mtk-pmic-wrap.ko: pwrap_mt6789 has capability BIT(5); its
++ * mt6789_regs table selects separate command/data registers. The legacy
++ * packed WACS command and FSM bits [18:16] do not apply to this controller.
++ * Firmware owns bus initialization. Call from thread context only.
++ */
++#if defined(ARM64_BOARD_CONFIG_SWEET)
++#include <sys/param.h>
++#include <sys/systm.h>
++#include <sys/errno.h>
++#include <kern/locks.h>
++#include <kern/clock.h>
++#include <machine/machine_routines.h>
++#include "sweet_input_mtk.h"
++#include "sweet_pwrap.h"
++
++extern vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
++
++#define PWRAP_CMD       0x880u
++#define PWRAP_WDATA     0x884u
++#define PWRAP_RDATA     0x894u
++#define PWRAP_VLDCLR    0x8a4u
++#define PWRAP_STATUS    0x8a8u
++
++static vm_offset_t pwrap;
++static LCK_GRP_DECLARE(sweet_pwrap_group, "sweet_pwrap");
++static LCK_MTX_DECLARE(sweet_pwrap_lock, &sweet_pwrap_group);
++
++static int
++pwrap_wait(unsigned expected, bool discard)
++{
++	for (unsigned i = 0; i < 5000; i++) {
++		unsigned state = (sweet_input_read32(pwrap, PWRAP_STATUS) >> 1) & 7u;
++		if (state == expected) {
++			return 0;
++		}
++		/* A previous timed-out read can leave a response to acknowledge. */
++		if (discard && state == 6u) {
++			sweet_input_write32(pwrap, PWRAP_VLDCLR, 1);
++		}
++		delay(1);
++	}
++	return ETIMEDOUT;
++}
++
++static int
++pwrap_begin(uint16_t reg)
++{
++	if (reg & 1u) {
++		return EINVAL;
++	}
++	if (!sweet_input_is_mtk()) {
++		return ENODEV;
++	}
++	if (!pwrap) {
++		pwrap = ml_io_map(0x10026000u, 0x1000);
++		if (!pwrap) {
++			return ENOMEM;
++		}
++	}
++	return pwrap_wait(0, true);
++}
++
++int
++sweet_pwrap_read(uint16_t reg, uint16_t *value)
++{
++	if (!value) {
++		return EINVAL;
++	}
++	lck_mtx_lock(&sweet_pwrap_lock);
++	int error = pwrap_begin(reg);
++	if (!error) {
++		sweet_input_write32(pwrap, PWRAP_CMD, reg);
++		error = pwrap_wait(6, false);
++		if (!error) {
++			uint16_t result = (uint16_t)sweet_input_read32(pwrap, PWRAP_RDATA);
++			sweet_input_write32(pwrap, PWRAP_VLDCLR, 1);
++			error = pwrap_wait(0, false);
++			if (!error) {
++				*value = result;
++			}
++		}
++	}
++	lck_mtx_unlock(&sweet_pwrap_lock);
++	return error;
++}
++
++int
++sweet_pwrap_write(uint16_t reg, uint16_t value)
++{
++	lck_mtx_lock(&sweet_pwrap_lock);
++	int error = pwrap_begin(reg);
++	if (!error) {
++		sweet_input_write32(pwrap, PWRAP_WDATA, value);
++		sweet_input_write32(pwrap, PWRAP_CMD, reg | (1u << 29));
++		/* Keep serialization until the command has left the SWINF engine. */
++		error = pwrap_wait(0, false);
++	}
++	lck_mtx_unlock(&sweet_pwrap_lock);
++	return error;
++}
++#endif

@@ -1,10 +1,10 @@
 /*
  * MaliValhallHw.h: ARM Mali-G57 MC2 (Valhall v9, Job-Manager) HW Register Map & Job Structures
  *
- * Register layout is the canonical ARM Mali Job-Manager map as published in the
- * Linux kbase driver (mali_kbase_gpu_regmap.h) and Mesa Panfrost. This is the
- * authoritative spec for Bifrost/Valhall-JM parts; MediaTek MT6789 integrates an
- * unmodified Mali-G57 MC2, so the same offsets apply. GPU MMIO base = 0x13000000.
+ * JM register offsets are cross-checked against Linux Panfrost panfrost_regs.h
+ * and this phone's mali_kbase_mt6789.ko. Descriptors follow Mesa commit
+ * 5a07217f src/panfrost/genxml/v9.xml. GPU MMIO base = 0x13000000.
+ * Product-specific power sequencing and errata remain the kernel's responsibility.
  *
  * NOTE: these offsets only matter once the MFG power domain is actually up. On
  * MT6789 the GPU is powered by the AP-side gpufreqv2 path (GPUEB firmware is OFF),
@@ -32,12 +32,35 @@
 #define MALI_REG_GPU_IRQ_STATUS     0x002cu
 #define MALI_REG_GPU_COMMAND        0x0030u
 #define MALI_REG_GPU_STATUS         0x0034u
+#define MALI_REG_GPU_LATEST_FLUSH_ID 0x0038u
 #define MALI_REG_GPU_FAULTSTATUS    0x003cu
 #define MALI_REG_GPU_FAULT_ADDR_LO  0x0040u
 #define MALI_REG_GPU_FAULT_ADDR_HI  0x0044u
 #define MALI_REG_PWR_KEY            0x0050u   /* unlock = 0x2968A819 */
 #define MALI_REG_PWR_OVERRIDE0      0x0054u
 #define MALI_REG_PWR_OVERRIDE1      0x0058u
+#define MALI_REG_COHERENCY_ENABLE   0x0304u
+#define MALI_COHERENCY_NONE         31u
+#define MALI_REG_JM_CONFIG          0x0f00u
+#define MALI_REG_SHADER_CONFIG      0x0f04u
+#define MALI_REG_L2_MMU_CONFIG      0x0f0cu
+#define MALI_G57_R0P1_GPU_ID        0x90930010u
+/* Vendor kbase_pm_init_hw issue21 workaround for this exact r0p1 product. */
+#define MALI_G57_SHADER_QUIRK       (1u << 29)
+#define MALI_G57_IDVS_GROUP_SIZE    (15u << 16)
+#define MALI_G57_MMU_OUTSTANDING_MASK 0x0003ff80u
+#define MALI_G57_AS_TRANSCFG        0x42000006ull
+#define MALI_G57_AS_MEMATTR         0x00004c8d888d8f88ull
+#define MALI_JS_CONFIG_CACHE_FLUSH  0x00003300u
+#define MALI_JS_CONFIG_PRIORITY    (8u << 16)
+#define MALI_GPU_CACHE_LINE_SIZE    64u
+#define MALI_GPU_PHYSICAL_BITS      40u
+#define MALI_GPU_VIRTUAL_BITS       48u
+#define MALI_PTE_VALID_AF           0x403ull
+#define MALI_PTE_AP_READ_WRITE      0x40ull
+#define MALI_PTE_AP_READ_ONLY       0xc0ull
+#define MALI_PTE_EXECUTE_NEVER      (1ull << 54)
+#define MALI_PTE_ADDRESS_MASK       0x0000fffffffff000ull
 
 /* Core-availability / power bitmaps (64-bit, LO/HI pairs) */
 #define MALI_REG_SHADER_PRESENT_LO  0x0100u
@@ -138,39 +161,46 @@
 #define MALI_AS_COMMAND_FLUSH_PT    0x04u
 #define MALI_AS_COMMAND_FLUSH_MEM   0x05u
 
-/*
- * Valhall Job Descriptor Types
- */
-#define MALI_JOB_TYPE_NULL          0x01u
-#define MALI_JOB_TYPE_WRITEVALUE    0x02u
-#define MALI_JOB_TYPE_CACHE_FLUSH   0x03u
-#define MALI_JOB_TYPE_COMPUTE       0x04u
-#define MALI_JOB_TYPE_VERTEX        0x05u
-#define MALI_JOB_TYPE_TILER         0x06u
-#define MALI_JOB_TYPE_FRAGMENT      0x07u
+/* v9 types differ from older Bifrost/Valhall generations. */
+#define MALI_JOB_TYPE_NULL          1u
+#define MALI_JOB_TYPE_WRITEVALUE    2u
+#define MALI_JOB_TYPE_CACHE_FLUSH   3u
+#define MALI_JOB_TYPE_COMPUTE       4u
+#define MALI_JOB_TYPE_TILER         7u
+#define MALI_JOB_TYPE_FRAGMENT      9u
+#define MALI_JOB_TYPE_INDEXED_VERTEX 10u
+#define MALI_JOB_TYPE_MALLOC_VERTEX 11u
+#define MALI_JOB_TYPE_FULLSCREEN    12u
+#define MALI_JOB_HEADER_TYPE(control) (((control) >> 1) & 0x7fu)
+#define MALI_JOB_HEADER_BARRIER     (1u << 8)
+#define MALI_JOB_HEADER_SUPPRESS_PREFETCH (1u << 11)
+#define MALI_JOB_HEADER_RELAX_DEP1  (1u << 14)
+#define MALI_JOB_HEADER_RELAX_DEP2  (1u << 15)
 
-/*
- * 64-byte Hardware Job Descriptor Header (Panfrost / Valhall)
- */
-struct __attribute__((packed)) mali_job_descriptor_header {
-    uint8_t   job_type;
-    uint8_t   index;
-    uint16_t  flags;
-    uint32_t  fault_pointer;
-    uint64_t  next_job_address;
-    uint64_t  dependencies[2];
+/* 32-byte packed header. Job allocations, rather than this header, align128. */
+struct mali_job_descriptor_header {
+    uint32_t exception_status;
+    uint32_t first_incomplete_task;
+    uint64_t fault_pointer;
+    uint32_t control;             /* type[7:1], flags, index[31:16] */
+    uint16_t dependency_1;
+    uint16_t dependency_2;
+    uint64_t next_job_address;
 };
-
-/*
- * Minimal Fragment Job Payload
- */
-struct __attribute__((packed)) mali_fragment_job_payload {
-    uint64_t  framebuffer;
-    uint64_t  polygon_list;
-    uint32_t  min_tile_x;
-    uint32_t  min_tile_y;
-    uint32_t  max_tile_x;
-    uint32_t  max_tile_y;
+/* Exact eight-word fragment payload; packed min/max hold 12-bit X and Y. */
+struct mali_fragment_job_payload {
+    uint32_t bound_min;
+    uint32_t bound_max;           /* render order[30:28], enable-map[31] */
+    uint64_t framebuffer;
+    uint64_t tile_enable_map;
+    uint32_t tile_enable_map_row_stride; /* low8 bits */
+    uint32_t reserved;
 };
-
+#if defined(__cplusplus)
+static_assert(sizeof(mali_job_descriptor_header) == 32, "v9 job header");
+static_assert(sizeof(mali_fragment_job_payload) == 32, "v9 fragment payload");
+#else
+typedef char mali_job_header_size_check[sizeof(struct mali_job_descriptor_header) == 32 ? 1 : -1];
+typedef char mali_fragment_size_check[sizeof(struct mali_fragment_job_payload) == 32 ? 1 : -1];
+#endif
 #endif /* MALI_VALHALL_HW_H */
