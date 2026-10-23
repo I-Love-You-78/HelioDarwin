@@ -3,9 +3,9 @@
  *
  *   1. log CPU state to the ramoops console zone (plog.c); read it in
  *      Android from /sys/fs/pstore/console-ramoops-0
- *   2. start the display pump on the second A76 (display.c): it pushes
- *      command-mode frames and kicks the MTK watchdog for xnu, then resets
- *      the board after PUMP_LIFETIME_S so a hung boot falls back to Android
+ *   2. (the legacy display pump on the second A76 is gone; xnu drives the MTK
+ *      DSI scanout natively, so the shim no longer resets the board on a timer
+ *      -- recover a hung boot by holding Power; the 1-try slot falls to Android)
  *   3. draw the boot splash (splash.c) on the visible layer, the way the
  *      xnu console expects to find it: black with the apple in the middle
  *   4. hand over to xnu (loader.c); on error paint RED and reset
@@ -19,7 +19,6 @@
 #include "plog.h"
 #include "splash.h"
 
-#define PUMP_LIFETIME_S		120
 #define ERROR_HOLD_MS		5000
 
 #define UFSHCI_BASE		0x11270000UL	/* ufshci@11270000, mediatek,mt8183-ufshci */
