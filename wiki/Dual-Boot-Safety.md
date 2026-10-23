@@ -1,47 +1,39 @@
-# Dual-Boot Architecture and Safety Mechanisms
+# Dual-Boot Safety
 
-## 1. Overview in Plain English
+The working setup keeps Android on slot B and uses slot A for a HelioDarwin boot attempt. The boot helper writes `boot_a` and A/B metadata in `misc`; the separate root-image flasher writes `iosroot`. These operations have different scopes and should not be confused.
 
-One of the greatest fears when porting an operating system to a smartphone is "bricking" the device — leaving it in an unbootable state where user data is lost or the bootloader locks up.
+## One attempt selects the next boot
 
-HelioDarwin is engineered with a **non-destructive, zero-risk dual-boot architecture**. The user's primary Android installation, apps, personal data, and system partitions remain 100% untouched.
+`boot-xnu.ps1` reads the 32-byte boot-control block at offset 2048 in `misc`, prepares slot A with `tries=1` and `successful=0`, writes the image to `boot_a`, verifies both writes and requests a reboot. LK consumes the attempt when it selects slot A. On the next reset, exhausted, unsuccessful slot A permits fallback to the bootable Android slot B.
 
----
+**A/B metadata is not a watchdog.** A hang does not make LK run again. If XNU stops progressing, a real reset is still required before slot fallback can occur. The current shim does not run the old timed display-pump recovery path, and the boot helper's ADB polling cannot reset a processor that no longer responds.
 
-## 2. The 1-Try Watchdog Mechanism
+The fallback also depends on valid slot metadata and a bootable slot B. It does not restore overwritten partitions or replace backups.
 
-Modern Android devices use **A/B seamless updates**. The flash storage has two sets of boot partitions:
-* **Slot A**: `boot_a`, `vendor_boot_a`
-* **Slot B**: `boot_b`, `vendor_boot_b`
+## Opt-in diagnostic reset
 
-Android normally boots and runs on **Slot B**. When we test a new HelioDarwin kernel:
-1. `boot-xnu.ps1` writes our new shim image **only to `boot_a`**.
-2. It modifies the hardware Boot Control Block (`bctl`) partition, setting Slot A with **exactly 1 try** (`tries = 1, successful = 0`):
-   ```text
-   [{'slot': 'A', 'priority': 15, 'tries': 1, 'successful': 0},
-    {'slot': 'B', 'priority': 14, 'tries': 1, 'successful': 1}]
-   ```
-3. The phone reboots into Slot A and starts HelioDarwin.
-4. If the kernel encounters any issue or finishes its session, the hardware bootloader automatically decrements `tries` to 0, marks Slot A unbootable, and **instantly falls back to Android on Slot B**!
+With `sweetreboot=N`, where `1 <= N <= 1800`, the X676C kernel starts a diagnostic thread after UFS bring-up. It waits for that interval, calls filesystem sync, then writes `0x1209` to TOPRGU `SWRST` at `0x10007014`. The timer runs independently of process sampling, so `sweetsample=-` does not disable it.
 
-It is physically impossible for a bad kernel build to brick the phone.
+`sweetreboot=420` returned the phone automatically to Android slot B during [run 39945002194](https://github.com/squeeeezy/HelioDarwin/actions/runs/39945002194) on 2026-10-23. An earlier diagnostic attempt, [run 39941252453](https://github.com/squeeeezy/HelioDarwin/actions/runs/39941252453), reached its sync/reset path but `PSCI SYSTEM_RESET` returned without resetting the device.
 
----
+This is a tested software-reset path, not an unconditional hardware watchdog: it needs UFS startup, kernel scheduling and completion of sync. It cannot guarantee recovery from an earlier boot failure or a kernel-wide hang. Without the boot argument, no diagnostic reset deadline is armed.
 
-## 3. Persistent Logging via `pstore`
-
-When Darwin runs, hardware UART serial logs can be difficult to capture without opening the phone and soldering debug wires. 
-
-Instead, HelioDarwin mirrors all kernel `printf` and `IOLog` messages into the SoC's hardware **RAM console (`pstore`)**:
-* Address: `0x54000000` (reserved memory carveout).
-* When Darwin reboots back into Android, the kernel console buffer is preserved in RAM.
-* `boot-xnu.ps1` immediately reads `/sys/fs/pstore/console-ramoops` via ADB and saves the full trace to `xnu-<RunID>.log`.
-
----
-
-## 4. Flash and Boot Command Reference
+## Deployment helpers
 
 ```powershell
-# Flash kernel artifact to Slot A with 1-try watchdog and collect logs
-pwsh x676c/tools/boot-xnu.ps1 -Run <RUN_ID>
+pwsh x676c/tools/boot-xnu.ps1 -Run ACTIONS_RUN_ID -Adb ADB_EXECUTABLE -Serial DEVICE_SERIAL
 ```
+
+This helper obtains the kernel artifact, builds the ADT/payload/shim, writes `boot_a` and `misc`, reboots, waits for Android and saves the previous console record. It does **not** flash a new root filesystem. Its current default command line does not include `sweetreboot`. `-BootArgs` replaces the whole command line; it does not append arguments.
+
+`x676c/tools/auto-deploy.ps1` requires an explicit `-Run`, waits for rooted Android and preserves the previous raw console. It replaces `iosroot` only when `-RootImage IMAGE` is supplied. The root flasher also requires an explicit image path, checks the HFS+ geometry, Android slot B, an unmounted destination and partition capacity, then verifies SHA-256 over the complete written image. Neither helper chooses an old build or local root image implicitly. Source and destination must still be reviewed before writing; verification cannot undo interruption during a write.
+
+The host return window defaults to 20 minutes and can be changed with `-ReturnWaitMinutes`. This is an ADB wait, not a reset timer. The next integrated diagnostic uses `sweetreboot=600` to allow ten minutes after UFS startup; the earlier successful 420-second boot remains the hardware evidence for reset behavior.
+
+Capture [pstore](Pstore-Debugging-on-MediaTek.md) after Android returns and before starting another shim boot, which initializes a fresh console header.
+
+## Source
+
+- [Boot helper](https://github.com/squeeeezy/HelioDarwin/blob/x676c/x676c/tools/boot-xnu.ps1) and [boot-control editor](https://github.com/squeeeezy/HelioDarwin/blob/x676c/x676c/tools/bootctl_block.py)
+- [Auto-deploy watcher](https://github.com/squeeeezy/HelioDarwin/blob/x676c/x676c/tools/auto-deploy.ps1) and [root-image flasher](https://github.com/squeeeezy/HelioDarwin/blob/x676c/x676c/tools/flash_rootfs.py)
+- [Diagnostic reset patch](https://github.com/squeeeezy/HelioDarwin/blob/x676c/xnu/patches/0190-x676c-serialize-dsi-and-use-toprgu-reset.patch)

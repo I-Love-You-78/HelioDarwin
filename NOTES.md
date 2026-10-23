@@ -1,165 +1,55 @@
-# HelioDarwin: Engineering Log & Milestone History
+# HelioDarwin engineering status
 
-Target: **Infinix Note 12 2023 (`X676C`)**  
-Platform: **MediaTek Helio G99 (`MT6789`)**  
-Cores: **2× Cortex-A76 + 6× Cortex-A55 (ARMv8.2-A, 16 KB page granules)**  
-Baseline: Apple XNU `xnu-8796` (Darwin 22.x, iOS 16.7.16 `20H392` / iPhone X `D22AP`)
+Target: Infinix Note 12 2023 (`X676C`), MediaTek Helio G99 (`MT6789`).
+Kernel baseline: XNU `xnu-8796`; userspace: iOS 16.7.16 (`20H392`, D22AP).
+This page summarizes the current implementation and observed milestones.
 
----
+## Observed milestones
 
-## Hardware Bring-up Milestones
+- LK enters the shim at EL1 with MMU off. The payload loader places XNU and its
+  ADT/boot arguments in the configured rank-1 memory window.
+- XNU reaches IOKit/BSD startup, mounts the named HFS+ root over the native UFS
+  driver and executes launchd. Captures include SpringBoard and backboardd.
+- XNU has read Mali `GPU_ID=0x90930010` and availability registers. Register
+  access is distinct from shader execution.
+- Following patch 0190, the physical panel displayed the clock/interface.
+  A bounded diagnostic boot also returned automatically to Android B using
+  TOPRGU. The observed UI used system software rendering.
 
-### Milestone 1: Bare-Metal Shim & Panel Validation
-- Replaced standard Android kernel with HelioDarwin bare-metal shim (`shim/`, boot image v4).
-- Verified Little Kernel (LK) hand-off: entered at EL1, MMU off, Image at `0x40000000`, DTB at `0x47c80000`.
-- Verified 16 KB page granule support in hardware MMU (`ID_AA64MMFR0_EL1` reports `TGran16` supported on all 8 cores).
-- Configured MIPI DSI0 (`0x14013000`) and DISP_MUTEX0 (`0x14001000`) to paint RGB test patterns onto the ili7835 1080×2400 AMOLED panel.
-- Enabled ramoops console buffer at `0x4811f000` to capture early boot logs through Android warm reset.
+## Current source
 
-### Milestone 2: Kernel Payload Loader & ADT Handover
-- Packed Apple Device Tree (ADT generated via `tools/mkadt.py`) and XNU Mach-O payload into LK initrd ramdisk.
-- Relocated kernel segments to physical RAM above 4 GiB (`0x140000000`+).
-- Configured ARM GIC-600 (GICv3): GICD at `0x0c000000`, GICR at `0x0c080000` (stride `0x20000` per core), virtual timer PPI 11 (INTID 27).
-- Woke secondary cores via PSCI `CPU_ON` (`0xc4000003`).
+The ADT publishes six A55 cores, GICR base `0x0c040000`, 16 KiB CPU pages and
+RAM base `0x140000000` with size `0xffff0000`. Both A76 cores remain excluded.
+The old secondary-core display pump and its lifetime timer are not started.
 
-### Milestone 3: XNU Kernel Initialization & Console Mirroring
-- Booted Apple XNU kernel (`xnu/patches/0140-x676c-mt6789-bringup.patch`).
-- Initialized Mach VM with native 16 KB page tables across 8 GB DRAM.
-- Disabled Qualcomm-specific peripherals; hooked console output into MT6789 pstore memory carveout.
-- Boot reached root filesystem wait: `Waiting on ... IOMedia ... Apple_HFS`.
+The GPU source uses the shared split-SWINF PMIC interface, preserves inherited
+voltage selectors and implements a versioned JM memory/submission/completion
+transport. New rail access, GPU address spaces, execution and recovery still
+require phone validation. Full DVFS and dynamic GPU power management remain open.
 
-### Milestone 4: Native MediaTek UFS 2.2 Host Driver
-- Implemented native kernel UFS host driver (`bsd/dev/ufs/`, patch 0141) targeting MT6789 UFS controller (`0x11270000`).
-- Configured HS-G3 x2 rate B link training, negotiated UFS 2.2 protocol.
-- Enumerated Logical Units: LU 0/1 (4 MiB boot LUs), LU 2 (128 GB User Data LU).
-- Verified GPT partition table with 128 entries. Carved dedicated 20 GiB `iosroot` partition from storage without altering Android system partitions.
-- Formatted `iosroot` as journaled HFS+ volume; verified block read/write operations and journal replay on physical hardware.
+Input source targets the confirmed FT5452J controller over I2C0/APDMA, the PMIC
+power key and keypad volume keys. UFS startup starts the readers; HID receives
+contact collections and consumer-button events. The replacement path is compiled
+but has not yet delivered verified physical events in iOS.
 
-### Milestone 5: iOS 16 Userland Execution (launchd & dyld)
-- Deployed unmodified iPhone X iOS 16.7.16 (`20H392`) root filesystem to `iosroot`.
-- Boot arguments configured: `rd=ufs ufsroot=iosroot ufsrw=iosroot unentitled_ios_sim_launch=1 ignition_level=1 cs_debug=1`.
-- Kernel successfully executed PID 1: `/sbin/launchd`.
-- `launchd` invoked `/usr/lib/dyld` to link system libraries and shared cache.
+MaliMetal includes native AIR translation, Vulkan commands and an iOS PanVK build.
+Selected real CoreAnimation render/compute shaders pass offline checks. Complete
+Metal coverage and assembled GPU rendering remain unfinished. PosterBoard and
+native UIKit geometry have explicit, build-gated compatibility tools awaiting
+device validation.
 
-### Milestone 6: Native Hardware DSI Scanout (AppleCLCD Integration)
-- Replaced background CPU display pump thread with direct register integration in `SweetFramebuffer.cpp` (patch 0146).
-- Mapped MT6789 `DISP_MUTEX0` (`0x14001000`) and `DSI0` (`0x14013000`).
-- Hooked hardware frame push (`mtkDsiPush()`) to 60 Hz VSYNC timer tick and console flip routines, enabling fluid display scanout to the ili7835 AMOLED panel without CPU overhead.
+## Priorities
 
-### Milestone 7: Extended Execution & Userland State Sampling
-- In `x676c/shim/main.c`, set `PUMP_LIFETIME_S = 420` (7-minute execution window) to allow dyld uninterrupted time to map the multi-hundred-megabyte `dyld_shared_cache` over UFS.
-- Eliminated early sampling deadlock in `osfmk/kern/exception.c`.
-- Captured 59 consecutive live user execution samples on physical device (see `logs/boot-0146-launchd-dyld.log`):
-  * `pc = 0x102ded990` (`ret` at `+0xd990` in `/usr/lib/dyld`)
-  * `lr = 0x102de3f2c` (`+0x3f2c` in `_vm_allocate`)
-  * `sp = 0x16d3175b0`, `x16 = -10` (Mach trap `_kernelrpc_mach_vm_allocate_trap`)
-  * `x0 = 0x203` (task_self), `x2 = 0x44000` (272 KB allocation), `x3 = 0x3c000001` (`VM_FLAGS_ANYWHERE | VM_MAKE_TAG(VM_MEMORY_DYLD)`)
-  * Call stack: `lsl::MemoryManager::vm_allocate_bytes` -> `dyld4::APIs::_dyld_for_each_objc_class`.
-  * **Result**: `dyld` initialized its memory heaps and is actively mapping Objective-C classes.
+1. Validate the assembled native display/input/MaliMetal candidate, recording
+   actual failures and separating loading, rendering and scanout.
+2. Resolve shader/API coverage required by the observed system calls; then extend
+   graphics features and application compatibility.
+3. Restore services as their keybag, storage and hardware dependencies become
+   available. Wi-Fi, Bluetooth, NFC, cellular and audio need separate bring-up.
 
-### Milestone 8: Mali-G57 MC2 GPU identity & first (incorrect) power attempt
-- Vendor Mali driver sysfs on the device reports the real GPU identity:
-  `Mali-G57 2 cores r0p1 0x9093` (`/sys/devices/platform/soc/13000000.mali/gpuinfo`).
-  This is the ARM product ID; our XNU has **not** read it live yet (the bank reads `0x0`).
-- Published `IOAcceleratorES` in IORegistry (`MetalPluginName = "MaliMetal"`,
-  `MetalPluginClassName = "MaliMetalDevice"`); `device-id` is registered as `0`
-  (offline-stub) until the hardware actually answers.
-- **Correction (see Milestone 15):** the first bring-up assumed the MFG power-domain
-  control registers lived in `MFG_TOP` at `0x13fbf000 + 0x308/0x30c` with status at
-  `+0x16c/+0x170`, and VGPU at ~0.8V. That was wrong. The `*_PWR_CON` registers are in
-  the **SPM** bank at `0x10006308+`; `0x16c/0x170` are SPM `PWR_STATUS`; VGPU is
-  0.575–0.725 V. The old writes to `0x13fbf000` power bits did nothing.
+No NFC, payment, biometric, modem or wireless functionality follows merely from
+a controller identification or a preserved daemon definition.
 
-### Milestone 9: iOS 16 SpringBoard & backboardd execution
-- `launchd` executes and spawns `lsd`, `backboardd`, and `SpringBoard` (IOKit activity
-  for these is visible in the log). `containermanagerd` reliably launching was a known
-  blocker earlier in bring-up; do not claim it as settled without a log that shows it.
-- Applied system root tweaks via `sweet-root-tweaks.py`:
-  * Configured `com.apple.springboard` preferences to disable `SBShowInternalAssertionBanners`, `SBShowInternalBanner`, `SBEnableAssertionAlerts`, and `BKNoWatchdogs`.
-  * Prepopulated DataMigration markers (`BuildVersion = 20H392`, `DataMigrationCompleted`, `com.apple.migration.plist`) to bypass `com.apple.datamigrator` white folder screen.
-- SpringBoard/backboardd reach UI composition on the 1080×2400 AMOLED panel via the
-  CPU 2D compositor path (see `logs/boot-0175-springboard-backboardd.log`). A fully
-  rendered, interactive lockscreen is not independently verified here.
-
-### Milestone 10: Native Physical Input Drivers (MTK Keypad & FocalTech I2C)
-- Implemented native MediaTek Keypad driver (`bsd/dev/sweet_keys.c`, patch 0175/0176):
-  * Mapped MT6789 Keypad MMIO registers at `0x10010000`.
-  * Read `KP_MEM1` (`0x10010004`): Volume Up (bit 0), Volume Down (bit 1), Power (bit 8) with active-low hardware logic.
-  * Dispatched events directly to `sweet_hid_key`.
-- Implemented native MediaTek I2C driver (`bsd/dev/sweet_touch.c`):
-  * Mapped MT6789 I2C-0 controller at `0x11e00000`.
-  * Configured communication with FocalTech FT3418/FT5452 touch controller at slave address `0x38`.
-  * 100 Hz polling loop parsing multi-touch coordinates (1080×2400) and reporting to `sweet_hid_touch`.
-  * Removed simulated unlock swipe; driver actively polls I2C (0x38), physical finger touch event validation pending clean log capture.
-
-### Milestone 11: Userspace Metal ICD Driver Skeleton (`MaliMetal.bundle`)
-- Implemented native 64-bit arm64 Mach-O Metal ICD driver skeleton for ARM Mali-G57 MC2 Valhall GPU (`MaliMetal/`):
-  * Implemented core Objective-C protocols: `MTLDevice`, `MTLCommandQueue`, `MTLCommandBuffer`, `MTLRenderPipelineState`, `MaliMetalBuffer`, `MaliMetalTexture` (1080×2400 BGRA surface).
-  * Buffers backed by in-memory storage (`calloc`) to satisfy `Metal.framework` / `CoreAnimation` validation checks during early boot.
-  * Packaged bundle deployed to `/System/Library/Extensions/MaliMetal.bundle`.
-  * In `SweetFramebuffer.cpp`, delayed `accel->registerService()` until `MetalPluginName` and `MetalPluginClassName` are populated, allowing `Metal.framework` to bind immediately on boot without crashing `CAMetalContextCreate`.
-  * Serves as the userland foundation for subsequent Mesa `panvk` Vulkan shader translation integration.
-
-### Milestone 12: Display Pump Elimination & Native 60 Hz DSI Scanout (Patch 0177)
-- Eliminated legacy background display pump thread on CPU 7 (`pump_start` completely removed from shim).
-- Connected `mtk_dsi_push_hw()` directly into `SweetFramebuffer.cpp` Vsync timer at 60 Hz (`sMtkDsi` at `0x14013000`, `sMtkMutex` at `0x14001000`).
-- Integrated synchronous MediaTek TOPRGU hardware watchdog kicks (`0x10007000 + 0x08`, key `0x1971`) on every frame scanout.
-- CPU 7 remains powered down in PSCI; display is driven natively by XNU.
-
-### Milestone 13: GPU PMIC Power Sequencing, MMIO Mapping & HFS+ cprotect Resolution (Patches 0178 & 0179)
-- Discovered and addressed root cause of `launchd.log: fopen(...): 22` infinite loop across subsequent boots:
-  * In HFS+ Content Protection (`bsd/sweet_hfs/core/hfs_cprotect.c`), `newclass == PROTECTION_CLASS_F` returned `EINVAL` (22) if the file already had size > 0 (`cp->c_datafork->ff_size > 0`).
-  * On subsequent boots where `launchd.log` already exists on disk, `open_dprotected_np` returned `EINVAL`, causing `launchd` to recursively retry opening its log file, consuming 100% CPU on Core 0 and spamming the console (see `logs/boot-0177-hang.log`).
-  * Patch 0179 removed this restriction on SWEET, allowing `launchd` to cleanly append to existing log files across all reboots.
-- Implemented real MediaTek MT6789 PMIC Wrapper (`PWRAP` at `0x10026000`) power sequencing for Mali-G57 regulators (Patch 0178):
-  * WACS2 command channel targets the MT6366 `buck_vgpu` / `vsram_gpu` rails. Note: the
-    device OPP table gives VGPU 0.575–0.725 V and VSRAM_GPU 0.75 V (the earlier "0.800V"
-    was a guess); the exact MT6366 register encoding over PWRAP is not yet re-verified.
-  * Replaced device ID spoofing with honest reporting: registers `offline-stub` (device-id 0) if the hardware bus returns 0.
-- Implemented `SweetMaliUserClient::clientMemoryForType` memory mapping:
-  * Type 0: maps physical Mali-G57 MMIO registers (`0x13000000`, 64 KB).
-  * Type 1: maps 1 MB shared command ringbuffer.
-- Upgraded `MaliMetal` from empty mock stubs to a functioning 2D rasterizer pipeline:
-  * Implemented bounding box quad clipping, scissor rect clipping, texture sampling, and 32-bit BGRA alpha blending in `MaliMetalVulkan.c`.
-  * Connected `MaliMetalDevice` to `SweetMaliUserClient` via `IOConnectMapMemory64`.
-
-### Milestone 14: Thermal & Power Optimization
-- Identified that CPU 7 (Cortex-A76 Big Core) was busy-spinning at 2.2 GHz in `wait_ms()` in the shim.
-- Enabled architectural ARMv8 counter event stream on `CNTKCTL_EL1` (bit 14 of `cntpct_el0`, ~1.2 ms pulse at 13 MHz) coupled with low-power standby `wfe`. Duty cycle dropped from 100% to 0.05%.
-- Disabled 8 unsupported/telemetry daemons in `launchd.plist` (`locationd`, `wifid`, `bluetoothd`, `analyticsd`, `awdd`, `passd`, `biometrickitd`, `ScreenTimeAgent`) to eliminate background CPU load.
-
-### Milestone 14: Hardware Discovery: NXP PN553 NFC & MediaTek Connsys
-- Mapped physical NXP PN553 / PN544 NFC controller:
-  * Bus: I2C-3 (`0x11015000`), slave address `0x28`.
-  * Power/VEN pin: GPIO 103 (`0x67`).
-  * Architecture is identical to Apple Stockholm NFC (NXP NCI) used in iPhone X / XS / 11, enabling native `nfcd` integration for NameDrop, CoreNFC, and Apple Pay.
-- Mapped MediaTek Connsys wireless core:
-  * STP WMT (`/dev/stpwmt`) and Wi-Fi (`/dev/wmtWifi`).
-  * Dedicated firmware partitions on UFS: `connsys_wifi` and `connsys_bt`.
-
-### Milestone 15: Authoritative GPU power-on from stock-driver RE (IDA)
-- Pulled the stock proprietary/GPL blobs off the device and reversed them in IDA:
-  `mtk_gpufreq_mt6789.ko` (power path), `clk-mt6789.ko` / `clk-mt6789-mfgcfg.ko`
-  (MFG mux, MFGPLL, bg3d CG). `/proc/gpufreqv2` reports `GPUEB Support: Off`, so the
-  AP drives MTCMOS/BUCK/CG directly — the sequence XNU must replicate.
-- Exact sequence (`__gpufreq_power_control` + `__gpufreq_mfg[0-3]_control`):
-  VGPU → VSRAM_GPU → MFG0 → MFG1 (+ infracfg bus-protect release) → ref-clk-mux →
-  MFG2 → MFG3 → bg3d CG + external CG. `*_PWR_CON` in SPM `0x10006308/30c/310/314`,
-  status in `PWR_STATUS 0x16c`/`0x170` (bits `0x4/0x8/0x10/0x20`).
-- bg3d subsys CG: mfgcfg `syscon@13fbf000` (confirmed in DT), SETCLR gate
-  `{sta 0x0, clr 0x8, set 0x4}`, enable via CLR bit0.
-- Rewrote the GPU power-on in `SweetFramebuffer.cpp` to this sequence and corrected the
-  Mali register map (`MaliMetal/MaliValhallHw.h`) to the kbase Job-Manager layout
-  (`AS_PRESENT 0x18`, `JS_PRESENT 0x1c`, job slots at `0x1800 + n*0x80`, MMU/AS at
-  `0x2000`/`0x2400`). Full map: [MT6789 GPU Power Sequence](wiki/MT6789-GPU-Power-Sequence.md).
-- Still open (to confirm from the next boot log, which can read these regs from XNU):
-  whether MTCMOS + bg3d CG + boot-default clock make `GPU_ID` readable; MFGPLL/mux
-  parent-select for real DVFS; exact MT6366 VGPU encoding.
-
----
-
-## Active Engineering Priorities
-
-1. **NXP PN553 NFC Driver (`sweet_nfc.c`)**: Assert GPIO 103 (VEN), sequence NCI `CORE_RESET` over I2C-3 (`0x11015000`, `0x28`), and expose device node for iOS `nfcd` / NameDrop.
-2. **MediaTek Connsys WLAN/BT (`sweet_wmt.c`)**: Implement WMT firmware download from UFS `connsys_wifi` / `connsys_bt` and establish STP packet communication.
-3. **Dual-Boot Bootloader (Clover Clovy Theme)**: Re-enable `clover.c` graphical dual-boot selector with official `Clovy/theme.svg` assets once hardware bring-up is stabilized.
+Detailed contracts: [wiki home](wiki/Home.md), [display](wiki/Display-Pipeline.md),
+[GPU](wiki/MT6789-GPU-Power-Sequence.md), [Metal](wiki/MaliMetal-Driver.md),
+[input](wiki/Input-and-HID.md), [services](wiki/System-Services-and-Posters.md).

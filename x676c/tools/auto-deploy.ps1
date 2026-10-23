@@ -1,47 +1,52 @@
-# Auto-deploy watcher: waits for phone to connect via ADB, flashes updated rootfs and boots XNU
-$adb = Join-Path $env:LOCALAPPDATA "platform-tools-dl\platform-tools\adb.exe"
-$tools = $PSScriptRoot
-Write-Host "[AutoDeploy] Waiting for phone to connect via ADB..." -ForegroundColor Cyan
-
-while ($true) {
-    $devs = & $adb devices | Out-String
-    if ($devs -match "\tdevice") {
-        Write-Host "`n[AutoDeploy] Phone detected! Checking Android boot state..." -ForegroundColor Green
-        
-        # Wait for root/su availability
-        $ready = $false
-        for ($i = 0; $i -lt 30; $i++) {
-            $su_test = & $adb shell "su -c 'id -u'" 2>$null
-            if ($su_test -match "0") {
-                $ready = $true
-                break
-            }
-            Start-Sleep 1
-        }
-        
-        if ($ready) {
-            Write-Host "[AutoDeploy] Root shell confirmed! Pulling previous pstore log..." -ForegroundColor Green
-            try {
-                $pstore = & $adb shell "su -c 'cat /sys/fs/pstore/console-ramoops-0'"
-                $pstoreLog = Join-Path $tools "..\..\logs\last-xnu-boot.log"
-                $pstore | Set-Content $pstoreLog -Force
-                Write-Host "[AutoDeploy] Saved previous boot pstore log to $pstoreLog" -ForegroundColor Green
-            } catch {
-                Write-Host "[AutoDeploy] Note: could not pull pstore: $_" -ForegroundColor Yellow
-            }
-            Write-Host "[AutoDeploy] Streaming updated rootfs..." -ForegroundColor Green
-            python (Join-Path $tools "flash_rootfs.py")
-            if ($LASTEXITCODE -ne 0) {
-                Write-Host "[AutoDeploy] Rootfs flash failed!" -ForegroundColor Red
-                break
-            }
-            
-            Write-Host "[AutoDeploy] Rootfs flashed! Booting XNU (Run 39872424370)..." -ForegroundColor Green
-            & (Join-Path $tools "boot-xnu.ps1") -Run 39872424370
-            break
-        } else {
-            Write-Host "[AutoDeploy] Waiting for su to respond..." -ForegroundColor Yellow
-        }
-    }
-    Start-Sleep 2
+<#
+Wait for a selected Android device, optionally flash an explicit root image,
+then deploy an explicit CI run. Each successful invocation performs one attempt.
+Example: auto-deploy.ps1 -Run RUN_ID -Adb PATH_TO_ADB -Serial DEVICE_SERIAL
+Add -RootImage IMAGE only when replacing iosroot is intended.
+#>
+param(
+    [Parameter(Mandatory)] [ValidatePattern('^[0-9]+$')] [string]$Run,
+    [string]$RootImage = "",
+    [string]$Adb = "adb",
+    [string]$Serial = "",
+    [string]$BootArgs = "",
+    [ValidateRange(1, 3600)] [int]$WaitSeconds = 600
+)
+$ErrorActionPreference = 'Stop'
+$adb = (Get-Command $Adb -CommandType Application -ErrorAction Stop).Source
+$adbArguments = @()
+if ($Serial) { $adbArguments = @('-s', $Serial) }
+if ($RootImage) {
+    $RootImage = (Resolve-Path -LiteralPath $RootImage -ErrorAction Stop).Path
+    if (-not (Test-Path -LiteralPath $RootImage -PathType Leaf)) { throw 'RootImage must be a file' }
 }
+$out = Join-Path $PSScriptRoot '..\shim\out'
+New-Item -ItemType Directory -Force -Path $out | Out-Null
+$deadline = (Get-Date).AddSeconds($WaitSeconds)
+$ready = $false
+Write-Host 'Waiting for Android and its root shell...'
+while ((Get-Date) -lt $deadline) {
+    $uid = & $adb @adbArguments shell su -c 'id -u' 2>$null
+    if ($LASTEXITCODE -eq 0 -and "$uid".Trim() -eq '0') {
+        $ready = $true
+        break
+    }
+    Start-Sleep -Seconds 2
+}
+if (-not $ready) { throw 'Timed out waiting for one selected rooted Android device' }
+if (-not $Serial) {
+    $Serial = (& $adb get-serialno).Trim()
+    if ($LASTEXITCODE -or -not $Serial -or $Serial -eq 'unknown') { throw 'Select one device with -Serial' }
+    $adbArguments = @('-s', $Serial)
+}
+$previousLog = Join-Path $out "before-$Run-console.bin"
+if (Test-Path -LiteralPath $previousLog) { throw "Previous log already exists: $previousLog" }
+python -c 'import pathlib, subprocess, sys; pathlib.Path(sys.argv[1]).write_bytes(subprocess.check_output(sys.argv[2:]))' $previousLog $adb @adbArguments exec-out su -c 'cat /sys/fs/pstore/console-ramoops-0'
+if ($LASTEXITCODE) { throw 'Could not preserve the previous pstore console' }
+if ($RootImage) {
+    python (Join-Path $PSScriptRoot 'flash_rootfs.py') $RootImage --adb $adb --serial $Serial
+    if ($LASTEXITCODE) { throw 'Root image flash or full readback failed' }
+}
+$boot = @{ Run = $Run; Adb = $adb; Serial = $Serial }
+if ($BootArgs) { $boot.BootArgs = $BootArgs }
+& (Join-Path $PSScriptRoot 'boot-xnu.ps1') @boot

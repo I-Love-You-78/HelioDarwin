@@ -1,121 +1,73 @@
-# x676c: ios-topaz on the Infinix Note 12 2023 (X676C, MT6789)
+# X676C bring-up
 
-Port of this repository's XNU bring-up from the Redmi Note 12 4G (Qualcomm
-SM6225) to the Infinix X676C: MediaTek Helio G99 (MT6789), 6x Cortex-A55 +
-2x Cortex-A76, 8 GB, SK hynix UFS, ili7835 DSI command-mode panel.
+Target: Infinix Note 12 2023, MediaTek Helio G99 / MT6789, six Cortex-A55 and
+two Cortex-A76 cores, UFS storage and an ili7835 1080×2400 command-mode panel.
+The port builds on the repository's earlier SWEET/Topaz work.
 
-## Status
+## Current boundary
 
-- **Milestone 1 (2026-10-21): own code runs and paints the screen.**
-  `shim/` boots in place of the kernel, logs to pstore and pushes
-  red/green/blue frames to the command-mode panel.
-- **Milestone 2 (2026-10-21): xnu loader verified on hardware** with a
-  stand-in kernel (`tools/stub`): payload found in LK's initrd, segments
-  placed at 0x140000000+, ADT + boot_args (rev 2) handed over, entry
-  reached with x0 = boot_args. Display pump runs on CPU 0x700.
+Physical boots execute launchd, SpringBoard and backboardd. The corrected DSI
+sequence has displayed the clock/interface, using system software rendering.
+The new MaliMetal GPU transport/backend, replacement physical input and native
+UIKit metadata adapter are compile-checked and await an assembled device check.
+See [engineering status](../NOTES.md) and the [wiki](../wiki/Home.md).
 
-- **Milestone 3 (2026-10-21): xnu boots to the root wait.** CI kernel with
-  `xnu/patches/0140-x676c-mt6789-bringup.patch`: early console on the
-  MediaTek splash layer, every console byte mirrored into pstore, Qualcomm
-  MMIO users off on `infinix,x676c`. The log runs through IOKit (platform
-  expert, AppleKeyStore, HID, CPU0 + GIC SGI), BSD (AMFI, sandbox, HFS,
-  networking) and ends in `Waiting on ... IOMedia ... Apple_HFS`.
+## Boot layout
 
-- **Milestone 4 (2026-10-21): xnu reads the UFS.** Own driver
-  (`xnu/patches/0141-x676c-ufs-driver.patch`, `bsd/dev/ufs/`): full
-  host init (the link LK leaves fails the first NOP), HS-G3 x2 rate B,
-  user LU found from the unit descriptors (LU 2; LU 0/1 are 4 MiB boot
-  LUs), GPT with 64 partitions verified by CRC, `/dev/disk0sN` numbered
-  like Android's `sdcN` (userdata = disk0s63). With `rd=ufs
-  ufsroot=userdata` xnu opens disk0s63 and reads its volume header.
+LK loads a boot image v4 containing the shim and kernel payload. The host builder
+resolves kernel fixups; the shim checks/copies segments, places ADT and boot_args,
+and enters XNU at EL1 with MMU/caches off and x0 pointing to boot_args.
 
-## UFS host as LK leaves it
+| Port input | Value |
+| --- | --- |
+| Kernel-managed RAM | `0x140000000`, size `0xffff0000` |
+| GICD / GICR | `0x0c000000` / `0x0c040000` |
+| Counter / virtual timer | 13 MHz / PPI 11, INTID 27 |
+| CPU topology | Six A55 published; both A76 excluded |
+| CPU page size | 16 KiB |
+| Visible LK buffer | `0xfeabe000`, 1080×2400, 4320-byte stride |
+| UFS host | `0x11270000`; named HFS+ root `iosroot` |
 
-Dumped by the shim before entering xnu: CAP 0x3587071f (32 transfer slots,
-8 task slots, 64-bit DMA), HCE 1, HCS 0x10f (device present, UTRL/UTMRL/UIC
-ready), LK's list at UTRLBA 0x51252c00 idle (DBR 0, RSR 1), last UIC command
-DME_SET PA_PWRMode (0x1571), REFCLK_CTRL 0x3 (requested and acked), MTK IP
-version 0x20160706. Clocks, regulators and the HS link are up.
+Stock LK enters the shim with MMU off, Image at `0x40000000` and the observed DTB
+at `0x47c80000`. The boot image requires a gzip Image. `fastboot boot` was rejected
+by this LK, so deployment writes `boot_a` from rooted Android B.
 
-- **Milestone 5 (2026-10-21): iOS userland starts from internal flash.**
-  Dual boot: GPT grown to 128 entries, `iosroot` (20 GiB) carved from
-  userdata's tail (now 87 GiB), the 16 GiB iOS 16.7.16 HFS+ image written
-  there, Android still boots on slot B. With `rd=ufs ufsroot=iosroot
-  ufsrw=iosroot` xnu mounts iosroot read-write (HFS+ journal replayed —
-  the UFS driver's write path works on hardware) and `exec launchd`. Next:
-  dyld maps the shared cache (slow on one A55; the display pump's lifetime
-  bounds each attempt before the fall-back to Android).
+The shim does not start the earlier secondary-core display pump or a lifetime
+timer. XNU handles DSI refresh. An opt-in `sweetreboot=N` kernel timer provides
+the tested TOPRGU reset path after UFS startup; A/B retry state acts only after
+a reset. See [recovery](../RECOVERY.md).
 
-## xnu boot flow
+## Build and deploy
 
-```
-python tools/mkadt.py shim/out/x676c.adt [--d22ap research/d22ap.adt]
-python tools/mkpayload.py KERNEL shim/out/x676c.adt shim/out/payload.bin --cmdline "..."
-python shim/build.py shim/out/payload.bin      # payload rides as the boot.img ramdisk
+```powershell
+python x676c/tools/mkadt.py ADT_OUTPUT
+python x676c/tools/mkpayload.py KERNEL ADT_OUTPUT PAYLOAD_OUTPUT --cmdline "FULL_BOOT_ARGS"
+python x676c/shim/build.py PAYLOAD_OUTPUT
+pwsh x676c/tools/boot-xnu.ps1 -Run ACTIONS_RUN_ID -Adb ADB_EXECUTABLE -Serial DEVICE_SERIAL
 ```
 
-- Kernel RAM: **0x140000000 + 0xffff0000** (rank 1, between the dramc
-  training pages 0x13ffff000 / 0x23ffff000; every other carve-out is
-  below 4 GiB). Same values in `mkadt.py` and `shim/loader.c`.
-- GICv3: GICD 0x0c000000, GICR 0x0c040000; virtual timer PPI 11 = INTID 27;
-  CNTFRQ 13 MHz; PSCI 1.0 over SMC.
-- CPUs in the ADT: the six A55 (MPIDR 0x000-0x500). 0x600 (A76) is held
-  back until the AMP topology is set up; **0x700 (A76) runs the display
-  pump** and must never be given to xnu.
-- Display pump (`shim/display.c`): pushes a frame every 33 ms and kicks
-  the MTK watchdog (xnu does not know it), then resets after 120 s so a
-  hung boot falls back to Android.
-- `tools/stub`: kernel-shaped Mach-O that logs the boot_args/ADT it got
-  to pstore and resets. Use it to test loader changes without a kernel.
+The shim builder needs Python with `ziglang`. The ADT builder uses the separately
+supplied D22 metadata when available; proprietary firmware/cache inputs do not
+belong in this repository. `boot-xnu.ps1` builds the image, verifies writes to
+`boot_a` and boot-control metadata, reboots and captures raw pstore after return.
+It does not flash a root volume or arm a reset deadline by default.
 
-## Boot path facts
+`auto-deploy.ps1` requires the CI run as an argument; `-RootImage` is an explicit
+opt-in root replacement. `apply_tweaks.sh IMAGE [OPTIONS...]` prepares an offline
+HFS+ image, resolves repository tools relative to itself and cleans up its mount
+on failure. Supply `HFSPLUS_MODULE` only if the host needs an external module.
 
-- Stock Transsion LK. No `fastboot boot` ("unknown command"). The kernel in
-  boot.img v4 must be a **gzip** Image; a raw Image is rejected.
-- LK enters at **EL1**, MMU off, Image at **0x40000000**, x0 = DTB
-  (0x47c80000 seen).
-- CNTFRQ 13 MHz. ID_AA64MMFR0 = 0x101122: **16K granule supported** on the
-  A55/A76 cores.
-- Escape hatch: Vol-Up + Power at power-on opens LK's "Select Boot Mode"
-  menu (Recovery / Fastboot / Normal).
+## Display and input
 
-## Test loop without fastboot
+Native mode uses the complete 1080×2400 panel at scale 3, with matching touch
+coordinates and no crop offsets. The optional context adapter supplies actual
+cutout/corner geometry to UIKit; compilation does not establish the visible
+result. [Display details](../wiki/Display-Pipeline.md) and
+[input contracts](../wiki/Input-and-HID.md) describe remaining checks.
 
-Fastboot works, but Windows re-binds the shared USB ID 0E8D:201C to MTP
-whenever Android boots, so WinUSB must be re-installed each time. Instead,
-from rooted Android:
+## Console
 
-1. `dd` the shim image into the inactive `boot_a`.
-2. Make slot A active by writing the AOSP `bootloader_control` block at
-   `misc + 2048` with **1 try** (`tools/bootctl_block.py set-active a <hex> out.bin 1`).
-   The bootctl HAL is not reachable on the GSI.
-3. Reboot. The shim runs once, its reset uses up the try, and LK falls back
-   to slot B (Android) by itself (~1 min round trip).
-4. Read the shim log from `/sys/fs/pstore/console-ramoops-0`.
-
-## Debug channel: ramoops
-
-mem_address 0x48090000, size 0xe0000, record 0x1000, console 0x40000,
-ftrace 0x1000, pmsg 0x10000, ecc 0 -> console zone at **0x4811f000**
-(header `sig 0x43474244, start, size`). DRAM survives the warm reset, so
-the next Android boot exposes it. See `shim/plog.c`.
-
-## Display (command mode)
-
-| Block | Base | State left by LK |
-|---|---|---|
-| DSI0 | 0x14013000 | MODE_CTRL 0 (CMD), PSCTRL 0x2c030ca8, CMDQ0 0x002c3909 (DCS 0x2c) |
-| DISP_MUTEX | 0x14001000 | MUTEX0 MOD 0x147b7, EN 0 |
-| OVL0_2L L0 | 0x14006000 | addr 0xfe0c8000, pitch 1088 px |
-| OVL0 L1 (top, opaque, logo) | 0x14005000 | addr 0xfeabe000, pitch 1080 px |
-
-One frame: `MUTEX0_EN = 1`, `DSI_START = 0 -> 1`; INTSTA reads 0x16 and
-MUTEX0_EN self-clears. Pixels are ARGB8888 (0xffff0000 is red).
-
-## Build
-
-`python shim/build.py` (toolchain: `pip install ziglang`; links with
-`zig ld.lld`) -> `shim/out/shim-boot.img`.
-
-`tools/unpack_vendor_boot.py` extracts the vendor ramdisk (lz4 legacy) to
-get the stock MediaTek kernel modules.
+The ramoops reservation is `0x48090000`, size `0xe0000`; the console zone is
+`0x4811f000`, size `0x40000`, including a 12-byte header. XNU keeps early output
+when the zone fills. Retention depends on warm-reset behavior and Android import;
+capture the original bytes before the next shim boot.

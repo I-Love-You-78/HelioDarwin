@@ -1,45 +1,48 @@
 # HelioDarwin
 
 Running Apple's open-source XNU kernel (`xnu-8796`, Darwin 22 / iOS 16.7.16 `20H392`
-from iPhone X `D22AP`) and unmodified iOS 16 userland on the **MediaTek Helio G99
+from iPhone X `D22AP`) and iOS 16 userland on the **MediaTek Helio G99
 (`MT6789`)**, target device **Infinix Note 12 2023 (`X676C`)**. Forked from
 [MakrSas/ios-topaz](https://github.com/MakrSas/ios-topaz).
 
-This is experimental bring-up on physical hardware. Many subsystems are partial or
-in progress. The table below reflects what the committed boot logs actually show —
-nothing is listed as working that a log does not back.
+This is experimental bring-up on physical hardware. Booting the system, displaying
+its interface, and executing graphics on the GPU are separate milestones. The
+latest observed clock/interface uses the system's software rendering fallback;
+the new MaliMetal GPU execution path has not yet been validated on the phone.
+Userspace configuration changes and optional compatibility adapters are described
+in the [system services documentation](wiki/System-Services-and-Posters.md).
 
 ## Hardware status
 
-| Subsystem | Status | Log | Notes |
-| :--- | :--- | :--- | :--- |
-| Boot & shim | Working | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | Shim v4 unpacks the kernel payload, sets up GICv3, enters XNU at EL1. |
-| CPU & SMP | Working | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | ARMv8.2-A, 16 KB granules, secondary cores up via PSCI. |
-| Storage (UFS) | Working | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | Native MTK UFS 2.2 (`0x11270000`), journaled HFS+ read/write on a 20 GB `iosroot`. |
-| Display scanout | Working | [`boot-0176`](logs/boot-0176-mtk-input-malimetal.log) | Native DSI0 (`0x14013000`) + DISP_MUTEX0 (`0x14001000`) 60 Hz scanout from XNU; CPU display pump removed (patch 0177). |
-| Userland (launchd→SpringBoard) | Partial | [`boot-0175`](logs/boot-0175-springboard-backboardd.log) | `launchd` spawns `lsd`, `backboardd`, `SpringBoard`. `containermanagerd` reliability has been a blocker; a fully composed, interactive lockscreen is not independently verified. |
-| GPU power-on | In progress | [`boot-0148`](logs/boot-0148-gpu-mfg.log) | MFG power sequence reverse-engineered from stock `mtk_gpufreq_mt6789.ko` (SPM MTCMOS `0x10006308+`) and rewritten; the Mali bank still reads `0x0` — not yet confirmed responding. See [GPU power sequence](wiki/MT6789-GPU-Power-Sequence.md). |
-| Metal driver | CPU 2D only | [MaliMetal](wiki/MaliMetal-Driver.md) | `MaliMetal.bundle` exposes `MTLDevice`/etc. with a CPU 2D compositor. No GPU-accelerated 3D, no Vulkan/panvk — those are a design proposal, not code. |
-| Touchscreen | Driver polling | [`boot-0176`](logs/boot-0176-mtk-input-malimetal.log) | MT6789 I2C (`0x11e00000`, addr `0x38`), FocalTech FT3418/FT5452, 100 Hz poll; physical-touch capture not yet shown in a log. |
-| Physical keys | Working | [`boot-0176`](logs/boot-0176-mtk-input-malimetal.log) | MT6789 keypad (`0x10010000`): Vol±, Power. |
-| Thermal/power | Optimized | — | CPU 7 pump removed; `wfe`/event-stream idle in the shim. |
-| NFC | Address mapped | — | NXP PN553 on I2C-3 (`0x11015000`, addr `0x28`); no driver yet. |
-| Wi-Fi / BT / audio | Not started | — | MediaTek Connsys partitions located; nothing implemented. |
+| Subsystem | Evidence and current limits |
+| :--- | :--- |
+| Boot & CPU | Physical boots reach iOS userland. The ADT publishes six Cortex-A55 cores with 16 KiB pages; the two A76 cores are excluded. [Boot and Shim](wiki/Boot-and-Shim.md). |
+| Storage | Native UFS reads the `iosroot` HFS+ volume and has performed writes and journal replay. Root-volume backups must be kept separately. |
+| Display | Patch 0190 serializes the vendor DSI refresh sequence. A subsequent phone boot showed the clock/interface and no sampled DSI busy condition. A 60 Hz software timer is not a measured frame-rate guarantee. [Display Pipeline](wiki/Display-Pipeline.md). |
+| UIKit geometry | Physical scanout is 1080×2400. Native cutout, safe-area and status-bar compatibility work is separate from scanout and requires runtime validation. |
+| GPU | XNU has read GPU ID `0x90930010`. The new PMIC and Job Manager implementation is compile-checked; that does not establish successful GPU jobs. [GPU power sequence](wiki/MT6789-GPU-Power-Sequence.md). |
+| MaliMetal | Metal objects, native AIR translation, a Vulkan backend and an arm64 iOS PanVK port are implemented for a bounded feature set. Selected real CoreAnimation shaders pass offline translation checks. End-to-end GPU execution and broader Metal support remain unverified/incomplete. [Driver details](wiki/MaliMetal-Driver.md). |
+| Touch & keys | The replacement FT5452J, keypad and PMIC-key paths are compile-checked against extracted vendor information. Physical events through iOS HID still require phone validation. [Input and HID](wiki/Input-and-HID.md). |
+| System services | PosterBoard startup preparation and reversible job management are available. Disabled services are not considered working merely because their definitions are restored. [Services and posters](wiki/System-Services-and-Posters.md). |
+| Reset & fallback | The opt-in X676C TOPRGU reset returned a diagnostic boot to Android slot B. A/B retry metadata alone cannot reset a hung system. [Dual-boot safety](wiki/Dual-Boot-Safety.md). |
+| Wi-Fi / BT / NFC / cellular / audio | Functional MT6789 support is not established. Hardware addresses or discovered vendor files do not constitute working drivers. |
 
 ## Repository layout
 
 - `x676c/` — device shim, ADT/payload/boot/flash tooling.
 - `xnu/patches/` — numbered XNU source patches applied by CI before the kernel build.
-- `MaliMetal/` — userspace Metal ICD bundle (CPU 2D compositor today).
-- `wiki/` — hardware notes and reverse-engineered register maps.
-- `logs/` — captured `pstore` boot logs that back the status table.
+- `MaliMetal/` — userspace Metal implementation, AIR compiler adapter and Vulkan/XNU backend.
+- `tools/` — offline root preparation and explicit compatibility adapters.
+- `wiki/` — public hardware and implementation documentation, mirrored to the separate wiki.
+- `logs/` — selected historical `pstore` captures; not every local observation is published here.
 
 ## Building and flashing
 
 Requirements: LLVM/Clang 15+ (AArch64), Python 3.10+ with Zig, Android platform-tools
 (`adb`) with root (Magisk). The kernel is built in CI; `boot-xnu.ps1` downloads the
-artifact, builds the ADT/payload/boot image, flashes `boot_a` as slot A with a one-try
-watchdog fallback to Android, then collects the `pstore` log.
+artifact, builds the ADT/payload/boot image, flashes `boot_a` and selects slot A with
+one try. The next reset can return to Android slot B. Arrange a reset deadline or
+manual recovery explicitly; the default command is not a hang watchdog.
 
 ```bash
 pwsh x676c/tools/boot-xnu.ps1 -Run <CI_RUN_ID>
@@ -47,11 +50,16 @@ pwsh x676c/tools/boot-xnu.ps1 -Run <CI_RUN_ID>
 
 ## GPU / Metal status
 
-The kernel GPU power-on is being brought up; the reverse-engineered MT6789 sequence is
-in [`wiki/MT6789-GPU-Power-Sequence.md`](wiki/MT6789-GPU-Power-Sequence.md). Userspace
-`MaliMetal` is a CPU 2D compositor that satisfies `Metal.framework` during boot. A
-Metal→Vulkan path over Mesa `panvk` is a long-term **design proposal**
-([`wiki/MaliMetal-Driver.md`](wiki/MaliMetal-Driver.md)), not implemented.
+The current source implements Vulkan resource and command paths. Build matching
+iOS artifacts from source, including the pinned AIR compiler and PanVK dependency.
+Generated binaries are kept outside version control.
+See [MaliMetal build instructions](MaliMetal/README.md).
+
+Compilation and offline shader validation do not prove that the stock Metal loader,
+PanVK, kernel GPU transport and presentation work together on the phone. Full
+Metal or Vulkan conformance is not claimed. Framebuffer fetch, blending, broader
+texture variants, depth/stencil and multisampling remain among the unsupported
+paths.
 
 ## Development
 

@@ -20,12 +20,35 @@ Env: XNU_CC_EXTRA   extra flags (e.g. "-DKPERF -DKPC" for config changes)
 import concurrent.futures as cf, os, re, shlex, subprocess, sys
 from collections import Counter
 
-CI_DXB = os.environ.get('XNU_CC_DXB', '/Users/runner/work/ios-x676c/ios-x676c/dxb')
+CI_DXB = None
 CI_SDK_PLATFORM = re.compile(r'/Applications/Xcode[^ ]*?\.sdk/+System/Library/Frameworks/Kernel\.framework/Versions/A/PrivateHeaders/platform')
 CLANG = shlex.split(os.environ.get('XNU_CC_CLANG', '')) or [sys.executable, '-m', 'ziglang', 'clang']
 DROP = {'-c', '-g', '-MD', '-MMD'}
 DROP_WITH_ARG = {'-MF', '-MT', '-o', '-arch'}
 COMPONENTS = ('osfmk', 'bsd', 'iokit', 'libkern', 'pexpert', 'security', 'san', 'libsa')
+
+
+def ci_build_root(log):
+    """Resolve the original build root from source arguments, not runner names."""
+    override = os.environ.get('XNU_CC_DXB')
+    if override:
+        return override.rstrip('/')
+    roots = set()
+    with open(log, errors='replace') as stream:
+        for line in stream:
+            match = re.search(r'\S+/clang(?:\+\+)? (.*)', line)
+            if not match or ' -c ' not in line:
+                continue
+            try:
+                arguments = shlex.split(match.group(1))
+            except ValueError:
+                continue
+            for argument in arguments:
+                if argument.startswith('/') and '/xnu/' in argument and re.search(r'\.(c|cpp|s|S)$', argument):
+                    roots.add(argument.rsplit('/xnu/', 1)[0])
+    if len(roots) != 1:
+        raise ValueError('Expected one XNU build root in the log; set XNU_CC_DXB explicitly')
+    return roots.pop()
 
 
 def commands(log):
@@ -139,7 +162,12 @@ def sync_exported_headers(bt):
 
 
 def main():
+    global CI_DXB
+    if len(sys.argv) < 3:
+        print(__doc__, file=sys.stderr)
+        return 2
     log, bt = sys.argv[1], os.path.abspath(sys.argv[2]).replace(os.sep, '/')
+    CI_DXB = ci_build_root(log)
     sync_exported_headers(bt)
     per_file = '--per-file' in sys.argv
     warn = os.environ.get('XNU_CC_WARN') == '1'

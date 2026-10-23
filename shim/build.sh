@@ -4,6 +4,20 @@
 # active slot; loader.c finds our payload behind the vendor ramdisk.
 set -euo pipefail
 cd "$(dirname "$0")"
+if [ -n "${MKBOOTIMG:-}" ]; then
+	if [[ "$MKBOOTIMG" == *.py ]]; then
+		bootimg=(python3 "$MKBOOTIMG")
+	else
+		bootimg=("$MKBOOTIMG")
+	fi
+elif command -v mkbootimg >/dev/null 2>&1; then
+	bootimg=(mkbootimg)
+elif [ -f ../mkbootimg_src/mkbootimg.py ]; then
+	bootimg=(python3 ../mkbootimg_src/mkbootimg.py)
+else
+	echo "Set MKBOOTIMG to the mkbootimg executable or Python script" >&2
+	exit 1
+fi
 CC=aarch64-linux-gnu-gcc
 OBJCOPY=aarch64-linux-gnu-objcopy
 CFLAGS="-O2 -ffreestanding -nostdlib -fno-pic -mgeneral-regs-only -mstrict-align -fno-stack-protector -Wall -Wextra"
@@ -33,7 +47,7 @@ if [ -n "${1:-}" ]; then
 else
 	(cd out && rm -rf rd && mkdir rd && cd rd && find . | cpio -o -H newc --quiet | gzip -9 > ../ramdisk.bin)
 fi
-${MKBOOTIMG:-python3 /home/makr/work/topaz/mkbootimg_src/mkbootimg.py} --header_version 4 --kernel out/Image --ramdisk out/ramdisk.bin \
+"${bootimg[@]}" --header_version 4 --kernel out/Image --ramdisk out/ramdisk.bin \
 	--os_version 13.0.0 --os_patch_level 2025-01 \
 	--cmdline "console=null" -o out/shim-boot.img
 # Host render of the console layout.

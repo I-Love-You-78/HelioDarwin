@@ -1,0 +1,100 @@
+# System Services and Posters
+
+HelioDarwin includes reversible launchd policy and opt-in PosterBoard preparation for **iOS 16.7.16, build 20H392**. The native helpers compile to arm64 iOS artifacts with strict compiler warnings and source/binary hash checks. **They have not been installed or validated on the phone.** A present launchd job does not establish that its service works.
+
+## Service policy
+
+The inspected root snapshot has **ten removed jobs**: `com.apple.CommCenter`, `com.apple.locationd`, `com.apple.wifid`, `com.apple.bluetoothd`, `com.apple.nfcd`, `com.apple.awdd`, `com.apple.analyticsd`, `com.apple.passd`, `com.apple.biometrickitd` and `com.apple.ScreenTimeAgent`.
+
+Four other jobs are **present in that snapshot**: `com.apple.nanotimekitcompaniond`, `com.apple.fairplayd.H2`, `com.apple.ptpd` and `com.apple.searchd`. The current policy preserves these four instead of adding further disables. Presence is not runtime validation.
+
+For the remaining disable set, the root-tweaks script now archives original job definitions before setting `Disabled`. It retains program arguments, Mach services and device-matching conditions. Previously deleted jobs are not recreated automatically: restoration needs a preserved definition or an explicit original launchd cache from the same iOS build.
+
+From the repository root, inspect or restore an offline root with:
+
+```sh
+python3 tools/sweet_daemons.py MOUNTED_ROOT
+sudo python3 tools/sweet_daemons.py MOUNTED_ROOT --restore LABEL
+sudo python3 tools/sweet_daemons.py MOUNTED_ROOT --restore LABEL --source-cache ORIGINAL_LAUNCHD_CACHE
+```
+
+The first command is read-only. Restoration restores a definition; it does not supply missing hardware or software contracts. Other bring-up changes, including crash-panic policy, watchdog preferences, Setup/migration markers and audio workarounds, remain separate.
+
+Activation preparation now merges missing build/migration metadata while preserving existing daemon fields and activation state. It does not force `ActivationState` to `Activated`. Audio preparation also rejects conflicting active and disabled VirtualAudio plug-in copies.
+
+## PosterBoard preparation
+
+An early active-wallpaper read can lazily create a switcher configuration before the first extension initialization. A later prewarm then reaches an assertion requiring that configuration to be absent. The readiness guard leaves initialization and assertions intact: it returns unavailable before initialization and calls the original getter afterward. Returning unavailable alone does not ensure eventual wallpaper delivery.
+
+`SweetRegisterPosters`, running as `mobile` (UID 501), queries the real ExtensionKit provider list. With `--register`, it registers only missing LegacyPoster and CollectionsPoster identities, avoiding repeated unregister/register churn. Both exact identities must be visible before optional `--prewarm` invokes the original PosterBoard service. Registration/query failures, an actual prewarm `NSError`, and a 120-second completion timeout produce failure.
+
+Private API use is restricted by loaded framework UUIDs and runtime contract checks:
+
+| Framework | Expected UUID for 20H392 |
+| --- | --- |
+| PosterBoard | `fbd32eac-fbbf-3f56-a0ba-5bd44d2e2725` |
+| CoreServices | `8d42103d-bd59-308d-9d2c-2082b39738e7` |
+| PosterBoardServices | `4fc96a43-1b54-348b-9b78-13485197e086` |
+
+Build both artifacts into the same directory using [the builder](https://github.com/squeeeezy/HelioDarwin/blob/x676c/tools/posterboard/build.py), once normally and once with `--registration-helper`. It requires Zig's Clang and a matching iOS library sysroot. The Windows/WSL linker option is `--wsl --linker /usr/bin/ld64.lld-18`.
+
+Installation into an offline root is explicit:
+
+```sh
+sudo python3 tools/sweet_daemons.py MOUNTED_ROOT --prepare-posters POSTER_BUILD
+sudo python3 tools/sweet_daemons.py MOUNTED_ROOT --remove-poster-preparation
+```
+
+Preparation verifies the target build, current sources and arm64/iOS artifacts, preserves the original PosterBoard job, adds its scoped readiness environment, and installs a mobile startup registration/prewarm job. Rollback restores the original job and removes the preparation job while retaining provider data, tools and logs. Dylib loading, entitlement access, provider visibility, prewarm completion and visible wallpaper still need device validation. This does not establish complete wallpaper-gallery support.
+
+## Red status area and geometry
+
+Binary analysis confirms that UIKit's fallback status-bar provider creates a system-red background when native provider selection fails. The split-provider matcher considers native width **and** notch/exclusion size adjusted by native/reference scale; 1080-pixel variants already exist. Width or `360×800` points alone does not establish the cause.
+
+Native `1080×2400` remains the boot default (`sweetfb_native=1`), giving `360×800` points at scale 3. The new opt-in [native metadata adapter](https://github.com/squeeeezy/HelioDarwin/tree/x676c/tools/native-display) keeps that framebuffer configuration and the existing iPhone X artwork identity. The scanout and touch paths continue to use the full physical panel without crop offsets. The older `1125×2436` cropped canvas is not the resolution fix. See [Display Pipeline](Display-Pipeline.md) and [Input and HID](Input-and-HID.md).
+
+SpringBoard publishes display and device contexts to UIKit applications. Its shared factories now supply the native panel geometry:
+
+| Metadata | Native profile |
+| --- | --- |
+| Physical pixels / UIKit points | `1080×2400` / `360×800`, scale 3 |
+| Exclusion rectangle in portrait points | `(156, 0, 48, 36)` |
+| Corner radius | 39 points, corresponding to 117 physical pixels |
+| Portrait safe area, top/left/bottom/right | `47 / 0 / 34 / 0` points |
+| Preserved phone metrics | Periphery top 32; home-affordance allowance 21 |
+
+Cutout and corner dimensions come from the device's read-only Android display contract. The portrait top inset matches UIKit's stock generic `FixedSplit` height. Other orientation wrappers retain stock values and nil semantics; UIKit's existing orientation fallback remains responsible for their interpretation.
+
+The adapter uses the ordinary non-Jindo `FixedSplit` renderer, which reads the actual native width, scale and exclusion rectangle. The installer selects that stock feature policy with the valid `Jindo = { Enabled = false }` definition; it preserves the original definition for rollback. This is appropriate to the existing iPhone X identity, whose SpringBoard Jindo device path requires different artwork subtypes. It does not replace status-bar rendering methods, paint over the diagnostic, change assertions, or advertise Dynamic Island support.
+
+Installation checks build `20H392` and matching source/binary hashes. Runtime activation additionally checks exact framework UUIDs, method signatures, non-Jindo policy and the native display/edge contracts. Mismatches retain original behavior and produce diagnostics. The library logs measured display-context pixels, scale, bounds, exclusion rectangle and safe insets, plus the device-context corner-radius readback.
+
+| Native adapter image | Required UUID |
+| --- | --- |
+| FrontBoard | `0abe70d4-6cc0-37f9-af9e-ca2fd42442de` |
+| FrontBoardServices | `9df90f7d-2d79-316c-92e4-13ead6cf214d` |
+| SpringBoardFoundation | `7949279b-dbc1-3949-b8ef-90e7ef34dd46` |
+| UIKitCore | `1242978a-2c2c-3781-8d6c-9777edce2804` |
+| UIKitServices | `b9aded5a-37c0-30d4-ac8a-28ddc2f5654c` |
+| SpringBoardHome | `ee83267f-132c-35c6-aa2d-aea8eee035a3` |
+| SpringBoard | `22034aba-9a9a-3b94-93a5-a0de02befd2e` |
+| libsystem_featureflags | `3a160c9e-3488-3ffd-a194-e2a166fe1169` |
+
+Build and explicitly prepare an offline root with:
+
+```sh
+python tools/native-display/build.py --sysroot IOS_SYSROOT --out NATIVE_BUILD
+python3 tools/sweet_native_display.py MOUNTED_ROOT
+sudo python3 tools/sweet_native_display.py MOUNTED_ROOT --install NATIVE_BUILD
+sudo python3 tools/sweet_native_display.py MOUNTED_ROOT --remove
+```
+
+For Windows/WSL linking, add `--wsl --linker /usr/bin/ld64.lld-18` to the build command. Root mutations require a POSIX root shell. Inspection is read-only; installation adds the scoped SpringBoard startup environment and feature definition. Rollback removes that environment, restores the original Jindo definition, preserves unrelated changes, and retains the dylib, logs and recovery data.
+
+The artifact compiles for arm64 iOS with strict warnings. It has **not been installed or validated on the phone**. Startup dylib loading, feature-table regeneration, context propagation to applications, actual provider selection, orientation handling and the visible result remain to be checked in an assembled boot. Successful compilation is not a claim that the red status area or every UIKit layout issue is fixed.
+
+## Remaining contracts
+
+Persistent AppleKeyStore key wrapping/unwrapping, bag lifecycle and access control remain missing prerequisites for real keychain persistence. SEP-backed protection, biometric/NFC/secure-element interfaces, modem transport, Wi-Fi/Bluetooth controllers and the USB PTP function require separate implementations. Search, ScreenTime and pass services also retain storage, account and keybag dependencies. These changes do not establish blanket daemon or hardware functionality.
+
+Source: [root tweaks](https://github.com/squeeeezy/HelioDarwin/blob/x676c/tools/sweet-root-tweaks.py), [service tools](https://github.com/squeeeezy/HelioDarwin/blob/x676c/tools/sweet_daemons.py), [PosterBoard helpers](https://github.com/squeeeezy/HelioDarwin/tree/x676c/tools/posterboard), [native display preparation](https://github.com/squeeeezy/HelioDarwin/blob/x676c/tools/sweet_native_display.py).

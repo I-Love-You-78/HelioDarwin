@@ -1,62 +1,50 @@
-# Hardware Architecture: MediaTek MT6789 (Helio G99)
+# Hardware Architecture: MT6789 / X676C
 
-## 1. Overview in Plain English
+This page describes the Infinix Note 12 2023 (X676C, MediaTek Helio G99) configuration used by HelioDarwin. Addresses below are port inputs or device-tree values, not a complete SoC register map. A mapped address alone does not prove that a peripheral is powered, initialized or usable.
 
-The **MediaTek Helio G99 (MT6789)** is an octa-core 64-bit ARM SoC on a TSMC 6 nm
-process. Three things make bringing up a foreign OS on it hard:
-1. **Aggressive MTCMOS Power Gating**: Unlike Qualcomm SoCs where peripheral blocks often remain powered by default firmware, MediaTek powers down almost all subsystems (GPU, Camera, Video, Display engines) at the silicon level. Accessing an unpowered subsystem register triggers an immediate, unrecoverable AXI bus hang.
-2. **Proprietary SCPSYS Control**: Power domains are controlled by a dedicated System Power Manager (SPM) using multi-stage handshake sequences with microsecond delays.
-3. **16 KB Memory Granule Requirements**: Darwin/iOS requires a strict 16 KB virtual memory page size. Fortunately, the MT6789 uses modern Cortex-A76 and Cortex-A55 cores that support `TGran16` natively in hardware.
+## CPU and memory configuration
 
----
+The SoC has six Cortex-A55 cores at MPIDRs `0x000` through `0x500` and two Cortex-A76 cores at `0x600` and `0x700`. The current ADT publishes only the six A55 cores as one SMP cluster. The A76 cores are excluded; bringing all eight cores into XNU is not a validated configuration. This target uses 16 KiB pages, rather than imposing that page size on every Darwin platform.
 
-## 2. Memory Map & Carveouts
+The current ADT restricts kernel-managed memory to DRAM rank 1:
 
-The physical DRAM space begins at `0x40000000` (1 GiB offset) and spans up to 8 GiB (`0x2_40000000`):
+| Port region | Base | Size / boundary |
+| --- | --- | --- |
+| ADT kernel-managed RAM | `0x140000000` | `0xffff0000` bytes; exclusive end `0x23fff0000` |
+| Loader's upper RAM bound | — | Exclusive ceiling `0x23ffff000` |
+| Ramoops reservation | `0x48090000` | `0xe0000` bytes |
+| Ramoops console zone | `0x4811f000` | `0x40000` bytes, including its 12-byte header |
+| LK visible framebuffer | `0xfeabe000` | 1080 × 2400, 4320-byte stride; ADT mapping window `0xa00000` |
 
-| Region | Physical Address Range | Size | Description |
-| :--- | :--- | :--- | :--- |
-| **DRAM Base** | `0x40000000`–`0x44000000` | 64 MiB | ATF, TrustZone, and Secure OS carveouts |
-| **Framebuffer** | `0x5c000000`–`0x5f000000` | 48 MiB | Continuous splash / Display DMA buffer |
-| **XNU Kernel** | `0x60000000`–`0x80000000` | 512 MiB | Kernel text, data, and initial physical pools |
-| **System RAM** | `0x80000000`–`0x2_40000000` | ~7 GiB | Free memory pool for iOS userland and Mach VM |
+The rank-1 restriction keeps kernel allocation away from the lower firmware layout and DRAM training boundary. It is not a claim that every other installed RAM range is free, nor a fixed kernel allocation at `0x60000000`. The framebuffer mapping size is a port window, not a newly inferred firmware carveout. See [Boot and Shim](Boot-and-Shim.md) and [Pstore Debugging](Pstore-Debugging-on-MediaTek.md).
 
----
+## Peripheral bases used by the port
 
-## 3. Peripheral MMIO Register Map
+| Block | Physical base | Role |
+| --- | --- | --- |
+| GICv3 distributor | `0x0c000000` | ADT window `0x40000` |
+| GICv3 redistributors | `0x0c040000` | ADT window `0x200000` |
+| TOPCKGEN | `0x10000000` | Clock selection |
+| INFRACFG_AO | `0x10001000` | Infrastructure gates and resets |
+| GPIO | `0x10005000` | Pin mode, direction and level |
+| SPM | `0x10006000` | Power-domain control |
+| TOPRGU | `0x10007000` | Diagnostic software reset at `+0x14` |
+| Keypad | `0x10010000` | Physical volume keys |
+| PWRAP | `0x10026000` | MT6366 PMIC access through split SWINF registers |
+| Touch I2C0 | `0x11e00000` | FT5452J at address `0x38` |
+| UFS host | `0x11270000` | ADT window `0x2300`; named root partition |
+| Mali GPU | `0x13000000` | GPU register bank; see the GPU power page |
+| MFG_TOP_CFG | `0x13fbf000` | GPU subsystem configuration, not the SPM power-control bank |
+| DISP_MUTEX0 | `0x14001000` | Display synchronization |
+| DSI0 | `0x14013000` | Command-mode panel presentation |
 
-| Subsystem | Physical Address | Size | Description |
-| :--- | :--- | :--- | :--- |
-| **GIC-600 Dist** | `0x0c000000` | 64 KiB | ARM GICv3 Distributor |
-| **GIC-600 Rdist**| `0x0c080000` | 1 MiB | ARM GICv3 Redistributors (stride `0x20000` per core) |
-| **TOPCKGEN** | `0x10000000` | 4 KiB | Top Clock Generator & PLL control |
-| **INFRACFG_AO** | `0x10001000` | 4 KiB | Always-On Infrastructure Configuration |
-| **SCPSYS (SPM)** | `0x10006000` | 4 KiB | System Control Processor / MTCMOS power controller |
-| **UART0** | `0x11002000` | 4 KiB | High-speed debug serial console (921600 baud) |
-| **UFS Host** | `0x11270000` | 64 KiB | MediaTek UFS 2.2 Host Controller |
-| **Mali-G57 GPU** | `0x13000000` | 4 MiB | ARM Mali Valhall core registers |
-| **MFG_TOP_CFG** | `0x13fbf000` | 4 KiB | GPU clock gating and subsystem config |
-| **DISP_MUTEX0** | `0x14001000` | 4 KiB | Display hardware sync mutex controller |
-| **DSI0** | `0x14013000` | 4 KiB | MIPI Display Serial Interface controller |
+Only the documented port windows are sized here. Power and clock dependencies must be satisfied before accesses; there is no blanket claim that every unpowered access has the same failure behavior.
 
----
+## Subsystems
 
-## 4. MTCMOS Power Sequencing
+- [MT6789 GPU Power Sequence](MT6789-GPU-Power-Sequence.md) documents PMIC rails, SPM domains, clocks, observed GPU identity and validation limits. [MaliMetal Driver](MaliMetal-Driver.md) covers the userspace/kernel interface.
+- [Display Pipeline](Display-Pipeline.md) separates framebuffer contents, DSI presentation and the logical display profile.
+- [Input and HID](Input-and-HID.md) documents the FT5452J touchscreen, MT6366 power key, keypad volume keys and iOS events.
+- [Dual-Boot Safety](Dual-Boot-Safety.md) describes reset/fallback behavior and deployment scope.
 
-The GPU sits in the MFG power domain. On this MT6789 the AP drives power directly
-(`/proc/gpufreqv2` reports `GPUEB Support: Off`). The exact sequence, register offsets
-and bit layout were reverse-engineered from the stock `mtk_gpufreq_mt6789.ko` and
-`clk-mt6789*.ko`; see **[MT6789 GPU Power Sequence](MT6789-GPU-Power-Sequence.md)** for
-the authoritative, verified map. Summary:
-
-- The per-domain `*_PWR_CON` registers are in the **SPM** bank at `0x10006000`
-  (`MFG0=+0x308`, `MFG1=+0x30c`, `MFG2=+0x310`, `MFG3=+0x314`), **not** in MFG_TOP; status
-  is read from SPM `PWR_STATUS 0x16c` / `PWR_STATUS_2ND 0x170`.
-- Order: VGPU → VSRAM_GPU rails → MFG0 → MFG1 (+ infracfg bus-protect release) →
-  reference clock → MFG2 → MFG3 → bg3d subsys CG + MFG_TOP external CG.
-- PMIC rails from the device OPP table: VGPU 0.575–0.725 V, VSRAM_GPU 0.75 V.
-
-> An earlier bring-up wrote the power bits into MFG_TOP (`0x13fbf000 + 0x308…`) and used
-> ~0.8 V; that was wrong and is corrected above. The Mali bank reads `0x0` until the MFG
-> domain is actually powered — the vendor product ID `0x9093` comes from the device's own
-> Mali driver sysfs, and XNU has not yet read it live.
+The ADT is generated by [mkadt.py](https://github.com/squeeeezy/HelioDarwin/blob/x676c/x676c/tools/mkadt.py); its declared RAM and MMIO windows should be checked when changing the boot layout.

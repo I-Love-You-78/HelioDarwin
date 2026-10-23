@@ -1,42 +1,56 @@
 # HelioDarwin Technical Wiki
 
-Reference notes for running Apple's XNU kernel (`xnu-8796`) and unmodified iOS 16
-userland on the MediaTek Helio G99 (`MT6789` / Infinix `X676C`).
+Implementation reference for XNU `xnu-8796` and iOS 16.7.16 (`20H392`, D22AP)
+on the Infinix Note 12 2023 (`X676C`, MediaTek MT6789 / Helio G99).
 
-## Principles
+## Current status
 
-1. **Don't break userspace.** iOS binaries (`launchd`, `dyld4`, `backboardd`,
-   `SpringBoard`) run unmodified; the kernel must provide correct Mach/BSD/IOKit
-   semantics rather than patch the binaries.
-2. **Document the real hardware.** Every subsystem is recorded with physical base
-   addresses, register offsets and the bring-up sequence actually observed on device.
-3. **No overclaiming.** Status reflects what boot logs show. Where hardware is not yet
-   working (e.g. the GPU is powered but the Metal path is a CPU compositor, not
-   accelerated), the docs say so.
+Physical boots reach iOS userland. After patch 0190, the panel displayed the
+clock/interface and a diagnostic boot returned automatically to Android B.
+The observed interface uses the system's software rendering fallback.
+
+The new MaliMetal source includes Metal objects, native AIR translation, an
+arm64 iOS PanVK build and a versioned XNU GPU transport. Offline compilation
+and selected shader checks pass; GPU execution through the assembled driver
+has not yet been validated on the phone. Input and the opt-in PosterBoard/native
+display adapters likewise require physical validation.
+
+## Documentation boundaries
+
+Hardware observations, implemented source and offline checks are identified
+separately. A discovered register, present service, compiled shader or successful
+build does not by itself establish a working subsystem. Full Metal/Vulkan
+conformance and complete hardware support are not claimed.
+
+iOS executables and frameworks are supplied separately. Root preparation changes
+configuration; the optional compatibility libraries adapt inspected private API
+contracts at runtime. Their scope and rollback are documented explicitly.
 
 ## Articles
 
-| Article | Description |
-| :--- | :--- |
-| [Hardware Architecture](Hardware-Architecture.md) | MT6789 memory map and peripheral MMIO. |
-| [MT6789 GPU Power Sequence](MT6789-GPU-Power-Sequence.md) | Reverse-engineered Mali-G57 power/clock bring-up and register map. |
-| [Boot and Shim](Boot-and-Shim.md) | LK → shim → PSCI multicore → 16 KB MMU → XNU entry. |
-| [Display Pipeline](Display-Pipeline.md) | MTK `DSI0` + `DISP_MUTEX0` scanout to the AMOLED panel. |
-| [MaliMetal Driver](MaliMetal-Driver.md) | Metal→Vulkan design proposal (not implemented). |
-| [Dual-Boot & Safety](Dual-Boot-Safety.md) | Slot A/B isolation and the one-try watchdog fallback. |
+| Article | Scope |
+| --- | --- |
+| [Hardware Architecture](Hardware-Architecture.md) | CPU topology, RAM and peripheral bases. |
+| [Boot and Shim](Boot-and-Shim.md) | LK handoff, payload, ADT and kernel entry. |
+| [Display Pipeline](Display-Pipeline.md) | DSI presentation and native UI geometry. |
+| [Input and HID](Input-and-HID.md) | FT5452J, PMIC/keypad buttons and event delivery. |
+| [GPU Power Sequence](MT6789-GPU-Power-Sequence.md) | PMIC, MFG clocks, GPU identity and JM transport. |
+| [MaliMetal Driver](MaliMetal-Driver.md) | Metal, AIR, Vulkan and kernel integration. |
+| [System Services and Posters](System-Services-and-Posters.md) | Service dependencies, PosterBoard and native display preparation. |
+| [Pstore Debugging](Pstore-Debugging-on-MediaTek.md) | Console retention and raw capture. |
+| [Dual-Boot Safety](Dual-Boot-Safety.md) | Slot selection, reset and deployment scope. |
 
 ## Target hardware
 
-- Device: Infinix Note 12 2023 (`X676C`)
-- SoC: MediaTek Helio G99 (`MT6789`), 2× Cortex-A76 + 6× Cortex-A55, ARMv8.2-A, 16 KB granule
-- Interrupts: ARM GICv3 (GIC-600)
-- RAM: 8 GB LPDDR4X (base `0x40000000`)
-- Storage: UFS 2.2 (`0x11270000`)
-- Display: 1080×2400 AMOLED (ili7835) over MIPI DSI
-- GPU: ARM Mali-G57 MC2 (Valhall), 2 cores; vendor product ID `0x9093`
+The SoC has six Cortex-A55 and two Cortex-A76 cores. The current ADT publishes
+only the six A55 cores, with 16 KiB CPU pages and a rank-1 RAM window. The board
+has a 1080×2400 ili7835 command-mode panel and a Mali-G57 MC2 Job Manager GPU.
+The complete installed RAM and CPU inventory is distinct from the resources
+currently managed by XNU.
 
 ## Credits
 
 [dipa-studio/ios-sweet](https://github.com/dipa-studio/ios-sweet),
 [MakrSas/ios-topaz](https://github.com/MakrSas/ios-topaz), Apple open-source XNU,
-Mesa/Panfrost/PanVK, and Linux MediaTek kernel contributors.
+Mesa/Panfrost/PanVK, the referenced AIR/v9 compiler projects and Linux MediaTek
+contributors. Third-party code retains its own license notices.

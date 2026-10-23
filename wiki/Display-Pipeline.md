@@ -1,71 +1,67 @@
-# Display Pipeline: Native MediaTek DSI Hardware Scanout
+# Display Pipeline
 
-## 1. Overview in Plain English
+The physical X676C panel is an ili7835 command-mode display, 1080×2400 pixels.
+LK initializes the panel and overlay path. XNU's `SweetFramebuffer.cpp` owns
+subsequent framebuffer copying and DSI refresh. The shim does not run the older
+secondary-core display pump.
 
-In consumer smartphones, displaying a smooth 60 or 120 FPS picture requires a dedicated display controller communicating with the screen panel over high-speed differential lanes called **MIPI DSI (Display Serial Interface)**.
+## Scanout blocks
 
-There are two primary modes for mobile screens:
-1. **Video Mode**: The display processor continuously streams pixels to the screen on every refresh cycle.
-2. **Command Mode (CMD)**: The screen panel has its own built-in frame memory (GRAM). The display processor only transmits pixels when the image actually changes, using a synchronization signal called **TE (Tearing Effect)** or hardware **MUTEX**.
+| Block | Physical base / configuration |
+| --- | --- |
+| DSI0 | `0x14013000` |
+| DISP_MUTEX0 | `0x14001000` |
+| OVL0 layer 1 | `0x14005000`; visible LK buffer `0xfeabe000`, stride 4320 bytes |
+| OVL0_2L layer 0 | `0x14006000`; LK buffer `0xfe0c8000`, stride 4352 bytes |
 
-The Infinix Note 12 2023 features an **ili7835 AMOLED panel (1080×2400)** operating in **Command Mode**. 
+The software vsync timer requests refresh at approximately 60 Hz. That cadence
+does not prove sustained 60 FPS, tear-free presentation or GPU acceleration.
+Framebuffer copies and cache cleaning still consume CPU time.
 
-Earlier experimental ports relied on software CPU pump loops (having the CPU repeatedly copy memory in a background thread), which caused high CPU usage, stuttering, and display freezes. HelioDarwin completely eliminates CPU display pumping by implementing direct hardware scanout in the kernel driver `AppleCLCD` / `SweetFramebuffer`.
+## Serialized DSI refresh
 
----
+Patch 0190 follows the inspected MediaTek DRM trigger ordering:
 
-## 2. Hardware Subsystems Involved
+1. Acquire a nonblocking software gate so concurrent callers cannot overlap.
+2. Read `DSI_INTSTA +0x0c`; busy is **bit 31**, not completion bit 0.
+3. When idle, program mutex enable `0 -> 1`, pulse engine reset bit 0 in
+   `DSI_CON_CTRL +0x10` while preserving other control bits, then write
+   `DSI_START 0 -> 1`, with the required memory barriers.
+4. Defer a busy transfer. Persistent busy for 100 ms enters bounded engine
+   recovery instead of spinning indefinitely in the presentation callback.
 
-| Component | Physical Address | Role |
-| :--- | :--- | :--- |
-| **`DISP_MUTEX0`** | `0x14001000` | Coordinates frame synchronization and atomic hardware trigger. |
-| **`DSI0`** | `0x14013000` | MediaTek MIPI DSI controller engine. |
-| **`ili7835 Panel`** | Connected via MIPI DSI | 1080×2400 AMOLED display with integrated command-mode GRAM. |
+The vsync path performs the push after copying/cleaning panel memory; `present`
+does not issue a second competing push. In diagnostic run `39945002194`, all
+sampled status values were `0x16`, recovery count remained zero, and the user
+confirmed that the clock/interface appeared physically. This establishes the
+corrected display path for that boot, not operation of the new MaliMetal driver.
 
----
+## Native resolution and UIKit
 
-## 3. Hardware Scanout Sequence (`mtkDsiPush`)
+The normal boot helper selects `sweetfb_native=1`: logical and physical buffers
+are both 1080×2400, with no crop offset. At scale 3, UIKit's viewport is 360×800
+points. The compatibility `sweetfb_native=0` mode uses a 1125×2436 canvas and
+copies a centered panel window; that mode is not the native-resolution fix.
 
-In `iokit/Kernel/arm/SweetFramebuffer.cpp`, every frame update triggers `mtkDsiPush()`:
+Native width alone does not select a valid UIKit status bar. The stock matcher
+also consumes exclusion geometry and native/reference scale. SpringBoard's
+shared display/device contexts supply that metadata to applications. The opt-in
+native adapter supplies the actual panel cutout and corner radius and selects
+the stock non-Jindo, geometry-aware `FixedSplit` policy. It keeps scanout,
+scale, artwork identity and touch coordinates unchanged.
 
-```text
-[ CoreAnimation / SpringBoard ]
-         │
-         ▼
-[ IOSurface / SweetSurface Framebuffer ]
-         │ (Double-buffered contiguous physical RAM)
-         ▼
-[ AppleCLCD::vsyncFired() (60 Hz Timer Tick) ]
-         │
-         ├── Poll DSI0_INTSTA (0x1401300c) -> Wait until previous transfer completes
-         ├── Write DISP_MUTEX0_EN (0x14001020) = 1 -> Arm hardware mutex
-         ├── Write DSI0_START (0x14013000) = 1 -> Trigger DMA push over MIPI DSI
-         └── Hardware pushes frame directly to ili7835 GRAM at 60 Hz
-```
+The native metadata adapter is compile-checked but not yet phone-validated.
+Loading, policy selection, application contexts, orientation and the visible
+status bar must be checked together. See [System Services and Posters](System-Services-and-Posters.md)
+for exact geometry, API guards, installation and rollback, and [Input and HID](Input-and-HID.md)
+for coordinate delivery.
 
-### Driver Implementation
-```cpp
-static void mtkDsiPush(void)
-{
-    if (g_dsi0 == NULL || g_mutex0 == NULL) return;
+## Source and diagnostics
 
-    /* Check if DSI engine is busy */
-    uint32_t sta = g_dsi0[0x000c / 4]; /* DSI_INTSTA */
-    if (sta & 0x1) {
-        g_dsi0[0x000c / 4] = 0x1;       /* Clear completion status */
-    }
+- [DSI ordering and reset patch](https://github.com/squeeeezy/HelioDarwin/blob/x676c/xnu/patches/0190-x676c-serialize-dsi-and-use-toprgu-reset.patch)
+- [Opt-in scanout diagnostics](https://github.com/squeeeezy/HelioDarwin/blob/x676c/xnu/patches/0188-x676c-trace-ui-scanout-and-diagnostic-reset.patch)
+- [Native context adapter](https://github.com/squeeeezy/HelioDarwin/tree/x676c/tools/native-display)
 
-    /* Trigger hardware display mutex to transmit DMA buffer */
-    g_mutex0[0x0020 / 4] = 1;          /* DISP_MUTEX0_EN */
-    g_dsi0[0x0000 / 4] = 0;            /* Reset DSI START */
-    g_dsi0[0x0000 / 4] = 1;            /* Assert DSI START */
-}
-```
-
----
-
-## 4. Resolution and Scaling
-
-* **Physical Panel Resolution:** 1080×2400 (20:9 aspect ratio, 393 ppi).
-* **iOS Viewport Emulation:** iOS 16 userland expects the native iPhone X canvas (`1125×2436`).
-* `AppleCLCD` centers the 1080×2400 panel window onto the iOS surface canvas with 16-byte alignment, ensuring that SpringBoard, UIKit elements, and status bar icons render with pixel-perfect clarity.
+Pixel hashes and sampled thumbnails establish buffer contents; they do not alone
+prove that DSI transmitted those pixels. Preserve the raw [pstore record](Pstore-Debugging-on-MediaTek.md)
+alongside the user's physical observation.

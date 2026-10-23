@@ -1,82 +1,68 @@
-# HelioDarwin: Recovery and Hardware Runbook
+# X676C recovery and deployment
 
-Target: **Infinix Note 12 2023 (`X676C`)**  
-SoC: **MediaTek Helio G99 (`MT6789`)**  
-Storage: **128 GB UFS 2.2 (MediaTek UFS Controller at `0x11270000`)**
+The working setup runs rooted Android on slot B and uses `boot_a` for a single
+HelioDarwin attempt. `iosroot` is a separate HFS+ volume on the same UFS device.
+Slot selection does not isolate shared storage or undo partition writes.
 
----
+## Before a write
 
-## 1. Dual-Boot Slot Architecture
+Preserve the current boot image, 32-byte boot-control record and root volume
+outside Git. Confirm the selected phone, Android slot B and a successful,
+bootable fallback slot. Use explicit artifact/image inputs and verify readback.
+Do not overwrite a root image that is mounted or currently backing the running OS.
 
-HelioDarwin utilizes Android's native A/B partition structure to guarantee complete isolation from the primary Android installation:
+## One attempt and reset
 
-* **Slot B (Primary OS)**: Stock Android 12 / 13 (XOS) or GSI with Magisk root (`boot_b`, `vendor_boot_b`).
-* **Slot A (Experimental OS)**: HelioDarwin kernel shim (`boot_a`).
-* **Storage Partitioning**:
-  * The UFS 2.2 storage (LU 2) GPT partition table contains 128 entries.
-  * A 20 GiB partition (`iosroot`) was carved from the tail of `userdata`, leaving Android with over 87 GiB of personal storage.
-  * Android user data and applications remain 100% untouched.
+The boot helper writes `boot_a`, selects A with one try and verifies the image
+and boot-control bytes. LK consumes the attempt. A later reset permits fallback
+to bootable slot B. **Retry metadata does not reset a hang.**
 
----
+The opt-in kernel `sweetreboot=N` timer starts after UFS bring-up, waits N seconds,
+syncs filesystems and requests TOPRGU software reset. `sweetreboot=420` returned
+the phone to Android in run `39945002194`. A longer diagnostic can explicitly
+select `sweetreboot=600`. `-BootArgs` replaces the full command line.
 
-## 2. Bootloader 1-Try Watchdog (Zero-Brick Protection)
+This timer depends on kernel scheduling and sync completion. Earlier failures or
+a kernel-wide hang can still need a manual reset. There is no unconditional
+recovery guarantee. The shim does not run a separate timed display pump.
 
-Every test kernel deployment via `boot-xnu.ps1` programs the Bootloader Control Block (`bctl`) partition at offset `misc + 2048` with **exactly 1 try**:
+## Manual return
 
-```text
-Slot A: priority 15, tries 1, successful 0
-Slot B: priority 14, tries 1, successful 1
+The hardware Power + Volume Down reset has been used to return this device.
+The required hold time can vary; release after the reset indication. If LK's
+boot menu or fastboot is available, select Android B with:
+
+```sh
+fastboot set_active b
+fastboot reboot
 ```
 
-* When the phone reboots, Little Kernel (LK) attempts to boot Slot A.
-* If the kernel encounters any issue, panics, or completes its execution window (7 minutes), LK decrements `tries` to 0.
-* On the next reset, LK automatically marks Slot A unbootable and **instantly boots Android on Slot B**!
-* It is physically impossible for a bad kernel build to brick the device.
+Power + Volume Up at power-on opens the observed LK boot-mode menu. Windows USB
+driver binding can affect fastboot access. Device-specific BROM/authentication
+recovery has not been established by this port and is not a guaranteed fallback.
 
----
+## Explicit deployment helpers
 
-## 3. Manual Recovery & Bootloader Modes
-
-If the device ever hangs or fails to respond:
-
-### Method A: Hardware Forced Reset
-* Hold **Power + Volume Down** for 10 seconds until the phone vibrates and resets.
-
-### Method B: Little Kernel (LK) Boot Mode Menu
-1. Power off the phone completely.
-2. Hold **Power + Volume Up** simultaneously.
-3. The screen will display the MediaTek LK Boot Mode Menu:
-   ```text
-   [Select Boot Mode]
-   [Recovery Mode]
-   [Fastboot Mode]
-   [Normal Boot]  <=
-   ```
-4. Use Volume Up to navigate to `[Fastboot Mode]` and Volume Down to select.
-5. In Fastboot mode, you can flash or switch active slots via standard fastboot commands:
-   ```bash
-   fastboot set_active b
-   fastboot reboot
-   ```
-
-### Method C: MediaTek BROM Mode (Deep Recovery)
-If fastboot is inaccessible, the MT6789 BootROM is hardcoded into silicon and cannot be corrupted:
-1. Disconnect the USB cable and power off the device.
-2. Hold **Volume Up + Volume Down**.
-3. Connect the USB-C cable to a PC running `mtkclient` or SP Flash Tool.
-4. The SoC will enter BROM mode (USB ID `0e8d:0003`), allowing direct reading/writing of any partition.
-
----
-
-## 4. Reading Persistent Crash Logs (`pstore`)
-
-HelioDarwin mirrors all kernel console output, panic dumps, and userland registers into physical RAM carveout at **`0x4811f000`** (`pstore ramoops`):
-
-When the phone falls back into Android, pull the persistent trace via ADB:
-```bash
-adb shell su -c "cat /sys/fs/pstore/console-ramoops-0" > xnu-crash.log
-```
-Or use the automated deployment script which collects and saves it automatically:
 ```powershell
-pwsh x676c/tools/boot-xnu.ps1 -Run <RunID>
+pwsh x676c/tools/boot-xnu.ps1 -Run ACTIONS_RUN_ID -Adb ADB_EXECUTABLE -Serial DEVICE_SERIAL
+pwsh x676c/tools/auto-deploy.ps1 -Run ACTIONS_RUN_ID -Adb ADB_EXECUTABLE -Serial DEVICE_SERIAL
 ```
+
+Both require an explicit run. The watcher waits for rooted Android and preserves
+the previous raw pstore console. It replaces `iosroot` only when `-RootImage IMAGE`
+is supplied. `flash_rootfs.py IMAGE --adb ADB_EXECUTABLE --serial DEVICE_SERIAL`
+checks the HFS+ size, selected device/slot, unmounted destination and capacity,
+then verifies a SHA-256 readback of the complete written image. These checks do
+not replace backups or protect against power/cable loss during a write.
+
+The boot helper leaves `iosroot` unchanged. Its default command line has no reset
+deadline. It waits up to 20 minutes for return, then reports failure if Android
+does not complete boot; host waiting itself cannot reset the phone.
+
+## Logs
+
+Capture `/sys/fs/pstore/console-ramoops-0` as raw bytes after Android returns and
+before another shim boot. The record is bounded and may omit late output.
+The boot helper preserves raw bytes under its ignored output directory.
+See [Dual-Boot Safety](wiki/Dual-Boot-Safety.md) and
+[Pstore Debugging](wiki/Pstore-Debugging-on-MediaTek.md).

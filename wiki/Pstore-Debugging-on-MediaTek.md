@@ -1,125 +1,47 @@
-# Zero-Serial Hardware Debugging on MediaTek via Pstore (Ramoops)
+# Pstore Debugging on MediaTek
 
-One of the greatest hurdles when porting an operating system (such as Darwin / XNU) to modern smartphone hardware is the **complete absence of an exposed UART / serial console**. 
+The X676C port mirrors shim and XNU console output into the existing Android ramoops console zone. When DRAM contents survive a reset and Android imports the record, it appears as `/sys/fs/pstore/console-ramoops-0`. This provides a debug channel without an attached serial adapter; it does not guarantee log retention across every reset or power loss.
 
-Modern MediaTek platforms do not expose physical TX/RX test pads without high-risk board desoldering. If early kernel initialization panics, hangs, or faults, the device simply goes black, leaving developers in total darkness.
+## Region and format
 
-HelioDarwin solves this with a **zero-hardware-modification debug cycle** utilizing the SoC's persistent RAM console (`ramoops` / `pstore`), a 1-try bootloader fallback mechanism, and Android host recovery.
+| Item | Value |
+| --- | --- |
+| Whole ramoops reservation | Base `0x48090000`, size `0xe0000` |
+| Console zone | Base `0x4811f000`, size `0x40000` (256 KiB) |
+| Console header | 12 bytes: 32-bit `sig`, `start`, `size` |
+| Signature | `0x43474244` (`DBGC`) |
+| Maximum console data | `0x40000 - 12 = 262132` bytes |
 
----
+The whole reservation also contains other ramoops records; it is not all available to the console. The header follows Linux `persistent_ram` layout: `start` is the next write offset and `size` is the recorded byte count. The shim initializes a fresh header and writes its diagnostics; XNU continues behind that output.
 
-## 1. The Core Concept
+## Current retention policy
 
-When DRAM retains power across a warm reboot, physical memory contents survive unaltered. 
+Since patch 0185, XNU uses a **keep-head** policy: once the recorded size reaches capacity, later appends stop so that early boot messages are retained. This is not a generic 1 MiB rolling console.
 
-MediaTek Little Kernel (LK) reserves a dedicated slice of physical RAM for persistent kernel logs (`ramoops`):
-* **Physical Base Address:** `0x4811f000` (MT6789 / Helio G99)
-* **Buffer Size:** `0x100000` (1 MiB)
-* **Structure:** Circular ASCII text ringbuffer with an atomic write pointer.
+The append path reserves offsets with compare/exchange and updates the recorded size separately. It avoids a console lock, allowing early-boot and panic-context output, but reservation, byte writes and size publication are not one ordered transaction. Concurrent writers can interleave or lose bytes, including near the capacity boundary. A missing late message does not prove that execution stopped there.
 
-```
-+-------------------------------------------------------------+
-|                      Physical DRAM                          |
-|                                                             |
-|  [0x40000000] Kernel Payload / Shim                         |
-|  [0x4811f000] Ramoops Persistent Buffer (1 MiB) <---------+ |
-|               - Survives warm reboot                      | |
-|               - Written atomically by XNU console         | |
-|                                                           | |
-+-----------------------------------------------------------+-+
-                            |                               |
-       Warm Reboot (Watchdog / Timer / Panic)               |
-                            |                               |
-                            v                               |
-+-------------------------------------------------------+   |
-|               Android Slot B Boots                    |   |
-|                                                       |   |
-|  Linux kernel mounts ramoops:                         |   |
-|  /sys/fs/pstore/console-ramoops-0  -------------------+   |
-|                                                           |
-|  Host pulls log via ADB:                                  |
-|  adb shell su -c "cat /sys/fs/pstore/console-ramoops-0"   |
-+-------------------------------------------------------+
+The implementation is `osfmk/arm64/sweet_early.c`, with console-zone constants supplied by the board configuration; the shim writer is `x676c/shim/plog.c`.
+
+## Reading a previous attempt
+
+After Android returns and root access is available, the console can be read with:
+
+```text
+adb shell su -c 'cat /sys/fs/pstore/console-ramoops-0'
 ```
 
----
+Save it before another shim boot initializes the region. The deployment helper preserves original console bytes under `x676c/shim/out/xnu-<run>.log`, despite the `.log` suffix. The auto-deploy watcher also preserves the previous record as a `.bin` file. Do not pass binary thumbnails through a text decoder or PowerShell `Set-Content`.
 
-## 2. Kernel-Side Implementation (XNU)
+Useful boundaries are the shim's CPU/payload messages, XNU early-boot markers, UFS initialization, HID service opens and the first userspace failures. Console output is evidence of that path executing; a rendered frame in a log is not proof that the physical panel presented it. See [Display Pipeline](Display-Pipeline.md) and [Input and HID](Input-and-HID.md).
 
-In standard XNU, `kprintf()` emits characters to memory buffers or PE serial routines. In HelioDarwin, we bind the early console directly to the MTK ramoops buffer.
+## Reset and fallback are separate
 
-In `bsd/dev/sweet_ufs.c` / `SweetConsole.cpp`:
+One-attempt slot A metadata causes fallback on the **next reset**. It does not reset a hang. The current shim has no active lifetime timer. The opt-in XNU `sweetreboot=420` path syncs filesystems and uses TOPRGU software reset after UFS startup; it returned automatically to Android B in run `39945002194`. The earlier PSCI reset attempt in run `39941252453` returned without a reset.
 
-```c
-#define PSTORE_RAMOOPS_BASE  0x4811f000ULL
-#define PSTORE_RAMOOPS_SIZE  0x00100000ULL  /* 1 MiB */
+Neither the software timer nor a host ADB timeout is a guarantee against every kernel hang. See [Dual-Boot Safety](Dual-Boot-Safety.md) for the tested behavior and the distinction between boot-only and root-image deployment helpers.
 
-static volatile char *pstore_buf = NULL;
-static volatile uint32_t *pstore_head = NULL;
+## Source
 
-void
-sweet_pstore_init(void)
-{
-    /* Map the physical ramoops DRAM slice into kernel virtual address space */
-    pstore_buf = (volatile char *)ml_io_map(PSTORE_RAMOOPS_BASE, PSTORE_RAMOOPS_SIZE);
-}
-
-void
-sweet_pstore_append(const char *buf, int len)
-{
-    if (!pstore_buf || len <= 0) return;
-    
-    for (int i = 0; i < len; i++) {
-        uint32_t pos = __atomic_fetch_add(&global_pos, 1, __ATOMIC_RELAXED);
-        pstore_buf[pos % PSTORE_RAMOOPS_SIZE] = buf[i];
-    }
-}
-```
-
-Because writes use lockless atomic index increments, `sweet_pstore_append` never deadlocks, even during multi-core interrupts, double faults, or fatal panics.
-
----
-
-## 3. Non-Destructive 1-Try Slot A/B Watchdog
-
-To prevent a crashing kernel from soft-bricking the phone into a bootloop, HelioDarwin leverages the MediaTek LK A/B slot metadata in the `misc` partition:
-
-1. Android normally runs on **Slot B**.
-2. When flashing a test build to `boot_a` (Slot A), the deployment script sets `slot_a.tries = 1` and `slot_a.successful = 0` in the `boot_control` block (at offset `2048` of `/dev/block/by-name/misc`).
-3. LK boots Slot A exactly **once**:
-   * Decrements `tries` from 1 to 0.
-   * If XNU crashes, hangs, or panics, the SoC hardware watchdog or LK boot counter expires.
-   * On reboot, LK inspects `misc`, sees `slot_a.tries == 0`, and **automatically falls back to healthy Android on Slot B**!
-
----
-
-## 4. Fully Automated Test Pipeline (`boot-xnu.ps1`)
-
-The entire cycle is fully automated end-to-end:
-
-```powershell
-# 1. Flash new kernel into Slot A with 1-try watchdog
-pwsh x676c/tools/boot-xnu.ps1 -Run <ACTIONS_RUN_ID>
-
-# 2. Script execution sequence:
-#    a. Unpacks CI kernel artifact and compiles shim payload.
-#    b. Updates misc block on device: slot A active, tries = 1.
-#    c. Flashes boot_a and invokes 'adb reboot'.
-#    d. Device boots XNU; runs kernel, drivers, launchd, dyld.
-#    e. Watchdog triggers automatic reboot back into Android Slot B.
-#    f. Script polls 'adb wait-for-device' and extracts:
-#       adb shell su -c "cat /sys/fs/pstore/console-ramoops-0" > out/xnu-<Run>.log
-#    g. Displays the last 60 lines of the live log on screen.
-```
-
----
-
-## 5. Summary of Benefits
-
-| Traditional UART Approach | HelioDarwin Pstore Approach |
-| :--- | :--- |
-| Requires physical phone disassembly | Zero physical disassembly; 100% software |
-| Risk of permanent hardware damage | Non-destructive; dual-boot protected |
-| Hardware logic analyzer / FTDI required | Standard USB-C cable and ADB |
-| Risk of unrecoverable BROM bootloops | Automatic LK fallback to Android Slot B |
-| Slow manual logging setup | Instant automated CI-to-device test loop (~7 min) |
+- [Shim console writer](https://github.com/squeeeezy/HelioDarwin/blob/x676c/x676c/shim/plog.c)
+- [Keep-head console patch](https://github.com/squeeeezy/HelioDarwin/blob/x676c/xnu/patches/0185-x676c-pstore-keep-head.patch)
+- [Boot/log collection helper](https://github.com/squeeeezy/HelioDarwin/blob/x676c/x676c/tools/boot-xnu.ps1)
