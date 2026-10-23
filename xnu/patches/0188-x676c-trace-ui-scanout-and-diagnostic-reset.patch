@@ -1,0 +1,238 @@
+x676c: observe framebuffer content and display state during a bounded diagnostic boot
+
+Opt-in sweetfb_trace records source/panel hashes, RGB565 thumbnails and calls
+to unimplemented Mali/Scaler methods. DSI programming and stub return values
+are unchanged. sweetakslog=0 suppresses successful AKS tracing, not failures.
+sweetreboot=N syncs and invokes PSCI SYSTEM_RESET after N seconds; absent by
+default. The timed kernel reset path still requires hardware validation.
+
+diff --git a/bsd/dev/sweet_sample.c b/bsd/dev/sweet_sample.c
+index 39ab84d..b81fa7c 100644
+--- a/bsd/dev/sweet_sample.c
++++ b/bsd/dev/sweet_sample.c
+@@ -18,6 +18,9 @@
+ #include <sys/proc_internal.h>
+ #include <kern/task.h>
+ #include <kern/thread.h>
++#include <kern/sched_prim.h>
++#include <kern/clock.h>
++#include <mach/mach_time.h>
+ #include <pexpert/pexpert.h>
+ 
+ extern task_t proc_task(proc_t);
+@@ -26,6 +29,32 @@ extern void sweet_sample_start(void);
+ 
+ static char sweet_sample_names[128];
+ 
++extern int sync_internal(void);
++
++/* Opt-in timed diagnostic boot; the normal boot has no reset deadline. */
++static void
++sweet_reboot_thread(void *arg, __unused wait_result_t wr)
++{
++	static int channel;
++	uint32_t seconds = (uint32_t)(uintptr_t)arg;
++	uint64_t deadline;
++	clock_interval_to_deadline(seconds, NSEC_PER_SEC, &deadline);
++	printf("SWEET BOOT: diagnostic reset armed for %u seconds\n", seconds);
++	while (mach_absolute_time() < deadline) {
++		(void)assert_wait_deadline(&channel, THREAD_UNINT, deadline);
++		thread_block(THREAD_CONTINUE_NULL);
++	}
++	printf("SWEET BOOT: syncing filesystems before diagnostic reset\n");
++	(void)sync_internal();
++	printf("SWEET BOOT: diagnostic PSCI SYSTEM_RESET\n");
++	/* Same SMCCC convention and PSCI function as the shim; this path is diagnostic. */
++	register uint64_t x0 __asm__("x0") = 0x84000009;
++	__asm__ volatile("dsb sy; smc #0" : "+r"(x0) : :
++	    "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9",
++	    "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "cc", "memory");
++	printf("SWEET BOOT: PSCI reset returned %lld\n", (int64_t)x0);
++}
++
+ static bool
+ sweet_sample_wanted(const char *name)
+ {
+@@ -87,6 +116,12 @@ void
+ sweet_sample_start(void)
+ {
+ 	thread_t thread;
++	uint32_t reboot_seconds = 0;
++	if (PE_parse_boot_argn("sweetreboot", &reboot_seconds, sizeof(reboot_seconds)) &&
++	    reboot_seconds > 0 && reboot_seconds <= 1800 &&
++	    kernel_thread_start(sweet_reboot_thread, (void *)(uintptr_t)reboot_seconds, &thread) == KERN_SUCCESS) {
++		thread_deallocate(thread);
++	}
+ 	if (kernel_thread_start(sweet_sample_thread, NULL, &thread) == KERN_SUCCESS) {
+ 		thread_deallocate(thread);
+ 	}
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index 7944a74..2a88f56 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -124,6 +124,49 @@ mtk_dsi_push_hw(void)
+ #include <kern/clock.h>
+ #include <sys/proc.h>
+ 
++/* Opt-in observations only: do not change the display programming sequence. */
++static bool
++sweet_fb_trace_enabled(void)
++{
++	static int enabled = -1;
++	if (enabled < 0) {
++		enabled = 0;
++		(void)PE_parse_boot_argn("sweetfb_trace", &enabled, sizeof(enabled));
++	}
++	return enabled != 0;
++}
++
++static uint32_t
++sweet_fb_sample_hash(const uint8_t *pixels, uint32_t width, uint32_t height, uint32_t stride)
++{
++	uint32_t hash = 2166136261u;
++	for (uint32_t y = 0; y < 32; y++) {
++		const uint32_t *row = (const uint32_t *)(pixels + (uint64_t)(y * (uint64_t)height / 32) * stride);
++		for (uint32_t x = 0; x < 32; x++) {
++			hash = (hash ^ row[x * (uint64_t)width / 32]) * 16777619u;
++		}
++	}
++	return hash;
++}
++
++static void
++sweet_graphics_stub_trace(unsigned int service, uint32_t selector, IOExternalMethodArguments *args)
++{
++	static uint32_t logged[2];
++	if (!sweet_fb_trace_enabled() || service >= 2 || logged[service] >= 16 || args == NULL) {
++		return;
++	}
++	logged[service]++;
++	char name[32];
++	proc_selfname(name, sizeof(name));
++	IOLog("SWEET GRAPHICS STUB: %s %s selector %u in %u/%llu out %u/%llu returns success without implementation\n",
++	    service == 0 ? "Mali" : "Scaler", name, selector,
++	    args->scalarInputCount, (unsigned long long)(args->structureInputDescriptor ?
++	    args->structureInputDescriptor->getLength() : args->structureInputSize),
++	    args->scalarOutputCount, (unsigned long long)(args->structureOutputDescriptor ?
++	    args->structureOutputDescriptor->getLength() : args->structureOutputSize));
++}
++
+ enum {
+ 	kSweetFBGetLayerDefaultSurface  = 3,
+ 	kSweetFBSwapBegin               = 4,
+@@ -230,6 +273,8 @@ public:
+ 	volatile uint32_t *fMtkDsi;
+ 	volatile uint32_t *fMtkMutex;
+ 	void          mtkDsiPush(void);
++	uint32_t      fTraceFrames;
++	void          traceFrame(void);
+ 	IOLock       *fBlLock;
+ 	uint32_t      fBlLevel;       /* panel DBV 1..0x7ff, kept while the display is off */
+ 	uint32_t      fBlSent;        /* last level sent to the panel */
+@@ -285,6 +330,7 @@ public:
+ 	IOReturn externalMethod(uint32_t selector, IOExternalMethodArguments *args,
+ 	    IOExternalMethodDispatch *dispatch, OSObject *target,
+ 	    void *reference) APPLE_KEXT_OVERRIDE {
++		sweet_graphics_stub_trace(0, selector, args);
+ 		return kIOReturnSuccess;
+ 	}
+ 	IOReturn clientMemoryForType(UInt32 type, IOOptionBits *options,
+@@ -339,6 +385,7 @@ public:
+ 	IOReturn externalMethod(uint32_t selector, IOExternalMethodArguments *args,
+ 	    IOExternalMethodDispatch *dispatch, OSObject *target,
+ 	    void *reference) APPLE_KEXT_OVERRIDE {
++		sweet_graphics_stub_trace(1, selector, args);
+ 		return kIOReturnSuccess;
+ 	}
+ };
+@@ -1148,6 +1195,47 @@ AppleCLCD::mtkDsiPush(void)
+ 	mtk_dsi_push_hw();
+ }
+ 
++void
++AppleCLCD::traceFrame(void)
++{
++	if (!sweet_board_x676c() || !sweet_fb_trace_enabled() || fPixels == 0) {
++		return;
++	}
++	uint32_t frame = ++fTraceFrames;
++	if (frame > 16) {
++		return;
++	}
++	static volatile uint32_t *ovl = NULL, *ovl2 = NULL;
++	if (ovl == NULL) ovl = (volatile uint32_t *)ml_io_map(0x14005000, 0x1000);
++	if (ovl2 == NULL) ovl2 = (volatile uint32_t *)ml_io_map(0x14006000, 0x1000);
++	IOLog("SWEET FB TRACE: frame %u panel 0x%llx hash 0x%08x DSI start 0x%x sta 0x%x intsta 0x%x cmdq 0x%x mutex 0x%x\n",
++	    frame, fPhys, sweet_fb_sample_hash((const uint8_t *)fPixels, fWidth, fHeight, fRowBytes),
++	    fMtkDsi ? fMtkDsi[0] : 0, fMtkDsi ? fMtkDsi[1] : 0,
++	    fMtkDsi ? fMtkDsi[3] : 0, fMtkDsi ? fMtkDsi[0xd00 / 4] : 0,
++	    fMtkMutex ? fMtkMutex[0x20 / 4] : 0);
++	if (ovl != NULL && ovl2 != NULL) {
++		IOLog("SWEET FB TRACE: OVL src 0x%x L0 0x%x/%u L1 0x%x/%u; OVL2 src 0x%x L0 0x%x/%u\n",
++		    ovl[0x2c / 4], ovl[0xf40 / 4], ovl[0x44 / 4], ovl[0xf60 / 4], ovl[0x64 / 4],
++		    ovl2[0x2c / 4], ovl2[0xf40 / 4], ovl2[0x44 / 4]);
++	}
++	if (frame != 1 && frame != 8 && frame != 16) {
++		return;
++	}
++	/* Small RGB565 thumbnails let the captured bytes distinguish a logo from UI. */
++	static const char hex[] = "0123456789abcdef";
++	for (uint32_t y = 0; y < 72; y++) {
++		const uint32_t *row = (const uint32_t *)(fPixels + (uint64_t)(y * (uint64_t)fHeight / 72) * fRowBytes);
++		char line[129];
++		for (uint32_t x = 0; x < 32; x++) {
++			uint32_t p = row[x * (uint64_t)fWidth / 32];
++			uint16_t rgb = (uint16_t)(((p >> 8) & 0xf800) | ((p >> 5) & 0x07e0) | ((p >> 3) & 0x001f));
++			for (uint32_t n = 0; n < 4; n++) line[x * 4 + n] = hex[(rgb >> (12 - n * 4)) & 15];
++		}
++		line[128] = 0;
++		IOLog("SWEET FBPIX %u %u %s\n", frame, y, line);
++	}
++}
++
+ void
+ AppleCLCD::fadeStep(const uint8_t *src, uint32_t srcStride, uint32_t step)
+ {
+@@ -1407,6 +1495,12 @@ AppleCLCD::present(const uint8_t *rec)
+ 			src = 0;
+ 		}
+ 		if (src != 0 && bpe == 4) {
++			if (sweet_fb_trace_enabled() && sweet_board_x676c() && fTraceFrames < 16) {
++				IOLog("SWEET FB TRACE: swap %u layer %u source %u hash 0x%08x\n",
++				    get32(rec, 0x50), layer, id,
++				    sweet_fb_sample_hash((const uint8_t *)(src + s->offset + (uint64_t)sy * s->bytesPerRow + (uint64_t)sx * 4),
++				    (uint32_t)w, (uint32_t)h, s->bytesPerRow));
++			}
+ 			for (int32_t y = 0; y < h; y++) {
+ 				memcpy((void *)(dst + (uint64_t)(dy + y) * fRowBytes + (uint64_t)dx * 4),
+ 				    (const void *)(src + s->offset + (uint64_t)(sy + y) * s->bytesPerRow + (uint64_t)sx * 4),
+@@ -1429,6 +1523,7 @@ AppleCLCD::present(const uint8_t *rec)
+ 		if (fPixels != 0) {
+ 			sweet_dcache_clean((vm_offset_t)fPixels, (unsigned)((size_t)fRowBytes * fHeight));
+ 		}
++		traceFrame();
+ 		mtkDsiPush();
+ 	}
+ }
+diff --git a/iokit/Kernel/arm/SweetKeyStore.cpp b/iokit/Kernel/arm/SweetKeyStore.cpp
+index d11fe26..c7eebb9 100644
+--- a/iokit/Kernel/arm/SweetKeyStore.cpp
++++ b/iokit/Kernel/arm/SweetKeyStore.cpp
+@@ -234,8 +234,15 @@ AppleKeyStoreUserClient::externalMethod(uint32_t selector, IOExternalMethodArgum
+ 
+ 	char name[32];
+ 	proc_selfname(name, sizeof(name));
+-	IOLog("SWEET AKS: %s sel %u arg0 %llu in %u/%u out %u/%u -> 0x%x\n", name, selector,
+-	    arg0, in_scalars, in_struct, out_scalars, out_struct, ret);
++	static int trace = -1;
++	if (trace < 0) {
++		trace = 1;
++		(void)PE_parse_boot_argn("sweetakslog", &trace, sizeof(trace));
++	}
++	if (trace || ret != kIOReturnSuccess) {
++		IOLog("SWEET AKS: %s sel %u arg0 %llu in %u/%u out %u/%u -> 0x%x\n", name, selector,
++		    arg0, in_scalars, in_struct, out_scalars, out_struct, ret);
++	}
+ 	return ret;
+ }
+ #endif /* SWEET */
