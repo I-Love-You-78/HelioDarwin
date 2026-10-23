@@ -2,6 +2,12 @@
 
 X676C input support has been implemented and compiled locally to ARM64 objects. **Physical touch, button delivery and iOS gestures are not yet validated with this implementation.** Hardware identity and wiring below are established by Android's active driver binding, input metadata, device tree and vendor driver behavior.
 
+The first integrated boot reached the hardware startup thread but stopped
+with `error=5` during clock setup. The shipped gate descriptor orders its fields
+as status/clear/set: IMPW uses `0xe00`/`0xe04`/`0xe08`. Patch 0193 changes the
+I2C0 enable write to CLR at `0xe04` and reports gate/reset failures separately.
+Controller identification and physical contact delivery remain unvalidated.
+
 ## Touchscreen
 
 The actual controller is **FocalTech FT5452J**, chip ID `0x5452`, using Android module `ft3519_common`. The module filename does not identify an FT3519 controller. Android binds `mtk-tpd` at I2C device `0-0038`; merely loading a Goodix module does not make Goodix the active controller.

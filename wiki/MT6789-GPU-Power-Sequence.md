@@ -10,7 +10,7 @@ These observations establish register access. The new GPU memory and submission 
 
 The power/register definitions were checked against the shipped `mtk_gpufreq_mt6789.ko`, `mali_kbase_mt6789.ko`, `mtk-pmic-wrap.ko`, `mt6358-regulator.ko`, and MediaTek clock drivers. Descriptor layouts use the pinned Mesa v9 XML. Vendor implementation details and offline compilation are evidence about the source; they do not validate the new XNU path under GPU load.
 
-The current implementation preserves the existing SPM/MFG sequence. It uses split-SWINF PWRAP transactions, checks regulator-enable readback in the source, and implements GPU address spaces and JM submission. The new readback and submission paths still require device validation.
+The current implementation preserves the existing SPM/MFG sequence. It uses split-SWINF PWRAP transactions, checks regulator-enable readback in the source, and implements GPU address spaces and JM submission. Run `39972968304` verified both rail-enable readbacks, with inherited selector values `0x38`/`0x38`. GPU submission still requires device validation.
 
 ## Register bases
 
@@ -51,7 +51,7 @@ These MT6366 rail definitions were checked in the phone's shipped MT6358-family 
 
 The GPU factory follows the vendor power-control order: enable VGPU, then VSRAM_GPU. It changes only the enable bit, checks transaction errors, verifies enable readback, and reports the inherited selector values. It **preserves firmware voltages**; it does not assume or force 0.800 V.
 
-Successful rail readback is required before the driver advertises JM submission capability. This is an implemented check, not a claim that its new XNU transactions have already passed on hardware.
+Successful rail readback is required before the driver advertises JM submission capability. The integrated boot passed those enable/readback transactions. Selector readback alone is not a voltage or DVFS measurement.
 
 ## SPM MTCMOS sequence
 
@@ -111,4 +111,4 @@ Observed on the device: readable GPU identification and availability registers, 
 
 Checked offline: vendor register/protocol definitions, Mesa descriptor layouts, arm64 kernel compilation, and composition of the GPU, shared PWRAP, display, and input patches.
 
-Still unvalidated on the phone: the revised SWINF rail setup, GPU page walks, shader execution, JM completion and recovery, and assembled Metal-to-Vulkan rendering. No Metal or Vulkan conformance is claimed. See [MaliMetal Driver](https://github.com/squeeeezy/HelioDarwin/wiki/MaliMetal-Driver) for the userspace implementation and its supported-path limits.
+The integrated boot validated the revised SWINF enable/readback path and native PanVK loading, then stopped during a CPU cache-type query. Still unvalidated on the phone: GPU page walks, shader execution, JM completion and recovery, and assembled Metal-to-Vulkan rendering. No Metal or Vulkan conformance is claimed. See [MaliMetal Driver](https://github.com/squeeeezy/HelioDarwin/wiki/MaliMetal-Driver) for the userspace implementation and its supported-path limits.

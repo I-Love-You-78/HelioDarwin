@@ -11,9 +11,11 @@ The observed interface uses the system's software rendering fallback.
 
 The new MaliMetal source includes Metal objects, native AIR translation, an
 arm64 iOS PanVK build and a versioned XNU GPU transport. Offline compilation
-and selected shader checks pass; GPU execution through the assembled driver
-has not yet been validated on the phone. Input and the opt-in PosterBoard/native
-display adapters likewise require physical validation.
+and selected shader checks pass. The first integrated phone boot loaded PanVK
+and read its GPU identity, then backboardd repeatedly trapped on `CTR_EL0`.
+Patch 0193 addresses the user cache-query permission and I2C0 gate selection.
+GPU jobs, physical input and the installed PosterBoard/native display adapters
+still require successful runtime validation.
 
 ## Documentation boundaries
 

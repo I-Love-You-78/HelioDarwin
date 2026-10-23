@@ -35,6 +35,11 @@ not been validated on the phone, and Metal or Vulkan conformance is not claimed.
 
 `MaliMetalVulkan.c` contains Metal-to-Vulkan enum conversion.
 
+The first integrated phone boot loaded PanVK, reported GPU identity and texture
+features, and reached `util_cache_granularity`. The kernel trapped its `CTR_EL0` read;
+patch 0193 enables the required user cache-type query on SWEET. No GPU job
+execution has been established by this boot.
+
 ## Dependencies and build
 
 Build a fresh iOS artifact from the current source. Generated bundles and native

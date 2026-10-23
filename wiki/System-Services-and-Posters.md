@@ -1,6 +1,6 @@
 # System Services and Posters
 
-HelioDarwin includes reversible launchd policy and opt-in PosterBoard preparation for **iOS 16.7.16, build 20H392**. The native helpers compile to arm64 iOS artifacts with strict compiler warnings and source/binary hash checks. **They have not been installed or validated on the phone.** A present launchd job does not establish that its service works.
+HelioDarwin includes reversible launchd policy and opt-in PosterBoard preparation for **iOS 16.7.16, build 20H392**. The native helpers compile to arm64 iOS artifacts with strict compiler warnings and source/binary hash checks. **They are installed in the integrated phone root, but their runtime behavior is not yet validated.** A present launchd job does not establish that its service works.
 
 ## Service policy
 
@@ -91,7 +91,7 @@ sudo python3 tools/sweet_native_display.py MOUNTED_ROOT --remove
 
 For Windows/WSL linking, add `--wsl --linker /usr/bin/ld64.lld-18` to the build command. Root mutations require a POSIX root shell. Inspection is read-only; installation adds the scoped SpringBoard startup environment and feature definition. Rollback removes that environment, restores the original Jindo definition, preserves unrelated changes, and retains the dylib, logs and recovery data.
 
-The artifact compiles for arm64 iOS with strict warnings. It has **not been installed or validated on the phone**. Startup dylib loading, feature-table regeneration, context propagation to applications, actual provider selection, orientation handling and the visible result remain to be checked in an assembled boot. Successful compilation is not a claim that the red status area or every UIKit layout issue is fixed.
+The artifact compiles for arm64 iOS with strict warnings. It is **installed in the phone root; runtime activation and the visible result are not yet validated**. The first integrated boot repeatedly lost backboardd during PanVK CPU cache-type discovery, before a usable UI could be assessed. Startup dylib loading, feature-table regeneration, context propagation to applications, actual provider selection, orientation handling and the visible result remain to be checked in an assembled boot. Successful compilation is not a claim that the red status area or every UIKit layout issue is fixed.
 
 ## Remaining contracts
 

@@ -20,7 +20,7 @@ in the [system services documentation](wiki/System-Services-and-Posters.md).
 | Storage | Native UFS reads the `iosroot` HFS+ volume and has performed writes and journal replay. Root-volume backups must be kept separately. |
 | Display | Patch 0190 serializes the vendor DSI refresh sequence. A subsequent phone boot showed the clock/interface and no sampled DSI busy condition. A 60 Hz software timer is not a measured frame-rate guarantee. [Display Pipeline](wiki/Display-Pipeline.md). |
 | UIKit geometry | Physical scanout is 1080×2400. Native cutout, safe-area and status-bar compatibility work is separate from scanout and requires runtime validation. |
-| GPU | XNU has read GPU ID `0x90930010`. The new PMIC and Job Manager implementation is compile-checked; that does not establish successful GPU jobs. [GPU power sequence](wiki/MT6789-GPU-Power-Sequence.md). |
+| GPU | XNU has read GPU ID `0x90930010`. The integrated boot verified PMIC enable/readback and loaded PanVK. GPU memory, jobs and rendering remain unvalidated. [GPU power sequence](wiki/MT6789-GPU-Power-Sequence.md). |
 | MaliMetal | Metal objects, native AIR translation, a Vulkan backend and an arm64 iOS PanVK port are implemented for a bounded feature set. Selected real CoreAnimation shaders pass offline translation checks. End-to-end GPU execution and broader Metal support remain unverified/incomplete. [Driver details](wiki/MaliMetal-Driver.md). |
 | Touch & keys | The replacement FT5452J, keypad and PMIC-key paths are compile-checked against extracted vendor information. Physical events through iOS HID still require phone validation. [Input and HID](wiki/Input-and-HID.md). |
 | System services | PosterBoard startup preparation and reversible job management are available. Disabled services are not considered working merely because their definitions are restored. [Services and posters](wiki/System-Services-and-Posters.md). |
@@ -54,6 +54,11 @@ The current source implements Vulkan resource and command paths. Build matching
 iOS artifacts from source, including the pinned AIR compiler and PanVK dependency.
 Generated binaries are kept outside version control.
 See [MaliMetal build instructions](MaliMetal/README.md).
+
+The first integrated boot loaded PanVK and reached physical-device property queries,
+then backboardd trapped on a cache-type register read. Patch 0193 enables those
+reads on SWEET and corrects the I2C0 clock-enable register. Its runtime result
+still needs checking.
 
 Compilation and offline shader validation do not prove that the stock Metal loader,
 PanVK, kernel GPU transport and presentation work together on the phone. Full

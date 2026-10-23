@@ -6,6 +6,16 @@ iOS. Selected real CoreAnimation render and compute shaders translate to
 validated SPIR-V. **Assembled GPU execution on the phone is not yet validated.**
 Full Metal or Vulkan conformance is not claimed.
 
+## First integrated device observation
+
+Run `39972968304` loaded the native PanVK library and read Mali-G57 identity and
+texture features. Backboardd then repeatedly received SIGILL while PanVK queried
+`nonCoherentAtomSize`: `util_cache_granularity` reads `CTR_EL0`, but the kernel
+left user access disabled. Patch 0193 enables the read-only hardware cache-type
+query for SWEET; its configured X676C cluster contains only Cortex-A55 cores.
+The generic illegal-instruction handler remains unchanged. This observation
+does not establish Vulkan device creation, GPU memory mappings or GPU jobs.
+
 ## Execution layers
 
 | Layer | Implementation |

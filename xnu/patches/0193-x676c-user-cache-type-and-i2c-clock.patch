@@ -1,0 +1,62 @@
+diff --git a/osfmk/arm64/proc_reg.h b/osfmk/arm64/proc_reg.h
+--- a/osfmk/arm64/proc_reg.h
++++ b/osfmk/arm64/proc_reg.h
+@@ -639,6 +639,14 @@
+ #define SCTLR_DSSBS_DEFAULT       (0)
+ #endif
+ 
++#if defined(SWEET)
++/* Generic ARM userspace cache helpers read the hardware cache geometry.
++ * The X676C currently schedules its homogeneous Cortex-A55 cluster. */
++#define SCTLR_UCT_DEFAULT         SCTLR_UCT_ENABLED
++#else
++#define SCTLR_UCT_DEFAULT         (0)
++#endif
++
+ #if HAS_APPLE_PAC
+ #define SCTLR_ROP_KEYS_DEFAULT  SCTLR_PACIB_ENABLED /* IB is ROP */
+ #else /* !HAS_APPLE_PAC */
+@@ -661,7 +669,8 @@
+  * on exception entry (stays 0), matching a kernel that does not manage PAN.
+  */
+ #define SCTLR_EL1_DEFAULT \
+-	(SCTLR_RESERVED | SCTLR_UCI_ENABLED | SCTLR_nTWE_WFE_ENABLED | SCTLR_DZE_ENABLED | \
++	(SCTLR_RESERVED | SCTLR_UCI_ENABLED | SCTLR_UCT_DEFAULT |                       \
++	 SCTLR_nTWE_WFE_ENABLED | SCTLR_DZE_ENABLED |                                  \
+ 	 SCTLR_I_ENABLED | SCTLR_SED_DISABLED | SCTLR_CP15BEN_ENABLED |                    \
+ 	 SCTLR_SA0_ENABLED | SCTLR_SA_ENABLED | SCTLR_C_ENABLED | SCTLR_M_ENABLED |        \
+ 	 SCTLR_CSEH_DEFAULT | SCTLR_DSSBS_DEFAULT | SCTLR_PAN_UNCHANGED |                  \
+diff --git a/bsd/dev/sweet_touch_mtk.inc b/bsd/dev/sweet_touch_mtk.inc
+--- a/bsd/dev/sweet_touch_mtk.inc
++++ b/bsd/dev/sweet_touch_mtk.inc
+@@ -247,10 +247,16 @@
+ 	}
+ 	sweet_input_write32(mt.infra, 0x84, (1u << 11) | (1u << 12));
+ 	sweet_input_write32(mt.infra, 0xd4, 1u << 31);
+-	sweet_input_write32(mt.impw, 0xe08, 1);
+-	if ((sweet_input_read32(mt.infra, 0x90) & ((1u << 11) | (1u << 12))) ||
+-	    (sweet_input_read32(mt.infra, 0xd8) & (1u << 31)) ||
+-	    (sweet_input_read32(mt.impw, 0xe00) & 1u)) {
++	/* Vendor mtk_gate_regs order: status=0xe00, clear=0xe04, set=0xe08.
++	 * Clear the active-high disable bit to enable the I2C0 clock. */
++	sweet_input_write32(mt.impw, 0xe04, 1);
++	uint32_t infra_i2c = sweet_input_read32(mt.infra, 0x90);
++	uint32_t infra_dma = sweet_input_read32(mt.infra, 0xd8);
++	uint32_t wrapper = sweet_input_read32(mt.impw, 0xe00);
++	if ((infra_i2c & ((1u << 11) | (1u << 12))) ||
++	    (infra_dma & (1u << 31)) || (wrapper & 1u)) {
++		printf("SWEET TOUCH: clock enable failed infra=%#x apdma=%#x impw=%#x\n",
++		    infra_i2c, infra_dma, wrapper);
+ 		return EIO;
+ 	}
+ 	if (kmem_alloc_contig(kernel_map, &mt.memory, PAGE_SIZE, PAGE_MASK, 0, 0,
+@@ -264,6 +270,9 @@
+ 		return EOVERFLOW;
+ 	}
+ 	if (!mtki_reset()) {
++		printf("SWEET TOUCH: reset failed dma_en=%#x timing=%#x ltiming=%#x ext=%#x start=%#x\n",
++		    sweet_input_read32(mt.dma, 8), mtki_read(0x20), mtki_read(0x2c),
++		    mtki_read(0x28), mtki_read(MTKI_START));
+ 		return EIO;
+ 	}
+ 	sweet_input_pin_mode(mt.gpio, 130, 1); /* SCL0 */
