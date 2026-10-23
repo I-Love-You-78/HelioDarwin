@@ -1,143 +1,76 @@
 # HelioDarwin
 
-**Native Apple Darwin (XNU) & Metal-to-Vulkan Graphics Architecture on MediaTek Helio G99**
+Running Apple's open-source XNU kernel (`xnu-8796`, Darwin 22 / iOS 16.7.16 `20H392`
+from iPhone X `D22AP`) and unmodified iOS 16 userland on the **MediaTek Helio G99
+(`MT6789`)**, target device **Infinix Note 12 2023 (`X676C`)**. Forked from
+[MakrSas/ios-topaz](https://github.com/MakrSas/ios-topaz).
 
-`HelioDarwin` is a standalone, bare-metal operating system project bringing Apple's open-source XNU kernel (`xnu-8796` / Darwin 22.x, iOS 16.7.16 `20H392` from iPhone X `D22AP`) to MediaTek ARM64 silicon, targeting the **MediaTek Helio G99 (MT6789)** on the **Infinix Note 12 2023 (`X676C`)**.
+This is experimental bring-up on physical hardware. Many subsystems are partial or
+in progress. The table below reflects what the committed boot logs actually show —
+nothing is listed as working that a log does not back.
 
-### Lineage & Upstream Roots
+## Hardware status
 
-HelioDarwin directly branches from and builds upon the pioneering work of the Darwin-on-Android community:
-* **[dipa-studio/ios-sweet](https://github.com/dipa-studio/ios-sweet)** by **dipa** — The breakthrough project that proved Apple's XNU kernel can boot on modern Android silicon (Qualcomm Snapdragon 730G / Redmi Note 10 Pro) and reach SpringBoard with display, touch, and Wi-Fi.
-* **[MakrSas/ios-topaz](https://github.com/MakrSas/ios-topaz)** by **MakrSas** — Pioneering bring-up scripts, device tree definitions, and driver architecture on Redmi Note 12 (Snapdragon 685).
+| Subsystem | Status | Log | Notes |
+| :--- | :--- | :--- | :--- |
+| Boot & shim | Working | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | Shim v4 unpacks the kernel payload, sets up GICv3, enters XNU at EL1. |
+| CPU & SMP | Working | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | ARMv8.2-A, 16 KB granules, secondary cores up via PSCI. |
+| Storage (UFS) | Working | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | Native MTK UFS 2.2 (`0x11270000`), journaled HFS+ read/write on a 20 GB `iosroot`. |
+| Display scanout | Working | [`boot-0176`](logs/boot-0176-mtk-input-malimetal.log) | Native DSI0 (`0x14013000`) + DISP_MUTEX0 (`0x14001000`) 60 Hz scanout from XNU; CPU display pump removed (patch 0177). |
+| Userland (launchd→SpringBoard) | Partial | [`boot-0175`](logs/boot-0175-springboard-backboardd.log) | `launchd` spawns `lsd`, `backboardd`, `SpringBoard`. `containermanagerd` reliability has been a blocker; a fully composed, interactive lockscreen is not independently verified. |
+| GPU power-on | In progress | [`boot-0148`](logs/boot-0148-gpu-mfg.log) | MFG power sequence reverse-engineered from stock `mtk_gpufreq_mt6789.ko` (SPM MTCMOS `0x10006308+`) and rewritten; the Mali bank still reads `0x0` — not yet confirmed responding. See [GPU power sequence](wiki/MT6789-GPU-Power-Sequence.md). |
+| Metal driver | CPU 2D only | [MaliMetal](wiki/MaliMetal-Driver.md) | `MaliMetal.bundle` exposes `MTLDevice`/etc. with a CPU 2D compositor. No GPU-accelerated 3D, no Vulkan/panvk — those are a design proposal, not code. |
+| Touchscreen | Driver polling | [`boot-0176`](logs/boot-0176-mtk-input-malimetal.log) | MT6789 I2C (`0x11e00000`, addr `0x38`), FocalTech FT3418/FT5452, 100 Hz poll; physical-touch capture not yet shown in a log. |
+| Physical keys | Working | [`boot-0176`](logs/boot-0176-mtk-input-malimetal.log) | MT6789 keypad (`0x10010000`): Vol±, Power. |
+| Thermal/power | Optimized | — | CPU 7 pump removed; `wfe`/event-stream idle in the shim. |
+| NFC | Address mapped | — | NXP PN553 on I2C-3 (`0x11015000`, addr `0x28`); no driver yet. |
+| Wi-Fi / BT / audio | Not started | — | MediaTek Connsys partitions located; nothing implemented. |
 
-HelioDarwin takes these architectural lessons into completely uncharted territory: porting XNU to **MediaTek silicon** (MT6789) with command-mode DSI scanout, 4-domain MTCMOS power sequencing, and a proposed native Metal-to-Vulkan translation driver for ARM Mali Valhall GPUs.
+## Repository layout
 
----
+- `x676c/` — device shim, ADT/payload/boot/flash tooling.
+- `xnu/patches/` — numbered XNU source patches applied by CI before the kernel build.
+- `MaliMetal/` — userspace Metal ICD bundle (CPU 2D compositor today).
+- `wiki/` — hardware notes and reverse-engineered register maps.
+- `logs/` — captured `pstore` boot logs that back the status table.
 
-## Engineering Transparency & Hardware Status
+## Building and flashing
 
-We believe in radical engineering honesty. Every status in the table below is backed by physical hardware boot logs captured via the MT6789 `pstore` RAM console (`0x4811f000`) and committed directly to the [`logs/`](logs/) directory.
+Requirements: LLVM/Clang 15+ (AArch64), Python 3.10+ with Zig, Android platform-tools
+(`adb`) with root (Magisk). The kernel is built in CI; `boot-xnu.ps1` downloads the
+artifact, builds the ADT/payload/boot image, flashes `boot_a` as slot A with a one-try
+watchdog fallback to Android, then collects the `pstore` log.
 
-| Subsystem | Target Scope | Hardware Status | Log Reference | Physical Verification Details |
-| :--- | :--- | :---: | :--- | :--- |
-| **Boot & Shim** | EL1 hand-off | **Verified** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | Shim v4 unpacks kernel payload, sets up GICv3, transfers control at EL1. |
-| **CPU & SMP** | 8 cores, 16K pages | **Verified** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | ARMv8.2-A, 16 KB page granules, LSE atomics, secondary cores up via PSCI. |
-| **Storage (UFS)** | UFS 2.2 host | **Verified** | [`boot-0146`](logs/boot-0146-launchd-dyld.log) | MTK UFS (`0x11270000`), SCSI command transport, journaled HFS+ read/write on 20 GB `iosroot`. |
-| **Display Scanout**| Native 60 Hz HW scanout | **Verified (Native 60Hz)** | [`boot-0176`](logs/boot-0176-mtk-input-malimetal.log) | Native DSI0 (`0x14013000`) & DISP_MUTEX0 (`0x14001000`) 60 Hz HW scanout to ili7835 AMOLED panel directly from XNU `SweetFramebuffer`. CPU 7 display pump fully eliminated (patch 0177). |
-| **Userland Execution**| iOS 16 `SpringBoard` | **launchd → backboardd/SpringBoard** | [`boot-0175`](logs/boot-0175-springboard-backboardd.log) | `launchd` executes and spawns `lsd`, `backboardd`, and `SpringBoard` (IOKit activity visible in the log). Internal assertion banners and watchdogs suppressed. A fully composed, verified lockscreen is not yet claimed. |
-| **GPU Subsystem** | Mali-G57 MC2 | **Power bring-up in progress** | [`boot-0148`](logs/boot-0148-gpu-mfg.log) | MFG power-on sequence reverse-engineered from the stock `mtk_gpufreq_mt6789.ko` (AP-direct MTCMOS in SPM `0x10006308+`) and rewritten in `SweetFramebuffer.cpp`. `SweetMaliUserClient` maps `0x13000000` via `IOConnectMapMemory64`. The GPU register bank still reads `0x0` (power/clock bring-up not yet confirmed on hardware); see [MT6789 GPU Power Sequence](wiki/MT6789-GPU-Power-Sequence.md). |
-| **Metal Driver**| Userspace ICD (`MaliMetal`)| **2D Software Rasterizer only** | [MaliMetal](wiki/MaliMetal-Driver.md) | 64-bit arm64 Mach-O ICD exposing `MTLDevice`/`MTLCommandQueue`/etc. with a CPU 2D compositor (quad clipping, texture sampling, BGRA alpha blending). No GPU-accelerated 3D, no Vulkan/panvk yet; those are a design proposal, not working code. |
-| **Touchscreen** | FocalTech FT3418/FT5452 | **Driver Active (Polling I2C)** | [`boot-0176`](logs/boot-0176-mtk-input-malimetal.log) | Native MT6789 I2C driver on `0x11e00000` (addr `0x38`), 100 Hz polling loop active. Synthetic unlock swipe removed; physical finger touch coordinate capture pending dedicated log. |
-| **Physical Keys** | MTK Keypad | **Verified (MTK Keypad)** | [`boot-0176`](logs/boot-0176-mtk-input-malimetal.log) | Native MT6789 Keypad driver (`0x10010000`, register `KP_MEM1` at `0x10010004`): Vol+, Vol-, Power keys with active-low hardware logic. |
-| **Thermal / Power**| CPU Power Management | **Optimized** | [`hw.c`](x676c/shim/hw.c) | CPU 7 pump eliminated (powered down via PSCI); ARMv8 `CNTKCTL_EL1` hardware counter event stream + `wfe` low-power standby in `wait_ms`; 8 unsupported background daemons disabled in launchd. |
-| **NFC (NameDrop)** | NXP PN553 / PN544 | **Hardware Mapped** | [NXP NCI](wiki/Hardware-Architecture.md) | Physical NXP PN553 / PN544 controller mapped on I2C-3 (`0x11015000`, addr `0x28`, VEN = GPIO 103). Architecture identical to Apple Stockholm / `nfcd`. |
-| **Audio & Wireless**| Wi-Fi / BT / Sound | **In Development** | — | MediaTek Connsys (`/dev/stpwmt` & `/dev/wmtWifi`), firmware partitions mapped on UFS. |
-
----
-
-## Development Notes
-
-HelioDarwin is developed by **[@squeeeezy](https://github.com/squeeeezy)**. AI assistance is utilized strictly for boilerplate generation, build script orchestration, and documentation formatting. All kernel architecture, register reverse engineering, driver implementations, and hardware test validation are conducted directly on physical Infinix Note 12 2023 (`X676C`) test hardware.
-
----
-
----
-
-## Verified Hardware Boot Logs
-
-All milestone achievements are backed by physical hardware logs captured via the SoC's hardware `pstore` RAM console (`0x4811f000`):
-
-* [**`logs/boot-0146-launchd-dyld.log`**](logs/boot-0146-launchd-dyld.log) — **Live iOS 16 Userland Execution**: Contains 59 consecutive SMP sampling traces of `launchd` and `dyld4` executing on physical Infinix hardware. Demonstrates dyld entering Mach Trap #10 (`_kernelrpc_mach_vm_allocate_trap`, `x16 = -10`, size 272 KB, `VM_MEMORY_DYLD`).
-* [**`logs/boot-0147-gpu-probe.log`**](logs/boot-0147-gpu-probe.log) — **Mali-G57 & DSI0 HW Probe**: Verifies MT6789 DSI0 / DISP_MUTEX0 scanout, MTCMOS SCPSYS power probe, and `IOAcceleratorES` registration.
-* [**`logs/boot-0148-gpu-mfg.log`**](logs/boot-0148-gpu-mfg.log) — **MFG_TOP_CONFIG 4-Domain Sequencing Attempt**: Issued register writes to MT6789 MFG_TOP_CONFIG at `0x13fbf000`.
-* [**`logs/boot-0175-springboard-backboardd.log`**](logs/boot-0175-springboard-backboardd.log) — **Live iOS 16 SpringBoard & backboardd**: Physical hardware RAM console log capturing the successful spawn of `containermanagerd`, `lsd`, `backboardd`, and `SpringBoard` reaching the active iOS 16 lockscreen UI.
-* [**`logs/boot-0176-mtk-input-malimetal.log`**](logs/boot-0176-mtk-input-malimetal.log) — **Hardware Inputs & MaliMetal Initialization**: Verifies native MediaTek Keypad driver (`sweet_keys.c`), FocalTech I2C touchscreen driver (`sweet_touch.c`), and `IOAcceleratorES` driver binding for Mali-G57 MC2.
-* [**`logs/boot-0177-hang.log`**](logs/boot-0177-hang.log) — **HFS+ cprotect launchd.log Loop**: Physical hardware RAM console log capturing the `fopen(/private/var/log/com.apple.xpc.launchd/launchd.log): 22` infinite loop caused by HFS+ Content Protection Class F restrictions on non-empty files across subsequent boots. Resolved in patch 0179.
-
----
-
-## Metal-to-Vulkan Architecture (`MaliMetal`) — Research & Design Notes
-
-> [!NOTE]
-> `MaliMetal` is an architectural design and research proposal adapting the prior art of **[darlinghq/indium](https://github.com/darlinghq/indium)** and **Iridium** (`mtl2spv` AIR-to-SPIR-V translation) to native Darwin/XNU for ARM Mali Valhall GPUs via Mesa's `panvk`. This is a long-term research effort (estimated 6–12 engineering months after kernel GPU bring-up) and is currently in early conceptual stages.
-
-Standard iOS compositing (`CoreAnimation`, `backboardd`, `RenderServer`) strictly requires a Metal-capable hardware device. On non-Apple silicon, this has historically prevented native GUI execution.
-
-HelioDarwin explores applying the Darling/Indium translation model within native XNU:
-
-1. **Kernel Driver (`SweetMaliAccelerator` & `SweetMaliUserClient`)**:
-   * Sequences MTCMOS power domains in MediaTek SCPSYS (`0x10006000`).
-   * Un-gates graphics clock distribution via `MFGCFG` (`0x13fbf000`).
-   * Exposes physical memory mapping and GPU command ringbuffers to user space.
-   * Registers `IOAcceleratorES` in the IORegistry. The real hardware ID (ARM
-     vendor `0x13b5`, Mali-G57 product `0x9093`, reported by the vendor Mali
-     driver's sysfs on this device) is only published once the GPU answers;
-     until then the kernel honestly registers `device-id = 0` (offline-stub):
-     ```text
-     MetalPluginName = "MaliMetal"
-     MetalPluginClassName = "MaliMetalDevice"
-     vendor-id = 0x13b5 (ARM)
-     device-id = 0x9093 when live, else 0 (offline-stub)
-     ```
-
-2. **Userspace ICD (`MaliMetal.bundle`)** *(proposed — not yet implemented)*:
-   * Dynamically loaded by Apple's `Metal.framework` via `CFBundle`.
-   * Implements the `MTLDevice` protocol (today: enough to satisfy early boot, with a CPU 2D compositor).
-   * *Would* bridge Metal state, command buffers, and render passes into **Vulkan 1.3** primitives.
-   * *Would* compile Apple Intermediate Representation (AIR / LLVM bitcode) and MSL into SPIR-V shaders run by Mesa's `panvk` Valhall driver.
-   * *Would* back framebuffers with zero-copy `IOSurface` memory mapped into the MediaTek DSI scanout hardware.
-
----
-
-## Technical Reference & Wiki
-
-Detailed hardware documentation and register maps are maintained in the [`wiki/`](wiki/Home.md):
-
-* [**Wiki Home**](wiki/Home.md) — Technical reference index.
-* [**Hardware Architecture**](wiki/Hardware-Architecture.md) — MediaTek MT6789 registers, SCPSYS power domains, memory maps.
-* [**Boot & Shim**](wiki/Boot-and-Shim.md) — Little Kernel hand-off, PSCI core boot, 16K translation granule initialization.
-* [**Display Pipeline**](wiki/Display-Pipeline.md) — MTK DSI0 and DISP_MUTEX0 hardware command-mode scanout to AMOLED.
-* [**MaliMetal Driver**](wiki/MaliMetal-Driver.md) — Metal-to-Vulkan architectural design notes.
-* [**Pstore Debugging**](wiki/Pstore-Debugging-on-MediaTek.md) — Zero-serial persistent RAM console debugging on MediaTek.
-* [**Dual-Boot Safety**](wiki/Dual-Boot-Safety.md) — Slot A/B isolation and non-destructive deployment.
-
----
-
-## Building and Flashing
-
-### Requirements
-* LLVM / Clang 15+ with AArch64 target support.
-* Python 3.10+ and Zig toolchain.
-* Android Platform Tools (`adb`, `fastboot`) with root permissions (Magisk).
-
-### Building the Kernel
-```powershell
-# Compile the HelioDarwin XNU kernel locally
-python tools/xnu-cc.py
-```
-
-### Deploying to Hardware
-```powershell
-# Flash kernel artifact to Slot A with automatic Android fallback
+```bash
 pwsh x676c/tools/boot-xnu.ps1 -Run <CI_RUN_ID>
 ```
 
----
+## GPU / Metal status
 
-## Credits and Acknowledgments
+The kernel GPU power-on is being brought up; the reverse-engineered MT6789 sequence is
+in [`wiki/MT6789-GPU-Power-Sequence.md`](wiki/MT6789-GPU-Power-Sequence.md). Userspace
+`MaliMetal` is a CPU 2D compositor that satisfies `Metal.framework` during boot. A
+Metal→Vulkan path over Mesa `panvk` is a long-term **design proposal**
+([`wiki/MaliMetal-Driver.md`](wiki/MaliMetal-Driver.md)), not implemented.
 
-HelioDarwin stands on the shoulders of giants in the low-level open-source community:
+## Development
 
-* **[dipa-studio/ios-sweet](https://github.com/dipa-studio/ios-sweet)** — The pioneering project that proved Apple's XNU kernel can boot on modern Android silicon (Qualcomm Snapdragon 730G / Redmi Note 10 Pro).
-* **[MakrSas/ios-topaz](https://github.com/MakrSas/ios-topaz) & [MakrSas/topaz-woa](https://github.com/MakrSas/topaz-woa)** — Groundbreaking hardware reverse engineering, bring-up scripts, and device drivers for the Redmi Note 12 platform.
-* **[darlinghq/indium](https://github.com/darlinghq/indium)** & **Iridium** — Pioneering open-source Metal-over-Vulkan implementation and AIR-to-SPIR-V shader translation (`mtl2spv`), establishing the primary blueprint for Metal translation layers.
-* **[darlinghq/darling-metal](https://github.com/darlinghq/darling-metal)** & **[steelbrain/metal2vulkan](https://github.com/steelbrain/metal2vulkan)** — Foundational open-source research and ABI compatibility for Metal emulation on Vulkan.
-* **Apple Open Source** — Apple's release of the Darwin / XNU kernel source code (`xnu-8796`), `IOHIDFamily`, `libpthread`, and Apple Device Tree formats.
-* **Mesa 3D Project & Panfrost / PanVK Contributors** — For pioneering open-source Vulkan support for the ARM Mali Valhall architecture.
-* **Linux MediaTek Kernel Contributors** — Upstream device tree definitions, power domain architecture, and clock distribution documentation.
+HelioDarwin is developed by **[@squeeeezy](https://github.com/squeeeezy)**. AI assistance is utilized strictly for boilerplate generation, build script orchestration, and documentation formatting. All kernel architecture, register reverse engineering, driver implementations, and hardware test validation are conducted directly on physical Infinix Note 12 2023 (`X676C`) test hardware.
 
----
+## Credits
 
-## Ethics and Legal Notice
+- [dipa-studio/ios-sweet](https://github.com/dipa-studio/ios-sweet) — XNU booting on Android silicon (Snapdragon / Redmi Note 10 Pro).
+- [MakrSas/ios-topaz](https://github.com/MakrSas/ios-topaz), [topaz-woa](https://github.com/MakrSas/topaz-woa) — upstream bring-up scripts and drivers for Redmi Note 12.
+- Apple — open-source XNU (`xnu-8796`) and Apple Device Tree formats.
+- Mesa / Panfrost / PanVK — open-source Vulkan for Mali Valhall.
+- Linux MediaTek contributors — device trees, power domains, clock drivers.
 
-HelioDarwin is an independent, non-commercial research project developed for architectural exploration and hardware interoperability. This repository contains only open-source kernel modifications, boot shims, and custom device drivers. It does **not** host, redistribute, or license proprietary Apple operating system files, firmware, or copyright-protected assets. All trademarks belong to their respective owners.
+## Legal
+
+Independent, non-commercial research project. This repository contains original code
+(boot shim, drivers, tooling), reverse-engineering notes, and source patches against
+Apple's open-source XNU. It does **not** include or redistribute Apple or MediaTek
+proprietary binaries, firmware, or operating-system images; those must be supplied by
+the user from their own device/licences. Apple's XNU source is used under the Apple
+Public Source License 2.0. All trademarks belong to their respective owners.
+See [`LICENSE`](LICENSE).

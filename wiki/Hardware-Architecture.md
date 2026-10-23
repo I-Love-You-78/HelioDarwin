@@ -2,7 +2,8 @@
 
 ## 1. Overview in Plain English
 
-The **MediaTek Helio G99 (MT6789)** is an octa-core 64-bit ARM SoC fabricated on TSMC's 6nm FinFET process. For years, running foreign operating systems (especially Apple's Darwin/XNU kernel) on MediaTek chips was considered impossible because of:
+The **MediaTek Helio G99 (MT6789)** is an octa-core 64-bit ARM SoC on a TSMC 6 nm
+process. Three things make bringing up a foreign OS on it hard:
 1. **Aggressive MTCMOS Power Gating**: Unlike Qualcomm SoCs where peripheral blocks often remain powered by default firmware, MediaTek powers down almost all subsystems (GPU, Camera, Video, Display engines) at the silicon level. Accessing an unpowered subsystem register triggers an immediate, unrecoverable AXI bus hang.
 2. **Proprietary SCPSYS Control**: Power domains are controlled by a dedicated System Power Manager (SPM) using multi-stage handshake sequences with microsecond delays.
 3. **16 KB Memory Granule Requirements**: Darwin/iOS requires a strict 16 KB virtual memory page size. Fortunately, the MT6789 uses modern Cortex-A76 and Cortex-A55 cores that support `TGran16` natively in hardware.
@@ -40,36 +41,22 @@ The physical DRAM space begins at `0x40000000` (1 GiB offset) and spans up to 8 
 
 ---
 
-## 4. MTCMOS Power Sequencing (SCPSYS)
+## 4. MTCMOS Power Sequencing
 
-In the MT6789, the GPU sits within the **MFG (Manufacturing / Graphics)** power domain. To power on the Mali-G57 without triggering a bus deadlock, the kernel must execute the following sequence:
+The GPU sits in the MFG power domain. On this MT6789 the AP drives power directly
+(`/proc/gpufreqv2` reports `GPUEB Support: Off`). The exact sequence, register offsets
+and bit layout were reverse-engineered from the stock `mtk_gpufreq_mt6789.ko` and
+`clk-mt6789*.ko`; see **[MT6789 GPU Power Sequence](MT6789-GPU-Power-Sequence.md)** for
+the authoritative, verified map. Summary:
 
-1. **Enable PMIC Power Rails**:
-   * `vgpu`: PMIC MT6366 Buck regulator (target ~0.75V).
-   * `vsram_gpu`: PMIC SRAM supply (target ~0.75V).
-2. **Sequence MTCMOS in SCPSYS (`0x10006000`)**:
-   ```c
-   /* Step 1: Assert PWR_ON */
-   scpsys[SPM_MFG_PWR_CON] |= (1u << 0);
-   IODelay(20);
+- The per-domain `*_PWR_CON` registers are in the **SPM** bank at `0x10006000`
+  (`MFG0=+0x308`, `MFG1=+0x30c`, `MFG2=+0x310`, `MFG3=+0x314`), **not** in MFG_TOP; status
+  is read from SPM `PWR_STATUS 0x16c` / `PWR_STATUS_2ND 0x170`.
+- Order: VGPU → VSRAM_GPU rails → MFG0 → MFG1 (+ infracfg bus-protect release) →
+  reference clock → MFG2 → MFG3 → bg3d subsys CG + MFG_TOP external CG.
+- PMIC rails from the device OPP table: VGPU 0.575–0.725 V, VSRAM_GPU 0.75 V.
 
-   /* Step 2: Assert PWR_ON_2ND */
-   scpsys[SPM_MFG_PWR_CON] |= (1u << 1);
-   IODelay(20);
-
-   /* Step 3: Clear SRAM_PDN (release memory power-down) */
-   scpsys[SPM_MFG_PWR_CON] &= ~(0xful << 8);
-   IODelay(20);
-
-   /* Step 4: Clear PWR_ISO (release bus isolation) */
-   scpsys[SPM_MFG_PWR_CON] &= ~(1u << 2);
-   IODelay(20);
-
-   /* Step 5: Assert PWR_RST_B (release hardware reset) */
-   scpsys[SPM_MFG_PWR_CON] |= (1u << 3);
-   IODelay(20);
-   ```
-3. **Un-gate Clocks in `MFG_TOP_CONFIG` (`0x13fbf000`)**:
-   * Enable graphics clock distribution.
-4. **Access Mali Registers at `0x13000000`**:
-   * `GPU_ID` at `0x0000` reports `0x9093` (Mali-G57 Valhall r0p1, 2 cores).
+> An earlier bring-up wrote the power bits into MFG_TOP (`0x13fbf000 + 0x308…`) and used
+> ~0.8 V; that was wrong and is corrected above. The Mali bank reads `0x0` until the MFG
+> domain is actually powered — the vendor product ID `0x9093` comes from the device's own
+> Mali driver sysfs, and XNU has not yet read it live.
