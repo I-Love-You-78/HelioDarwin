@@ -1,45 +1,39 @@
-/*
- * Fixed-layout CPU rectangle prototype. This is not a Vulkan implementation
- * or an implementation of arbitrary Metal vertex and fragment shaders.
- */
-
+/* Metal/Vulkan value conversion. No CPU renderer or implicit vertex layout. */
 #ifndef MALI_METAL_VULKAN_H
 #define MALI_METAL_VULKAN_H
-
 #include "MaliMetalTypes.h"
-
-#define MALI_MAX_DRAW_COMMANDS  256
-#define MALI_MAX_VERTEX_BUFFERS 8
-#define MALI_MAX_TEXTURES       8
-
-typedef struct {
-    NSUInteger primitiveType;
-    NSUInteger vertexStart;
-    NSUInteger vertexCount;
-    MTLViewport viewport;
-    MTLScissorRect scissorRect;
-    uint8_t hasScissorRect;
-    void *vertexBufferPtr[MALI_MAX_VERTEX_BUFFERS];
-    NSUInteger vertexBufferOffset[MALI_MAX_VERTEX_BUFFERS];
-    NSUInteger vertexBufferLength[MALI_MAX_VERTEX_BUFFERS];
-    void *fragmentTexturePtr[MALI_MAX_TEXTURES];
-    uint32_t textureWidth[MALI_MAX_TEXTURES];
-    uint32_t textureHeight[MALI_MAX_TEXTURES];
-    uint32_t textureBytesPerRow[MALI_MAX_TEXTURES];
-} MaliMetalDrawCommand;
-
+#include "Vulkan/MaliVulkanBackend.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/*
- * Experimental rectangle rasterizer for its own fixed vertex layout.
- * CoreAnimation's general shader and vertex layouts are not implemented.
- */
-void MaliMetalRasterizeCommand(const MaliMetalDrawCommand *cmd, void *dstPixels, uint32_t dstWidth, uint32_t dstHeight, uint32_t dstStride);
-
+MMVKFormat MaliMetalPixelFormat(MTLPixelFormat format);
+int MaliMetalVertexFormat(NSUInteger format, uint32_t *vkFormat);
+int MaliMetalBlendFactor(NSUInteger factor, uint32_t *vkFactor);
+int MaliMetalBlendOperation(NSUInteger operation, uint32_t *vkOperation);
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* MALI_METAL_VULKAN_H */
+#ifdef __OBJC__
+struct MMShaderRenderOutput;
+struct MMShaderVulkanConstants;
+struct MMShaderComputeOutput;
+struct MMShaderComputeRegion;
+@interface NSObject (MaliMetalBackendResource)
+- (MMVKBuffer *)maliBuffer;
+- (MMVKImage *)maliImage;
+- (MMVKSampler *)maliSampler;
+- (MMVKPipeline *)maliPipeline;
+- (MMVKComputeProgram *)maliComputeProgram;
+- (const struct MMShaderComputeOutput *)maliComputeOutput;
+- (MMVKBuffer *const *)maliComputeConstants;
+- (MMVKPipeline *)maliComputeVariantForRegion:(const struct MMShaderComputeRegion *)region
+                                        error:(MMVKError *)error;
+- (MTLPixelFormat)maliColorFormat;
+- (const struct MMShaderRenderOutput *)maliShaderOutput;
+- (const struct MMShaderVulkanConstants *)maliShaderConstants;
+- (BOOL)maliPrepareImage:(BOOL)preserve error:(MMVKError *)error;
+- (BOOL)maliReadbackImage:(MMVKError *)error;
+@end
+NSError *MaliMetalMakeError(NSInteger code, const char *message);
+#endif
+#endif

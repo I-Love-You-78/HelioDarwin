@@ -1,0 +1,21 @@
+# Prepared outside the source tree by build_air.py after verifying the compiler
+# checkout at a2c440b8bcdcf20d34aa1694b61ae22c2a7ea68b.
+[package]
+name = "malimetal-air-compiler"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lib]
+name = "MaliMetalAIR"
+crate-type = [@CRATE_TYPES@]
+path = "@ADAPTER_SOURCE@"
+
+[dependencies]
+metal2vulkan = { path = "@COMPILER_SOURCE@/crates/metal2vulkan", features = ["serde"] }
+serde_json = "=1.0.154"
+
+[profile.release]
+panic = "unwind"
+opt-level = 2
+debug = false

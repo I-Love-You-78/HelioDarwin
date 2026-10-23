@@ -18,6 +18,31 @@ typedef signed char BOOL;
 #endif
 
 typedef double CFTimeInterval;
+typedef struct {
+    NSUInteger location, length;
+} NSRange;
+typedef struct {
+    double red, green, blue, alpha;
+} MTLClearColor;
+typedef NSUInteger MTLLoadAction;
+enum { MTLLoadActionDontCare = 0, MTLLoadActionLoad = 1, MTLLoadActionClear = 2 };
+typedef NSUInteger MTLStoreAction;
+enum { MTLStoreActionDontCare = 0, MTLStoreActionStore = 1 };
+typedef NSUInteger MTLStorageMode;
+enum {
+    MTLStorageModeShared = 0,
+    MTLStorageModeManaged = 1,
+    MTLStorageModePrivate = 2,
+    MTLStorageModeMemoryless = 3
+};
+typedef NSUInteger MTLCPUCacheMode;
+enum { MTLCPUCacheModeDefaultCache = 0, MTLCPUCacheModeWriteCombined = 1 };
+typedef NSUInteger MTLHazardTrackingMode;
+enum {
+    MTLHazardTrackingModeDefault = 0,
+    MTLHazardTrackingModeUntracked = 1,
+    MTLHazardTrackingModeTracked = 2
+};
 
 typedef uint32_t mach_port_t;
 typedef mach_port_t io_connect_t;
@@ -34,12 +59,19 @@ typedef uint64_t mach_vm_size_t;
 typedef void *id;
 #endif
 
-extern mach_port_t mach_task_self(void);
-extern kern_return_t IOServiceOpen(mach_port_t service, mach_port_t owningTask, uint32_t type, io_connect_t *connect);
+/* Darwin exports a task-port variable; mach_task_self() is a header macro,
+ * not an exported callable function. Match mach/mach_init.h exactly. */
+extern mach_port_t mach_task_self_;
+#define mach_task_self() mach_task_self_
+extern kern_return_t IOServiceOpen(mach_port_t service, mach_port_t owningTask, uint32_t type,
+                                   io_connect_t *connect);
 extern kern_return_t IOServiceClose(io_connect_t connect);
 extern kern_return_t IORegistryEntryGetRegistryEntryID(io_service_t entry, uint64_t *entry_id);
-extern kern_return_t IOConnectMapMemory64(io_connect_t connect, uint32_t memory_type, mach_port_t into_task, mach_vm_address_t *at_address, mach_vm_size_t *of_size, uint32_t options);
-extern kern_return_t IOConnectUnmapMemory64(io_connect_t connect, uint32_t memory_type, mach_port_t from_task, mach_vm_address_t at_address);
+extern kern_return_t IOConnectMapMemory64(io_connect_t connect, uint32_t memory_type,
+                                          mach_port_t into_task, mach_vm_address_t *at_address,
+                                          mach_vm_size_t *of_size, uint32_t options);
+extern kern_return_t IOConnectUnmapMemory64(io_connect_t connect, uint32_t memory_type,
+                                            mach_port_t from_task, mach_vm_address_t at_address);
 extern void NSLog(id format, ...);
 extern const void *CFRetain(const void *object);
 extern void CFRelease(const void *object);
@@ -77,7 +109,8 @@ typedef struct {
     MTLSize size;
 } MTLRegion;
 
-static inline MTLRegion MTLRegionMake2D(NSUInteger x, NSUInteger y, NSUInteger width, NSUInteger height) {
+static inline MTLRegion MTLRegionMake2D(NSUInteger x, NSUInteger y, NSUInteger width,
+                                        NSUInteger height) {
     MTLRegion region;
     region.origin.x = x;
     region.origin.y = y;
@@ -88,7 +121,8 @@ static inline MTLRegion MTLRegionMake2D(NSUInteger x, NSUInteger y, NSUInteger w
     return region;
 }
 
-typedef enum {
+typedef NSInteger MTLGPUFamily;
+enum {
     MTLGPUFamilyApple1 = 1001,
     MTLGPUFamilyApple2 = 1002,
     MTLGPUFamilyApple3 = 1003,
@@ -101,52 +135,60 @@ typedef enum {
     MTLGPUFamilyCommon2 = 3002,
     MTLGPUFamilyCommon3 = 3003,
     MTLGPUFamilyMetal3 = 5001,
-} MTLGPUFamily;
+};
 
-typedef enum {
+typedef NSUInteger MTLFeatureSet;
+enum {
     MTLFeatureSet_iOS_GPUFamily1_v1 = 0,
     MTLFeatureSet_iOS_GPUFamily2_v1 = 1,
-    MTLFeatureSet_iOS_GPUFamily3_v1 = 2,
-    MTLFeatureSet_iOS_GPUFamily4_v1 = 3,
-} MTLFeatureSet;
+    MTLFeatureSet_iOS_GPUFamily3_v1 = 4,
+    MTLFeatureSet_iOS_GPUFamily4_v1 = 11,
+};
 
-typedef enum {
+typedef NSUInteger MTLPixelFormat;
+enum {
     MTLPixelFormatInvalid = 0,
     MTLPixelFormatRGBA8Unorm = 70,
     MTLPixelFormatRGBA8Unorm_sRGB = 71,
     MTLPixelFormatBGRA8Unorm = 80,
     MTLPixelFormatBGRA8Unorm_sRGB = 81,
     MTLPixelFormatRGB10A2Unorm = 90,
-    MTLPixelFormatBGR10A2Unorm = 91,
-} MTLPixelFormat;
+    MTLPixelFormatBGR10A2Unorm = 94,
+};
 
-typedef enum {
+typedef NSUInteger MTLTextureType;
+enum {
     MTLTextureType2D = 2,
     MTLTextureType2DMultisample = 4,
-} MTLTextureType;
+};
 
-typedef enum {
+typedef NSUInteger MTLTextureUsage;
+enum {
     MTLTextureUsageUnknown = 0x0000,
     MTLTextureUsageShaderRead = 0x0001,
     MTLTextureUsageShaderWrite = 0x0002,
     MTLTextureUsageRenderTarget = 0x0004,
     MTLTextureUsagePixelFormatView = 0x0010,
-} MTLTextureUsage;
+};
 
-typedef enum {
+typedef NSUInteger MTLResourceOptions;
+enum {
     MTLResourceCPUCacheModeDefaultCache = 0,
     MTLResourceStorageModeShared = 0 << 4,
+    MTLResourceStorageModePrivate = 2 << 4,
     MTLResourceHazardTrackingModeDefault = 0 << 8,
-} MTLResourceOptions;
+    MTLResourceHazardTrackingModeTracked = 2 << 8,
+};
 
-typedef enum {
+typedef NSUInteger MTLCommandBufferStatus;
+enum {
     MTLCommandBufferStatusNotEnqueued = 0,
     MTLCommandBufferStatusEnqueued = 1,
     MTLCommandBufferStatusCommitted = 2,
     MTLCommandBufferStatusScheduled = 3,
     MTLCommandBufferStatusCompleted = 4,
     MTLCommandBufferStatusError = 5,
-} MTLCommandBufferStatus;
+};
 
 typedef struct {
     double originX;
@@ -164,19 +206,29 @@ typedef struct {
     NSUInteger height;
 } MTLScissorRect;
 
-typedef enum {
+typedef NSUInteger MTLDispatchType;
+enum { MTLDispatchTypeSerial = 0, MTLDispatchTypeConcurrent = 1 };
+typedef NSUInteger MTLBarrierScope;
+enum { MTLBarrierScopeBuffers = 1, MTLBarrierScopeTextures = 2, MTLBarrierScopeRenderTargets = 4 };
+
+typedef NSUInteger MTLIndexType;
+enum { MTLIndexTypeUInt16 = 0, MTLIndexTypeUInt32 = 1 };
+
+typedef NSUInteger MTLPrimitiveType;
+enum {
     MTLPrimitiveTypePoint = 0,
     MTLPrimitiveTypeLine = 1,
     MTLPrimitiveTypeLineStrip = 2,
     MTLPrimitiveTypeTriangle = 3,
     MTLPrimitiveTypeTriangleStrip = 4,
-} MTLPrimitiveType;
+};
 
-typedef enum {
+typedef NSUInteger MTLFunctionType;
+enum {
     MTLFunctionTypeVertex = 1,
     MTLFunctionTypeFragment = 2,
     MTLFunctionTypeKernel = 3,
-} MTLFunctionType;
+};
 
 #ifdef __OBJC__
 
@@ -191,6 +243,8 @@ typedef enum {
 - (id)autorelease;
 - (oneway void)release;
 - (id)copy;
+- (BOOL)isKindOfClass:(Class)cls;
++ (Class)class;
 - (BOOL)respondsToSelector:(SEL)aSelector;
 - (NSMethodSignature *)methodSignatureForSelector:(SEL)aSelector;
 - (void)forwardInvocation:(NSInvocation *)anInvocation;
@@ -208,17 +262,53 @@ typedef enum {
 - (void)invoke;
 @end
 
-@class NSString, NSError, NSDictionary, NSArray, NSData;
+@class NSString, NSError, NSDictionary, NSArray, NSData, NSURL, NSBundle;
+@interface NSString : NSObject
++ (instancetype)stringWithUTF8String:(const char *)bytes;
+- (const char *)UTF8String;
+@end
+@interface NSArray : NSObject
++ (instancetype)arrayWithObjects:(const id *)objects count:(NSUInteger)count;
+- (NSUInteger)count;
+- (id)objectAtIndex:(NSUInteger)index;
+@end
+@interface NSURL : NSObject
++ (instancetype)fileURLWithPath:(NSString *)path;
+@end
+@interface NSData : NSObject
++ (instancetype)dataWithContentsOfURL:(NSURL *)url
+                              options:(NSUInteger)options
+                                error:(NSError **)error;
+- (const void *)bytes;
+- (NSUInteger)length;
+@end
+@interface NSBundle : NSObject
++ (instancetype)mainBundle;
+- (NSURL *)URLForResource:(NSString *)name withExtension:(NSString *)extension;
+@end
+
 @interface NSDictionary : NSObject
 + (instancetype)dictionaryWithObject:(id)object forKey:(id)key;
++ (instancetype)dictionaryWithObjects:(const id *)objects
+                              forKeys:(const id *)keys
+                                count:(NSUInteger)count;
 @end
 @interface NSError : NSObject
-+ (instancetype)errorWithDomain:(NSString *)domain code:(NSInteger)code userInfo:(NSDictionary *)userInfo;
++ (instancetype)errorWithDomain:(NSString *)domain
+                           code:(NSInteger)code
+                       userInfo:(NSDictionary *)userInfo;
 @end
 @interface NSException : NSObject
 + (void)raise:(NSString *)name format:(NSString *)format, ...;
 @end
 typedef void *dispatch_data_t;
+typedef void *dispatch_queue_t;
+extern dispatch_data_t dispatch_data_create_map(dispatch_data_t, const void **, size_t *);
+extern void dispatch_retain(void *);
+extern void dispatch_release(void *);
+extern void dispatch_async(dispatch_queue_t, void (^)(void));
+extern dispatch_queue_t dispatch_queue_create(const char *, void *);
+extern void dispatch_set_target_queue(void *, dispatch_queue_t);
 
 /*
  * Base class for all MaliMetal objects providing:
@@ -228,15 +318,23 @@ typedef void *dispatch_data_t;
 @interface MaliMetalObject : NSObject {
     NSString *_label;
 }
-@property (copy) NSString *label;
+@property(copy) NSString *label;
 - (NSString *)label;
 - (void)setLabel:(NSString *)label;
 @end
 
-@protocol MTLDevice @end
-@protocol MTLCommandQueue @end
-@protocol MTLCommandBuffer @end
-@protocol MTLResource @end
+@protocol MTLDevice
+@end
+@protocol MTLCommandQueue
+@end
+@protocol MTLCommandBuffer
+@end
+@protocol MTLResource
+- (id<MTLDevice>)device;
+- (MTLStorageMode)storageMode;
+- (MTLCPUCacheMode)cpuCacheMode;
+- (MTLHazardTrackingMode)hazardTrackingMode;
+@end
 @protocol NSObject
 - (BOOL)respondsToSelector:(SEL)aSelector;
 @end
@@ -260,48 +358,133 @@ typedef void *dispatch_data_t;
 - (NSUInteger)iosurfacePlane;
 @end
 
-@protocol MTLSamplerState @end
-@protocol MTLLibrary @end
-@protocol MTLRenderPipelineState @end
-@protocol MTLComputePipelineState @end
-@protocol MTLFunction @end
+@protocol MTLSamplerState
+@end
+@protocol MTLLibrary
+@end
+@protocol MTLRenderPipelineState
+@end
+@protocol MTLComputePipelineState
+@end
+@protocol MTLFunction
+@end
 @protocol MTLDrawable
 - (void)present;
 - (void)presentAtTime:(CFTimeInterval)presentationTime;
 @end
-@protocol MTLRenderCommandEncoder @end
-@protocol MTLComputeCommandEncoder @end
-@protocol MTLBlitCommandEncoder @end
+@protocol MTLRenderCommandEncoder
+@end
+@protocol MTLComputeCommandEncoder
+@end
+@protocol MTLBlitCommandEncoder
+@end
 
 typedef void (^MTLCommandBufferHandler)(id<MTLCommandBuffer>);
 
 @interface MTLTextureDescriptor : NSObject
-@property (nonatomic) NSUInteger width;
-@property (nonatomic) NSUInteger height;
-@property (nonatomic) MTLPixelFormat pixelFormat;
-@property (nonatomic) MTLTextureType textureType;
-@property (nonatomic) MTLTextureUsage usage;
-@property (nonatomic) NSUInteger depth;
-@property (nonatomic) NSUInteger mipmapLevelCount;
-@property (nonatomic) NSUInteger sampleCount;
-@property (nonatomic) NSUInteger arrayLength;
-+ (MTLTextureDescriptor *)texture2DDescriptorWithPixelFormat:(MTLPixelFormat)pixelFormat width:(NSUInteger)width height:(NSUInteger)height mipmapped:(BOOL)mipmapped;
+@property(nonatomic) NSUInteger width;
+@property(nonatomic) NSUInteger height;
+@property(nonatomic) MTLPixelFormat pixelFormat;
+@property(nonatomic) MTLTextureType textureType;
+@property(nonatomic) MTLTextureUsage usage;
+@property(nonatomic) NSUInteger depth;
+@property(nonatomic) NSUInteger mipmapLevelCount;
+@property(nonatomic) NSUInteger sampleCount;
+@property(nonatomic) NSUInteger arrayLength;
+@property(nonatomic) MTLStorageMode storageMode;
+@property(nonatomic) MTLCPUCacheMode cpuCacheMode;
+@property(nonatomic) MTLResourceOptions resourceOptions;
++ (MTLTextureDescriptor *)texture2DDescriptorWithPixelFormat:(MTLPixelFormat)pixelFormat
+                                                       width:(NSUInteger)width
+                                                      height:(NSUInteger)height
+                                                   mipmapped:(BOOL)mipmapped;
 @end
 
-@class MTLSamplerDescriptor;
+@interface MTLSamplerDescriptor : NSObject
+- (NSUInteger)minFilter;
+- (NSUInteger)magFilter;
+- (NSUInteger)mipFilter;
+- (NSUInteger)sAddressMode;
+- (NSUInteger)tAddressMode;
+- (NSUInteger)rAddressMode;
+- (NSUInteger)maxAnisotropy;
+- (BOOL)normalizedCoordinates;
+- (NSUInteger)compareFunction;
+- (NSUInteger)borderColor;
+- (BOOL)lodAverage;
+- (BOOL)supportArgumentBuffers;
+- (float)lodMinClamp;
+- (float)lodMaxClamp;
+@end
 @class MTLCompileOptions;
-@class MTLRenderPipelineDescriptor;
+@class MTLRenderPipelineDescriptor, MTLVertexDescriptor, MTLVertexAttributeDescriptor,
+    MTLVertexBufferLayoutDescriptor;
+@interface MTLVertexAttributeDescriptor : NSObject
+- (NSUInteger)format;
+- (NSUInteger)offset;
+- (NSUInteger)bufferIndex;
+@end
+@interface MTLVertexBufferLayoutDescriptor : NSObject
+- (NSUInteger)stride;
+- (NSUInteger)stepFunction;
+- (NSUInteger)stepRate;
+@end
+@interface MTLDescriptorArray : NSObject
+- (id)objectAtIndexedSubscript:(NSUInteger)index;
+@end
+@interface MTLVertexDescriptor : NSObject
+- (MTLDescriptorArray *)attributes;
+- (MTLDescriptorArray *)layouts;
+@end
+@interface MTLRenderPipelineColorAttachmentDescriptor : NSObject
+- (MTLPixelFormat)pixelFormat;
+- (BOOL)isBlendingEnabled;
+- (NSUInteger)sourceRGBBlendFactor;
+- (NSUInteger)destinationRGBBlendFactor;
+- (NSUInteger)rgbBlendOperation;
+- (NSUInteger)sourceAlphaBlendFactor;
+- (NSUInteger)destinationAlphaBlendFactor;
+- (NSUInteger)alphaBlendOperation;
+- (NSUInteger)writeMask;
+@end
+@interface MTLRenderPipelineDescriptor : NSObject
+- (id<MTLFunction>)vertexFunction;
+- (id<MTLFunction>)fragmentFunction;
+- (MTLVertexDescriptor *)vertexDescriptor;
+- (MTLDescriptorArray *)colorAttachments;
+- (NSUInteger)rasterSampleCount;
+- (BOOL)isRasterizationEnabled;
+- (BOOL)isAlphaToCoverageEnabled;
+- (BOOL)isAlphaToOneEnabled;
+- (NSUInteger)maxVertexAmplificationCount;
+- (NSUInteger)inputPrimitiveTopology;
+- (BOOL)supportIndirectCommandBuffers;
+- (MTLPixelFormat)depthAttachmentPixelFormat;
+- (MTLPixelFormat)stencilAttachmentPixelFormat;
+@end
 
 @interface MTLRenderPassColorAttachmentDescriptor : NSObject
 - (id<MTLTexture>)texture;
 - (void)setTexture:(id<MTLTexture>)texture;
+- (NSUInteger)level;
+- (NSUInteger)slice;
+- (NSUInteger)depthPlane;
+- (MTLLoadAction)loadAction;
+- (MTLStoreAction)storeAction;
+- (MTLClearColor)clearColor;
+- (id<MTLTexture>)resolveTexture;
 @end
 
 @interface MTLRenderPassColorAttachmentDescriptorArray : NSObject
 - (MTLRenderPassColorAttachmentDescriptor *)objectAtIndexedSubscript:(NSUInteger)attachmentIndex;
 @end
 
+@interface MTLRenderPassDepthAttachmentDescriptor : NSObject
+- (id<MTLTexture>)texture;
+@end
 @interface MTLRenderPassDescriptor : NSObject
+- (MTLRenderPassDepthAttachmentDescriptor *)depthAttachment;
+- (MTLRenderPassDepthAttachmentDescriptor *)stencilAttachment;
 - (MTLRenderPassColorAttachmentDescriptorArray *)colorAttachments;
 @end
 #endif

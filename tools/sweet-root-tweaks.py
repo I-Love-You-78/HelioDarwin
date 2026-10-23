@@ -9,8 +9,8 @@ Run as root (it writes root/mobile owned files). Idempotent. This is what
 configures iOS 16 userland for bare-metal execution on MT6789:
 
   launchd.plist   _PanicOnCrash -> _PanicOnCrasX (a crashing daemon must not
-                  panic the system); CommCenter jobs removed (no baseband: it
-                  crash-loops and Setup blocks on its CoreTelephony XPC)
+                  panic the system); bring-up job disables are reversible via
+                  tools/sweet_daemons.py; original definitions are preserved
   containers      /private/var/containers/{Bundle,Data/System,Shared/SystemGroup,Temp}
                   (on iOS they live on the data volume)
   migration       LastSystemVersion so DataMigration does not run for an hour
@@ -22,11 +22,12 @@ configures iOS 16 userland for bare-metal execution on MT6789:
                   kills), no cloud-configuration UI
   Setup           skipped: SetupDone, SetupFinishedAllSteps, SetupVersion 11,
                   mini-buddy flags off
-  activation      mobileactivationd data ark seeded; the actual Activated state
+  activation      mobileactivationd data ark metadata merged; the actual state
                   comes from its Hactivation branch, selected by the /chosen
                   security-status properties in tools/mkadt.py
 """
 import argparse, glob, hashlib, json, os, plistlib, shutil, struct, sys, tempfile
+from pathlib import Path, PurePosixPath
 
 BUILD, VERSION = '20H392', '16.7.16'
 MOBILE = 501
@@ -54,15 +55,7 @@ def merge_pref(root, name, values):
 
 
 def launchd(root):
-    path = os.path.join(root, 'System/Library/xpc/launchd.plist')
-    st = os.stat(path)
-    plist = load(path)
-    jobs = plist['LaunchDaemons']
-    renamed = 0
-    for job in jobs.values():
-        if '_PanicOnCrash' in job:
-            job['_PanicOnCrasX'] = job.pop('_PanicOnCrash')
-            renamed += 1
+    from sweet_daemons import preserve_and_disable
     disabled_labels = {
         'com.apple.CommCenter',
         'com.apple.locationd',
@@ -74,16 +67,8 @@ def launchd(root):
         'com.apple.passd',
         'com.apple.biometrickitd',
         'com.apple.ScreenTimeAgent',
-        'com.apple.nanotimekitcompaniond',
-        'com.apple.fairplayd.H2',
-        'com.apple.ptpd',
-        'com.apple.searchd',
     }
-    removed = [k for k, j in jobs.items() if j.get('Label') in disabled_labels]
-    for k in removed:
-        del jobs[k]
-    save(path, plist, st.st_uid, st.st_gid, st.st_mode & 0o7777)
-    print(f'launchd.plist: {renamed} _PanicOnCrash renamed, {len(removed)} thermal/unsupported jobs removed')
+    preserve_and_disable(root, disabled_labels)
 
 
 def containers(root):
@@ -114,18 +99,24 @@ def activation(root):
     os.makedirs(d, exist_ok=True)
     os.chown(d, MOBILE, MOBILE)
     os.chmod(d, 0o755)
-    save(os.path.join(d, 'data_ark.plist'), {
-        '-ActivationState': 'Activated', '-BrickState': False,
+    path = os.path.join(d, 'data_ark.plist')
+    data = load(path) if os.path.exists(path) else {}
+    defaults = {
         '-BuildVersion': BUILD, '-ProductVersion': VERSION,
         '-DataMigrationCompleted': True, '-PreSydroDataMigrationCompleted': True,
-    }, MOBILE, MOBILE, 0o600)
-    print('data ark', d)
+    }
+    for key, value in defaults.items():
+        data.setdefault(key, value)
+    save(path, data, MOBILE, MOBILE, 0o600)
+    print('data ark defaults merged', d)
 
 
 def audio(root):
     src = os.path.join(root, 'Library/Audio/Plug-Ins/HAL/VirtualAudio.plugin')
     dst_dir = os.path.join(root, 'Library/Audio/Plug-Ins/HAL.disabled')
     if os.path.exists(src):
+        if os.path.exists(os.path.join(dst_dir, 'VirtualAudio.plugin')):
+            raise FileExistsError('Both active and disabled VirtualAudio.plugin exist; resolve them before applying audio tweaks')
         os.makedirs(dst_dir, exist_ok=True)
         shutil.move(src, dst_dir)
         print('VirtualAudio.plugin disabled')
@@ -142,11 +133,20 @@ def malimetal_artifact(build_dir):
     bundle = os.path.join(build_dir, 'MaliMetal.bundle')
     with open(os.path.join(build_dir, 'build.json')) as f:
         manifest = json.load(f)
-    source_dir = os.path.dirname(os.path.abspath(build_dir))
+    source_dir = Path(__file__).resolve().parent.parent / 'MaliMetal'
+    required = {'build.py', 'Info.plist', 'MaliMetalDevice.m', 'MaliMetalCommandQueue.m',
+                'MaliMetalTypes.h', 'Shader/MaliMetalShader.c', 'Vulkan/MaliVulkanBackend.c'}
+    if not required.issubset(manifest['inputs']):
+        raise ValueError('incomplete MaliMetal source manifest')
+    digest = hashlib.sha256(json.dumps(manifest['inputs'], sort_keys=True).encode()).hexdigest()
+    if digest != manifest['source_digest']:
+        raise ValueError('MaliMetal source digest differs from manifest inputs')
     for name, expected in manifest['inputs'].items():
-        if name != os.path.basename(name):
+        relative = PurePosixPath(name)
+        candidate = (source_dir / name).resolve()
+        if relative.is_absolute() or '..' in relative.parts or '\\' in name or not candidate.is_relative_to(source_dir):
             raise ValueError('invalid source name in MaliMetal manifest')
-        with open(os.path.join(source_dir, name), 'rb') as f:
+        with open(candidate, 'rb') as f:
             if hashlib.sha256(f.read()).hexdigest() != expected:
                 raise ValueError(f'MaliMetal source changed since build: {name}')
     with open(os.path.join(bundle, 'MaliMetal'), 'rb') as f:
@@ -170,10 +170,28 @@ def malimetal_artifact(build_dir):
     expected_info['MaliMetalSourceDigest'] = manifest['source_digest']
     if load(os.path.join(bundle, 'Info.plist')) != expected_info:
         raise ValueError('MaliMetal Info.plist differs from build manifest')
-    return bundle
+    components = manifest.get('components', {})
+    icd = 'libpanvk_sweetmali.dylib'
+    if os.path.isfile(os.path.join(bundle, icd)) != (icd in components):
+        raise ValueError('MaliMetal ICD presence differs from build manifest')
+    for name, expected in components.items():
+        relative = PurePosixPath(name)
+        candidate = (Path(bundle) / name).resolve()
+        safe = not relative.is_absolute() and '..' not in relative.parts and '\\' not in name
+        known = name in ('libpanvk_sweetmali.dylib', 'panvk-sweetmali.json') or name.startswith('licenses/')
+        if not safe or not known or not candidate.is_relative_to(Path(bundle).resolve()):
+            raise ValueError('unknown MaliMetal bundle component')
+        with open(candidate, 'rb') as f:
+            if hashlib.sha256(f.read()).hexdigest() != expected:
+                raise ValueError(f'MaliMetal component differs from build manifest: {name}')
+    files = dict(components)
+    files['MaliMetal'] = manifest['binary_sha256']
+    files['Info.plist'] = hashlib.sha256(Path(bundle, 'Info.plist').read_bytes()).hexdigest()
+    return {'bundle': bundle, 'files': files}
 
 
-def install_malimetal(root, bundle):
+def install_malimetal(root, artifact):
+    bundle = artifact['bundle']
     parent = os.path.join(root, 'System/Library/Extensions')
     destination = os.path.join(parent, 'MaliMetal.bundle')
     stage = tempfile.mkdtemp(prefix='.malimetal-', dir=parent)
@@ -182,9 +200,13 @@ def install_malimetal(root, bundle):
     os.chmod(fresh, 0o755)
     os.chown(fresh, 0, 0)
     try:
-        for name, mode in (('Info.plist', 0o644), ('MaliMetal', 0o755)):
+        for name, expected in artifact['files'].items():
+            mode = 0o755 if name in ('MaliMetal', 'libpanvk_sweetmali.dylib') else 0o644
             path = os.path.join(fresh, name)
+            os.makedirs(os.path.dirname(path), mode=0o755, exist_ok=True)
             shutil.copyfile(os.path.join(bundle, name), path)
+            if hashlib.sha256(Path(path).read_bytes()).hexdigest() != expected:
+                raise ValueError(f'MaliMetal file changed during installation: {name}')
             os.chown(path, 0, 0)
             os.chmod(path, mode)
         if os.path.exists(destination):
@@ -210,11 +232,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('root')
     parser.add_argument('--malimetal-build', help='explicit MaliMetal build output directory')
+    parser.add_argument('--malimetal-only', action='store_true',
+                        help='install the verified driver without applying other root tweaks')
     args = parser.parse_args()
     if not os.path.isdir(os.path.join(args.root, 'System/Library/xpc')):
         sys.exit(__doc__)
     root = args.root
     bundle = malimetal_artifact(args.malimetal_build) if args.malimetal_build else None
+    if args.malimetal_only:
+        if bundle is None:
+            parser.error('--malimetal-only requires --malimetal-build')
+        install_malimetal(root, bundle)
+        return
     launchd(root)
     containers(root)
     activation(root)
