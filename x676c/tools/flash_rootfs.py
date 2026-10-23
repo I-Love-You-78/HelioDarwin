@@ -10,6 +10,7 @@ import gzip
 import hashlib
 import os
 from pathlib import Path
+import shlex
 import struct
 import subprocess
 import time
@@ -42,7 +43,7 @@ def main():
     adb += ['-s', serial]
 
     def phone(command):
-        return subprocess.check_output([*adb, 'exec-out', 'su', '-c', command], timeout=180)
+        return subprocess.check_output([*adb, 'exec-out', 'su -c ' + shlex.quote(command)], timeout=180)
 
     if phone('id -u').strip() != b'0':
         raise RuntimeError('Root shell is unavailable')
@@ -59,9 +60,11 @@ def main():
         raise RuntimeError('Image is larger than iosroot')
     print(f'Source: {image} ({stat.st_size} bytes)', flush=True)
     print(f'Target: {serial} {DEVICE}', flush=True)
+    acknowledgement = b'ROOT_WRITE_COMPLETE'
+    command = 'set -e; gzip -d > ' + DEVICE + '; sync; printf ROOT_WRITE_COMPLETE'
     receiver = subprocess.Popen(
-        [*adb, 'exec-in', 'su', '-c', 'set -e; gzip -d > ' + DEVICE + '; sync'],
-        stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+        [*adb, 'shell', '-T', 'su -c ' + shlex.quote(command)],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     digest = hashlib.sha256()
     started = reported = time.monotonic()
     written = 0
@@ -78,7 +81,8 @@ def main():
                         reported = now
         receiver.stdin.close()
         code = receiver.wait(timeout=180)
-        if code:
+        received = receiver.stdout.read()
+        if code or received != acknowledgement:
             raise RuntimeError(f'Root image receiver failed ({code}): ' + receiver.stderr.read().decode(errors='replace'))
         if written != stat.st_size or image.stat().st_mtime_ns != stat.st_mtime_ns:
             raise RuntimeError('Source image size or modification time changed while streaming')
@@ -94,6 +98,7 @@ def main():
             receiver.wait()
         raise
     finally:
+        receiver.stdout.close()
         receiver.stderr.close()
 
 
