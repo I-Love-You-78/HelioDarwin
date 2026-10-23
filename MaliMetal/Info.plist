@@ -23,7 +23,7 @@
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>MinimumOSVersion</key>
-    <string>16.0</string>
+    <string>16.7</string>
     <key>NSPrincipalClass</key>
     <string>MaliMetalDevice</string>
 </dict>

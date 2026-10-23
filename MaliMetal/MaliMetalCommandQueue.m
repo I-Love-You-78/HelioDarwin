@@ -5,7 +5,6 @@
 #import "MaliMetalCommandQueue.h"
 #import "MaliMetalDevice.h"
 #import "MaliMetalVulkan.h"
-#import "MaliValhallHw.h"
 #include <string.h>
 
 #define MAX_COMMANDS_PER_BUFFER 512
@@ -19,6 +18,8 @@
     MaliMetalCommandBuffer *_commandBuffer;
     MTLRenderPassDescriptor *_renderPassDescriptor;
     MaliMetalDrawCommand _currentCmd;
+    id<MTLBuffer> _vertexBuffers[MALI_MAX_VERTEX_BUFFERS];
+    id<MTLTexture> _fragmentTextures[MALI_MAX_TEXTURES];
 }
 - (instancetype)initWithCommandBuffer:(MaliMetalCommandBuffer *)cmdBuffer descriptor:(MTLRenderPassDescriptor *)desc;
 @end
@@ -28,14 +29,18 @@
 - (instancetype)initWithCommandBuffer:(MaliMetalCommandBuffer *)cmdBuffer descriptor:(MTLRenderPassDescriptor *)desc {
     self = [super init];
     if (self) {
-        _commandBuffer = cmdBuffer;
-        _renderPassDescriptor = desc;
+        _commandBuffer = [cmdBuffer retain];
+        _renderPassDescriptor = [desc copy];
         memset(&_currentCmd, 0, sizeof(_currentCmd));
     }
     return self;
 }
 
 - (void)dealloc {
+    for (NSUInteger i = 0; i < MALI_MAX_VERTEX_BUFFERS; i++) [(id)_vertexBuffers[i] release];
+    for (NSUInteger i = 0; i < MALI_MAX_TEXTURES; i++) [(id)_fragmentTextures[i] release];
+    [_renderPassDescriptor release];
+    [_commandBuffer release];
     [super dealloc];
 }
 
@@ -44,18 +49,31 @@
 
 - (void)setVertexBuffer:(id<MTLBuffer>)buffer offset:(NSUInteger)offset atIndex:(NSUInteger)index {
     if (index < MALI_MAX_VERTEX_BUFFERS) {
+        if (offset > [buffer length]) {
+            [NSException raise:@"NSInvalidArgumentException" format:@"MaliMetal vertex offset exceeds buffer length"];
+            return;
+        }
+        [(id)buffer retain];
+        [(id)_vertexBuffers[index] release];
+        _vertexBuffers[index] = buffer;
         _currentCmd.vertexBufferPtr[index] = [buffer contents];
         _currentCmd.vertexBufferOffset[index] = offset;
+        _currentCmd.vertexBufferLength[index] = [buffer length];
     }
 }
 
 - (void)setFragmentTexture:(id<MTLTexture>)texture atIndex:(NSUInteger)index {
     if (index < MALI_MAX_TEXTURES) {
+        [(id)texture retain];
+        [(id)_fragmentTextures[index] release];
+        _fragmentTextures[index] = texture;
+        _currentCmd.fragmentTexturePtr[index] = NULL;
         if ([(id)texture respondsToSelector:@selector(pixels)]) {
             _currentCmd.fragmentTexturePtr[index] = [(id)texture pixels];
         }
         _currentCmd.textureWidth[index] = (uint32_t)[texture width];
         _currentCmd.textureHeight[index] = (uint32_t)[texture height];
+        _currentCmd.textureBytesPerRow[index] = (uint32_t)[texture bytesPerRow];
     }
 }
 
@@ -69,6 +87,7 @@
 
 - (void)setScissorRect:(MTLScissorRect)rect {
     _currentCmd.scissorRect = rect;
+    _currentCmd.hasScissorRect = 1;
 }
 
 - (void)drawPrimitives:(NSUInteger)primitiveType vertexStart:(NSUInteger)vertexStart vertexCount:(NSUInteger)vertexCount {
@@ -86,36 +105,14 @@
             }
         }
     }
-    [_commandBuffer enqueueDrawCommand:&_currentCmd forTexture:targetTex];
+    [_commandBuffer enqueueDrawCommand:&_currentCmd forTexture:targetTex
+                        vertexBuffers:_vertexBuffers fragmentTextures:_fragmentTextures];
 }
 
 - (void)endEncoding {
     /* Encoding completed */
 }
 
-@end
-
-/*
- * Blit Command Encoder
- */
-@interface MaliMetalBlitCommandEncoder : MaliMetalObject <MTLBlitCommandEncoder>
-@end
-
-@implementation MaliMetalBlitCommandEncoder
-- (id<MTLDevice>)device { return (id<MTLDevice>)0; }
-- (void)endEncoding {}
-@end
-
-/*
- * Compute Command Encoder
- */
-@interface MaliMetalComputeCommandEncoder : MaliMetalObject <MTLComputeCommandEncoder>
-@end
-
-@implementation MaliMetalComputeCommandEncoder
-- (id<MTLDevice>)device { return (id<MTLDevice>)0; }
-- (void)setComputePipelineState:(id<MTLComputePipelineState>)state { (void)state; }
-- (void)endEncoding {}
 @end
 
 /*
@@ -129,10 +126,15 @@
 - (instancetype)initWithDevice:(MaliMetalDevice *)device maxCommandBufferCount:(NSUInteger)count {
     self = [super init];
     if (self) {
-        _device = device;
+        _device = [device retain];
         _maxCount = count;
     }
     return self;
+}
+
+- (void)dealloc {
+    [_device release];
+    [super dealloc];
 }
 
 - (id<MTLDevice>)device {
@@ -140,11 +142,11 @@
 }
 
 - (id<MTLCommandBuffer>)commandBuffer {
-    return (id<MTLCommandBuffer>)[[MaliMetalCommandBuffer alloc] initWithQueue:self];
+    return (id<MTLCommandBuffer>)[[[MaliMetalCommandBuffer alloc] initWithQueue:self] autorelease];
 }
 
 - (id<MTLCommandBuffer>)commandBufferWithUnretainedReferences {
-    return [self commandBuffer];
+    return (id<MTLCommandBuffer>)[[[MaliMetalCommandBuffer alloc] initWithQueue:self retainedReferences:NO] autorelease];
 }
 
 @end
@@ -155,8 +157,10 @@
 @implementation MaliMetalCommandBuffer {
     MaliMetalCommandQueue *_queue;
     MTLCommandBufferStatus _status;
+    BOOL _retainedReferences;
     MaliMetalDrawCommand _drawCommands[MAX_COMMANDS_PER_BUFFER];
     id<MTLTexture> _targetTextures[MAX_COMMANDS_PER_BUFFER];
+    id _drawResources[MAX_COMMANDS_PER_BUFFER][MALI_MAX_VERTEX_BUFFERS + MALI_MAX_TEXTURES];
     NSUInteger _drawCommandCount;
     id<MTLDrawable> _drawablesToPresent[MAX_DRAWABLES_PER_BUFFER];
     NSUInteger _drawableCount;
@@ -167,9 +171,14 @@
 }
 
 - (instancetype)initWithQueue:(MaliMetalCommandQueue *)queue {
+    return [self initWithQueue:queue retainedReferences:YES];
+}
+
+- (instancetype)initWithQueue:(MaliMetalCommandQueue *)queue retainedReferences:(BOOL)retainedReferences {
     self = [super init];
     if (self) {
-        _queue = queue;
+        _queue = [queue retain];
+        _retainedReferences = retainedReferences;
         _status = MTLCommandBufferStatusNotEnqueued;
         _drawCommandCount = 0;
         _drawableCount = 0;
@@ -180,6 +189,14 @@
 }
 
 - (void)dealloc {
+    for (NSUInteger i = 0; i < _drawCommandCount; i++) {
+        if (_retainedReferences) {
+            [(id)_targetTextures[i] release];
+            for (NSUInteger j = 0; j < MALI_MAX_VERTEX_BUFFERS + MALI_MAX_TEXTURES; j++) {
+                [_drawResources[i][j] release];
+            }
+        }
+    }
     for (NSUInteger i = 0; i < _drawableCount; i++) {
         [(id)_drawablesToPresent[i] release];
     }
@@ -189,6 +206,7 @@
     for (NSUInteger i = 0; i < _completedHandlerCount; i++) {
         [_completedHandlers[i] release];
     }
+    [_queue release];
     [super dealloc];
 }
 
@@ -208,7 +226,13 @@
     return (NSError *)0;
 }
 
+- (BOOL)retainedReferences { return _retainedReferences; }
+
 - (void)enqueue {
+    if (_status != MTLCommandBufferStatusNotEnqueued) {
+        [NSException raise:@"NSInternalInconsistencyException" format:@"MaliMetal command buffer was already enqueued"];
+        return;
+    }
     _status = MTLCommandBufferStatusEnqueued;
 }
 
@@ -224,15 +248,25 @@
     }
 }
 
-- (void)enqueueDrawCommand:(const MaliMetalDrawCommand *)cmd forTexture:(id<MTLTexture>)texture {
+- (void)enqueueDrawCommand:(const MaliMetalDrawCommand *)cmd forTexture:(id<MTLTexture>)texture
+            vertexBuffers:(id<MTLBuffer> const *)buffers fragmentTextures:(id<MTLTexture> const *)textures {
     if (_drawCommandCount < MAX_COMMANDS_PER_BUFFER) {
         _drawCommands[_drawCommandCount] = *cmd;
         _targetTextures[_drawCommandCount] = texture;
+        if (_retainedReferences) {
+            [(id)texture retain];
+            for (NSUInteger i = 0; i < MALI_MAX_VERTEX_BUFFERS; i++) {
+                _drawResources[_drawCommandCount][i] = [(id)buffers[i] retain];
+            }
+            for (NSUInteger i = 0; i < MALI_MAX_TEXTURES; i++) {
+                _drawResources[_drawCommandCount][MALI_MAX_VERTEX_BUFFERS + i] = [(id)textures[i] retain];
+            }
+        }
         _drawCommandCount++;
     }
 }
 
-- (void)commit {
+- (void)executeRecordedCommands {
     _status = MTLCommandBufferStatusCommitted;
 
     /* Execute scheduled handlers */
@@ -246,41 +280,24 @@
     }
     _scheduledHandlerCount = 0;
 
-    MaliMetalDevice *dev = (MaliMetalDevice *)[_queue device];
-    volatile uint32_t *hw = [dev respondsToSelector:@selector(hardwareRegisters)] ? [dev hardwareRegisters] : NULL;
-    void *ring = [dev respondsToSelector:@selector(ringBuffer)] ? [dev ringBuffer] : NULL;
-    uint32_t gpuID = [dev respondsToSelector:@selector(gpuID)] ? [dev gpuID] : 0;
-
-    if (hw != NULL && gpuID != 0 && gpuID != ~0u && ring != NULL) {
-        /*
-         * ARM Mali-G57 Valhall hardware job submission:
-         * Form a cache flush / sync job in the shared ringbuffer.
-         */
-        struct mali_job_descriptor_header *job = (struct mali_job_descriptor_header *)ring;
-        job->job_type = MALI_JOB_TYPE_CACHE_FLUSH;
-        job->index = 0;
-        job->flags = 0;
-        job->fault_pointer = 0;
-        job->next_job_address = 0;
-        job->dependencies[0] = 0;
-        job->dependencies[1] = 0;
-        __sync_synchronize();
-
-        /* Verify Job Slot 0 is ready */
-        uint32_t jsBase = MALI_JS_OFFSET(0) / 4;
-        hw[jsBase + (MALI_JS_COMMAND_NEXT / 4)] = MALI_JS_COMMAND_NOP;
-    }
-
-    /* Execute all recorded draw commands */
+    /* CPU prototype only. A NOP register write is not a GPU job submission. */
     for (NSUInteger i = 0; i < _drawCommandCount; i++) {
         id<MTLTexture> targetTex = _targetTextures[i];
         if (targetTex && [(id)targetTex respondsToSelector:@selector(pixels)]) {
             void *dstPixels = [(id)targetTex pixels];
             uint32_t w = (uint32_t)[targetTex width];
             uint32_t h = (uint32_t)[targetTex height];
-            uint32_t stride = w * 4;
+            uint32_t stride = (uint32_t)[targetTex bytesPerRow];
             MaliMetalRasterizeCommand(&_drawCommands[i], dstPixels, w, h, stride);
         }
+        if (_retainedReferences) {
+            [(id)targetTex release];
+            for (NSUInteger j = 0; j < MALI_MAX_VERTEX_BUFFERS + MALI_MAX_TEXTURES; j++) {
+                [_drawResources[i][j] release];
+                _drawResources[i][j] = nil;
+            }
+        }
+        _targetTextures[i] = nil;
     }
 
     /* Present all queued drawables (triggers CAMetalDrawable layer_private_present -> CATransaction commit) */
@@ -307,6 +324,20 @@
     _completedHandlerCount = 0;
 }
 
+- (void)commit {
+    if (_status >= MTLCommandBufferStatusCommitted) {
+        [NSException raise:@"NSInternalInconsistencyException" format:@"MaliMetal command buffers are single-use"];
+        return;
+    }
+    /* A callback may release the caller's last reference while commit runs. */
+    [self retain];
+    @try {
+        [self executeRecordedCommands];
+    } @finally {
+        [self release];
+    }
+}
+
 - (void)waitUntilScheduled {
 }
 
@@ -325,15 +356,15 @@
 }
 
 - (id<MTLRenderCommandEncoder>)renderCommandEncoderWithDescriptor:(MTLRenderPassDescriptor *)renderPassDescriptor {
-    return (id<MTLRenderCommandEncoder>)[[MaliMetalRenderCommandEncoder alloc] initWithCommandBuffer:self descriptor:renderPassDescriptor];
+    return (id<MTLRenderCommandEncoder>)[[[MaliMetalRenderCommandEncoder alloc] initWithCommandBuffer:self descriptor:renderPassDescriptor] autorelease];
 }
 
 - (id<MTLComputeCommandEncoder>)computeCommandEncoder {
-    return (id<MTLComputeCommandEncoder>)[[MaliMetalComputeCommandEncoder alloc] init];
+    return nil;
 }
 
 - (id<MTLBlitCommandEncoder>)blitCommandEncoder {
-    return (id<MTLBlitCommandEncoder>)[[MaliMetalBlitCommandEncoder alloc] init];
+    return nil;
 }
 
 @end

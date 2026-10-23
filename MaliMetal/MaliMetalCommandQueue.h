@@ -25,8 +25,10 @@
 @property (readonly) id<MTLCommandQueue> commandQueue;
 @property (readonly) MTLCommandBufferStatus status;
 @property (readonly) NSError *error;
+@property (readonly) BOOL retainedReferences;
 
 - (instancetype)initWithQueue:(MaliMetalCommandQueue *)queue;
+- (instancetype)initWithQueue:(MaliMetalCommandQueue *)queue retainedReferences:(BOOL)retainedReferences;
 - (void)enqueue;
 - (void)commit;
 - (void)waitUntilCompleted;
@@ -42,6 +44,7 @@
 - (id<MTLBlitCommandEncoder>)blitCommandEncoder;
 
 /* Internal: Enqueue a draw command from an encoder */
-- (void)enqueueDrawCommand:(const MaliMetalDrawCommand *)cmd forTexture:(id<MTLTexture>)texture;
+- (void)enqueueDrawCommand:(const MaliMetalDrawCommand *)cmd forTexture:(id<MTLTexture>)texture
+            vertexBuffers:(id<MTLBuffer> const *)buffers fragmentTextures:(id<MTLTexture> const *)textures;
 
 @end

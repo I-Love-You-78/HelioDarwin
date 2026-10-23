@@ -1,13 +1,12 @@
 /*
- * MaliMetalVulkan.h: Command translation and pipeline structures for MaliMetal
- * Bridges Metal render commands into Mali Valhall job streams or fallback rasterization.
+ * Fixed-layout CPU rectangle prototype. This is not a Vulkan implementation
+ * or an implementation of arbitrary Metal vertex and fragment shaders.
  */
 
 #ifndef MALI_METAL_VULKAN_H
 #define MALI_METAL_VULKAN_H
 
 #include "MaliMetalTypes.h"
-#include "MaliValhallHw.h"
 
 #define MALI_MAX_DRAW_COMMANDS  256
 #define MALI_MAX_VERTEX_BUFFERS 8
@@ -19,11 +18,14 @@ typedef struct {
     NSUInteger vertexCount;
     MTLViewport viewport;
     MTLScissorRect scissorRect;
+    uint8_t hasScissorRect;
     void *vertexBufferPtr[MALI_MAX_VERTEX_BUFFERS];
     NSUInteger vertexBufferOffset[MALI_MAX_VERTEX_BUFFERS];
+    NSUInteger vertexBufferLength[MALI_MAX_VERTEX_BUFFERS];
     void *fragmentTexturePtr[MALI_MAX_TEXTURES];
     uint32_t textureWidth[MALI_MAX_TEXTURES];
     uint32_t textureHeight[MALI_MAX_TEXTURES];
+    uint32_t textureBytesPerRow[MALI_MAX_TEXTURES];
 } MaliMetalDrawCommand;
 
 #ifdef __cplusplus
@@ -31,8 +33,8 @@ extern "C" {
 #endif
 
 /*
- * Software Rasterizer / GPU Fallback for 2D UI Compositing (CoreAnimation)
- * Renders textured quads / solid rectangles into target 1080x2400 BGRA surface
+ * Experimental rectangle rasterizer for its own fixed vertex layout.
+ * CoreAnimation's general shader and vertex layouts are not implemented.
  */
 void MaliMetalRasterizeCommand(const MaliMetalDrawCommand *cmd, void *dstPixels, uint32_t dstWidth, uint32_t dstHeight, uint32_t dstStride);
 

@@ -37,8 +37,12 @@ typedef void *id;
 extern mach_port_t mach_task_self(void);
 extern kern_return_t IOServiceOpen(mach_port_t service, mach_port_t owningTask, uint32_t type, io_connect_t *connect);
 extern kern_return_t IOServiceClose(io_connect_t connect);
+extern kern_return_t IORegistryEntryGetRegistryEntryID(io_service_t entry, uint64_t *entry_id);
 extern kern_return_t IOConnectMapMemory64(io_connect_t connect, uint32_t memory_type, mach_port_t into_task, mach_vm_address_t *at_address, mach_vm_size_t *of_size, uint32_t options);
+extern kern_return_t IOConnectUnmapMemory64(io_connect_t connect, uint32_t memory_type, mach_port_t from_task, mach_vm_address_t at_address);
 extern void NSLog(id format, ...);
+extern const void *CFRetain(const void *object);
+extern void CFRelease(const void *object);
 
 typedef struct {
     NSUInteger width;
@@ -184,6 +188,7 @@ typedef enum {
 - (id)init;
 - (void)dealloc;
 - (id)retain;
+- (id)autorelease;
 - (oneway void)release;
 - (id)copy;
 - (BOOL)respondsToSelector:(SEL)aSelector;
@@ -204,12 +209,21 @@ typedef enum {
 @end
 
 @class NSString, NSError, NSDictionary, NSArray, NSData;
+@interface NSDictionary : NSObject
++ (instancetype)dictionaryWithObject:(id)object forKey:(id)key;
+@end
+@interface NSError : NSObject
++ (instancetype)errorWithDomain:(NSString *)domain code:(NSInteger)code userInfo:(NSDictionary *)userInfo;
+@end
+@interface NSException : NSObject
++ (void)raise:(NSString *)name format:(NSString *)format, ...;
+@end
 typedef void *dispatch_data_t;
 
 /*
  * Base class for all MaliMetal objects providing:
  * 1. NSString *label support
- * 2. Invocation forwarding for unhandled/undocumented Metal selectors to prevent crashes
+ * Unsupported selectors retain NSObject's normal lookup/error behavior.
  */
 @interface MaliMetalObject : NSObject {
     NSString *_label;
@@ -237,6 +251,7 @@ typedef void *dispatch_data_t;
 - (NSUInteger)width;
 - (NSUInteger)height;
 - (void *)pixels;
+- (NSUInteger)bytesPerRow;
 - (MTLPixelFormat)pixelFormat;
 - (MTLTextureType)textureType;
 - (MTLTextureUsage)usage;
@@ -266,6 +281,10 @@ typedef void (^MTLCommandBufferHandler)(id<MTLCommandBuffer>);
 @property (nonatomic) MTLPixelFormat pixelFormat;
 @property (nonatomic) MTLTextureType textureType;
 @property (nonatomic) MTLTextureUsage usage;
+@property (nonatomic) NSUInteger depth;
+@property (nonatomic) NSUInteger mipmapLevelCount;
+@property (nonatomic) NSUInteger sampleCount;
+@property (nonatomic) NSUInteger arrayLength;
 + (MTLTextureDescriptor *)texture2DDescriptorWithPixelFormat:(MTLPixelFormat)pixelFormat width:(NSUInteger)width height:(NSUInteger)height mipmapped:(BOOL)mipmapped;
 @end
 

@@ -26,7 +26,7 @@ configures iOS 16 userland for bare-metal execution on MT6789:
                   comes from its Hactivation branch, selected by the /chosen
                   security-status properties in tools/mkadt.py
 """
-import glob, os, plistlib, shutil, sys
+import argparse, glob, hashlib, json, os, plistlib, shutil, struct, sys, tempfile
 
 BUILD, VERSION = '20H392', '16.7.16'
 MOBILE = 501
@@ -137,10 +137,84 @@ def audio(root):
         print('StartRecorderServer off', os.path.relpath(conf, root))
 
 
+def malimetal_artifact(build_dir):
+    """Reject stale or wrong-platform binaries before modifying the root image."""
+    bundle = os.path.join(build_dir, 'MaliMetal.bundle')
+    with open(os.path.join(build_dir, 'build.json')) as f:
+        manifest = json.load(f)
+    source_dir = os.path.dirname(os.path.abspath(build_dir))
+    for name, expected in manifest['inputs'].items():
+        if name != os.path.basename(name):
+            raise ValueError('invalid source name in MaliMetal manifest')
+        with open(os.path.join(source_dir, name), 'rb') as f:
+            if hashlib.sha256(f.read()).hexdigest() != expected:
+                raise ValueError(f'MaliMetal source changed since build: {name}')
+    with open(os.path.join(bundle, 'MaliMetal'), 'rb') as f:
+        binary = f.read()
+    if hashlib.sha256(binary).hexdigest() != manifest['binary_sha256']:
+        raise ValueError('MaliMetal binary differs from build manifest')
+    magic, cpu, _, kind, count = struct.unpack_from('<IIIII', binary)
+    if (magic, cpu, kind) != (0xfeedfacf, 0x100000c, 6):
+        raise ValueError('MaliMetal must be an arm64 Mach-O library')
+    offset, platform = 32, None
+    for _ in range(count):
+        command, size = struct.unpack_from('<II', binary, offset)
+        if size < 8 or offset + size > len(binary):
+            raise ValueError('invalid MaliMetal load command')
+        if command == 0x32:
+            platform, = struct.unpack_from('<I', binary, offset + 8)
+        offset += size
+    if platform != 2:
+        raise ValueError('MaliMetal was not built for iOS')
+    expected_info = load(os.path.join(source_dir, 'Info.plist'))
+    expected_info['MaliMetalSourceDigest'] = manifest['source_digest']
+    if load(os.path.join(bundle, 'Info.plist')) != expected_info:
+        raise ValueError('MaliMetal Info.plist differs from build manifest')
+    return bundle
+
+
+def install_malimetal(root, bundle):
+    parent = os.path.join(root, 'System/Library/Extensions')
+    destination = os.path.join(parent, 'MaliMetal.bundle')
+    stage = tempfile.mkdtemp(prefix='.malimetal-', dir=parent)
+    fresh, previous = os.path.join(stage, 'new'), os.path.join(stage, 'previous')
+    os.mkdir(fresh, 0o755)
+    os.chmod(fresh, 0o755)
+    os.chown(fresh, 0, 0)
+    try:
+        for name, mode in (('Info.plist', 0o644), ('MaliMetal', 0o755)):
+            path = os.path.join(fresh, name)
+            shutil.copyfile(os.path.join(bundle, name), path)
+            os.chown(path, 0, 0)
+            os.chmod(path, mode)
+        if os.path.exists(destination):
+            os.rename(destination, previous)
+        try:
+            os.rename(fresh, destination)
+        except BaseException:
+            if os.path.exists(previous):
+                os.rename(previous, destination)
+            raise
+    except BaseException:
+        if os.path.exists(previous):
+            print('MaliMetal previous bundle preserved at', previous, file=sys.stderr)
+        else:
+            shutil.rmtree(stage)
+        raise
+    else:
+        shutil.rmtree(stage)
+    print('MaliMetal.bundle installed from verified build:', bundle)
+
+
 def main():
-    if len(sys.argv) != 2 or not os.path.isdir(os.path.join(sys.argv[1], 'System/Library/xpc')):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('root')
+    parser.add_argument('--malimetal-build', help='explicit MaliMetal build output directory')
+    args = parser.parse_args()
+    if not os.path.isdir(os.path.join(args.root, 'System/Library/xpc')):
         sys.exit(__doc__)
-    root = sys.argv[1]
+    root = args.root
+    bundle = malimetal_artifact(args.malimetal_build) if args.malimetal_build else None
     launchd(root)
     containers(root)
     activation(root)
@@ -166,15 +240,10 @@ def main():
         f.write('')
     os.chown(dm_dir, MOBILE, MOBILE)
     os.chmod(dm_dir, 0o755)
-    mali_src = '/mnt/d/MTK ios/topaz/MaliMetal/MaliMetal.bundle'
-    if not os.path.isdir(mali_src):
-        mali_src = os.path.join(os.path.dirname(__file__), '../MaliMetal/MaliMetal.bundle')
-    mali_dst = os.path.join(root, 'System/Library/Extensions/MaliMetal.bundle')
-    if os.path.isdir(mali_src):
-        if os.path.exists(mali_dst):
-            shutil.rmtree(mali_dst)
-        shutil.copytree(mali_src, mali_dst)
-        print('MaliMetal.bundle installed to System/Library/Extensions')
+    if bundle is not None:
+        install_malimetal(root, bundle)
+    else:
+        print('MaliMetal.bundle unchanged; use --malimetal-build to install a verified build')
     merge_pref(root, 'com.apple.purplebuddy', {
         'SetupDone': True, 'SetupFinishedAllSteps': True, 'SetupVersion': 11,
         'daemonizeNeedsToRun': False})
