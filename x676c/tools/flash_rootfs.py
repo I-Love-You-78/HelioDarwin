@@ -4,8 +4,11 @@
 Usage: flash_rootfs.py IMAGE [--adb EXECUTABLE] [--serial SERIAL]
 Android must be running on the successful slot B with root access. This command
 writes only iosroot; it does not select a boot slot or reboot the phone.
+The compressed input is Base64-framed to preserve binary bytes through Windows
+ADB stdin. Success requires remote completion and full-volume SHA-256 readback.
 """
 import argparse
+import base64
 import gzip
 import hashlib
 import os
@@ -13,9 +16,35 @@ from pathlib import Path
 import shlex
 import struct
 import subprocess
+import sys
 import time
 
 DEVICE = '/dev/block/by-name/iosroot'
+
+
+class Base64Stream:
+    """Keep ADB stdin ASCII-only while preserving one continuous gzip stream."""
+
+    def __init__(self, stream):
+        self.stream = stream
+        self.tail = b''
+
+    def write(self, data):
+        value = self.tail + data
+        count = len(value) // 3 * 3
+        if count:
+            self.stream.write(base64.b64encode(value[:count]))
+        self.tail = value[count:]
+        return len(data)
+
+    def flush(self):
+        self.stream.flush()
+
+    def finish(self):
+        if self.tail:
+            self.stream.write(base64.b64encode(self.tail))
+            self.tail = b''
+        self.flush()
 
 
 def main():
@@ -61,16 +90,17 @@ def main():
     print(f'Source: {image} ({stat.st_size} bytes)', flush=True)
     print(f'Target: {serial} {DEVICE}', flush=True)
     acknowledgement = b'ROOT_WRITE_COMPLETE'
-    command = 'set -e; gzip -d > ' + DEVICE + '; sync; printf ROOT_WRITE_COMPLETE'
+    command = 'set -e; set -o pipefail; base64 -d | gzip -d > ' + DEVICE + '; sync; printf ROOT_WRITE_COMPLETE'
     receiver = subprocess.Popen(
-        [*adb, 'shell', '-T', 'su -c ' + shlex.quote(command)],
+        [*adb, 'shell', '-T', '-e', 'none', 'su -c ' + shlex.quote(command)],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     digest = hashlib.sha256()
     started = reported = time.monotonic()
     written = 0
     try:
+        encoded = Base64Stream(receiver.stdin)
         with image.open('rb') as stream:
-            with gzip.GzipFile(fileobj=receiver.stdin, mode='wb', compresslevel=1) as compressed:
+            with gzip.GzipFile(fileobj=encoded, mode='wb', compresslevel=1) as compressed:
                 while data := stream.read(4 * 1024 * 1024):
                     compressed.write(data)
                     digest.update(data)
@@ -79,6 +109,7 @@ def main():
                     if now - reported >= 5 or written == stat.st_size:
                         print(f'{written / stat.st_size:.1%}; {written / (now - started) / 2**20:.1f} MiB/s', flush=True)
                         reported = now
+        encoded.finish()
         receiver.stdin.close()
         code = receiver.wait(timeout=180)
         received = receiver.stdout.read()
@@ -96,6 +127,9 @@ def main():
         if receiver.poll() is None:
             receiver.kill()
             receiver.wait()
+        detail = receiver.stderr.read().decode(errors='replace')
+        if detail:
+            print('Root receiver: ' + detail, file=sys.stderr)
         raise
     finally:
         receiver.stdout.close()
