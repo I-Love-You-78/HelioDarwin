@@ -19,7 +19,7 @@
 #include "plog.h"
 #include "splash.h"
 
-#define PUMP_LIFETIME_S		1800
+#define PUMP_LIFETIME_S		120
 #define ERROR_HOLD_MS		5000
 
 #define UFSHCI_BASE		0x11270000UL	/* ufshci@11270000, mediatek,mt8183-ufshci */
