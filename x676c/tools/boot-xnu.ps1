@@ -68,9 +68,17 @@ if (-not ($r -match "flashed")) { throw "flash failed" }
 "$(Get-Date -f HH:mm:ss) rebooted into the shim"
 Start-Sleep 20
 $deadline = (Get-Date).AddMinutes(12)
-while ((Get-Date) -lt $deadline -and -not ((& $adb devices | Out-String) -match "`tdevice")) { Start-Sleep 3 }
-for ($i = 0; $i -lt 60 -and -not ((& $adb shell getprop sys.boot_completed 2>$null) -match '1'); $i++) { Start-Sleep 2 }
+while ((Get-Date) -lt $deadline) {
+    $devs = try { & $adb devices 2>$null | Out-String } catch { "" }
+    if ($devs -match "`tdevice") { break }
+    Start-Sleep 3
+}
+for ($i = 0; $i -lt 60; $i++) {
+    $bc = try { & $adb shell getprop sys.boot_completed 2>$null } catch { "" }
+    if ($bc -match '1') { break }
+    Start-Sleep 2
+}
 $log = Join-Path $out "xnu-$Run.log"
 Phone "cat /sys/fs/pstore/console-ramoops-0" | Set-Content $log
-"$(Get-Date -f HH:mm:ss) back in Android (slot $(& $adb shell getprop ro.boot.slot_suffix)), log: $log"
+"$(Get-Date -f HH:mm:ss) back in Android (slot $(& $adb shell getprop ro.boot.slot_suffix 2>$null)), log: $log"
 Get-Content $log -Tail 60

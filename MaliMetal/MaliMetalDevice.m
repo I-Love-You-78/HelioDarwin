@@ -396,6 +396,15 @@ extern size_t IOSurfaceGetBytesPerRow(void *token) __attribute__((weak_import));
                 _gpuID = _hardwareRegisters[0x0000 / 4];
                 NSLog(@"[MaliMetal] Mapped hardware MMIO at %p, read GPU_ID=0x%08x", (void *)mmioAddr, _gpuID);
             }
+
+            /* Map shared command ringbuffer / job descriptors (type 1, 1 MiB) */
+            mach_vm_address_t ringAddr = 0;
+            mach_vm_size_t ringSize = 1024 * 1024;
+            kr = IOConnectMapMemory64(_userClient, 1, mach_task_self(), &ringAddr, &ringSize, kIOMapAnywhere);
+            if (kr == KERN_SUCCESS && ringAddr != 0) {
+                _ringBuffer = (void *)ringAddr;
+                NSLog(@"[MaliMetal] Mapped shared job ringbuffer at %p (1 MiB)", _ringBuffer);
+            }
         }
     }
     return self;

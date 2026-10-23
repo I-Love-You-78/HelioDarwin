@@ -20,7 +20,16 @@ while ($true) {
         }
         
         if ($ready) {
-            Write-Host "[AutoDeploy] Root shell confirmed! Streaming updated rootfs..." -ForegroundColor Green
+            Write-Host "[AutoDeploy] Root shell confirmed! Pulling previous pstore log..." -ForegroundColor Green
+            try {
+                $pstore = & $adb shell "su -c 'cat /sys/fs/pstore/console-ramoops-0'"
+                $pstoreLog = Join-Path $tools "..\..\logs\last-xnu-boot.log"
+                $pstore | Set-Content $pstoreLog -Force
+                Write-Host "[AutoDeploy] Saved previous boot pstore log to $pstoreLog" -ForegroundColor Green
+            } catch {
+                Write-Host "[AutoDeploy] Note: could not pull pstore: $_" -ForegroundColor Yellow
+            }
+            Write-Host "[AutoDeploy] Streaming updated rootfs..." -ForegroundColor Green
             python (Join-Path $tools "flash_rootfs.py")
             if ($LASTEXITCODE -ne 0) {
                 Write-Host "[AutoDeploy] Rootfs flash failed!" -ForegroundColor Red

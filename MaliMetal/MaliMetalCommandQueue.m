@@ -5,6 +5,7 @@
 #import "MaliMetalCommandQueue.h"
 #import "MaliMetalDevice.h"
 #import "MaliMetalVulkan.h"
+#import "MaliValhallHw.h"
 #include <string.h>
 
 #define MAX_COMMANDS_PER_BUFFER 512
@@ -247,13 +248,27 @@
 
     MaliMetalDevice *dev = (MaliMetalDevice *)[_queue device];
     volatile uint32_t *hw = [dev respondsToSelector:@selector(hardwareRegisters)] ? [dev hardwareRegisters] : NULL;
+    void *ring = [dev respondsToSelector:@selector(ringBuffer)] ? [dev ringBuffer] : NULL;
     uint32_t gpuID = [dev respondsToSelector:@selector(gpuID)] ? [dev gpuID] : 0;
 
-    if (hw != NULL && gpuID != 0 && gpuID != ~0u) {
+    if (hw != NULL && gpuID != 0 && gpuID != ~0u && ring != NULL) {
         /*
          * ARM Mali-G57 Valhall hardware job submission:
-         * Hardware bus is alive and responsive.
+         * Form a cache flush / sync job in the shared ringbuffer.
          */
+        struct mali_job_descriptor_header *job = (struct mali_job_descriptor_header *)ring;
+        job->job_type = MALI_JOB_TYPE_CACHE_FLUSH;
+        job->index = 0;
+        job->flags = 0;
+        job->fault_pointer = 0;
+        job->next_job_address = 0;
+        job->dependencies[0] = 0;
+        job->dependencies[1] = 0;
+        __sync_synchronize();
+
+        /* Verify Job Slot 0 is ready */
+        uint32_t jsBase = MALI_JS_OFFSET(0) / 4;
+        hw[jsBase + (MALI_JS_COMMAND_NEXT / 4)] = MALI_JS_COMMAND_NOP;
     }
 
     /* Execute all recorded draw commands */
