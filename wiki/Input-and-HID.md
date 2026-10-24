@@ -1,6 +1,10 @@
 # Input and HID
 
-X676C input support has been implemented and compiled locally to ARM64 objects. **Physical touch, button delivery and iOS gestures are not yet validated with this implementation.** Hardware identity and wiring below are established by Android's active driver binding, input metadata, device tree and vendor driver behavior.
+X676C input support has been implemented and compiled locally to ARM64 objects.
+Run `40083985422` recorded physical touch press/release events in the kernel HID
+path. **End-to-end iOS gestures and physical button delivery remain unvalidated.**
+Hardware identity and wiring below are established by Android's active driver
+binding, input metadata, device tree and vendor driver behavior.
 
 The first integrated boot reached the hardware startup thread but stopped
 with `error=5` during clock setup. The shipped gate descriptor orders its fields
@@ -10,7 +14,9 @@ Run `39984534077` subsequently read the expected `54:52` chip ID and entered
 polling. Report parsing still returned `error=5` with completed I2C status `0x1`.
 Patch 0194 records the first three report prefixes and DMA buffer address to
 distinguish returned data from transport errors. Physical contact delivery
-remains unvalidated.
+was subsequently observed at the kernel HID layer in run `40083985422`.
+That boot also returned all-FF report prefixes and continued to reject them;
+it does not establish complete controller recovery or gesture handling.
 
 ## Touchscreen
 
@@ -57,6 +63,9 @@ State is retained until a HID client is ready, and incomplete event allocation i
 - `sweettouchdelay=N` changes the touch startup delay in seconds.
 - `sweetfb_stayon=1` deliberately keeps the physical display on, so lack of panel blanking alone does not prove a missing power event.
 
-The five affected translation units, including startup and shared PWRAP access, compile to ARM64 objects. That verifies source integration, not controller transfers or end-to-end iOS input on hardware. Those remain the next physical validation step.
+The five affected translation units, including startup and shared PWRAP access,
+compile to ARM64 objects. Chip identification and kernel HID press/release
+observations establish part of the physical path. Multi-touch, controller
+recovery, physical buttons and end-to-end iOS input still need validation.
 
 Source integration: [shared PWRAP patch 0191](https://github.com/squeeeezy/HelioDarwin/blob/x676c/xnu/patches/0191-x676c-shared-pwrap-swinf.patch) and [input patch 0192](https://github.com/squeeeezy/HelioDarwin/blob/x676c/xnu/patches/0192-x676c-real-touch-and-keys.patch).

@@ -55,12 +55,13 @@ iOS artifacts from source, including the pinned AIR compiler and PanVK dependenc
 Generated binaries are kept outside version control.
 See [MaliMetal build instructions](MaliMetal/README.md).
 
-The integrated boots loaded PanVK and reached physical-device property queries,
-then backboardd trapped on a cache-type register read. Patch 0193 configures user
-access, but run `39984534077` retained the previous startup instruction values.
-Assembly now bypasses the restored compiler cache, and CI and deployment verify
-the register policy in the binary. That run identified the touch controller after
-the I2C0 gate correction; touch reports and GPU execution still require validation.
+Run `40083985422` passed the earlier user cache-register trap after rebuilding
+assembly from the current headers. CI and deployment now check the assembled
+startup policy. The kernel also reported real touch press/release events.
+PanVK then failed during logical-device creation: that path still treated an
+IOKit connection as a Unix descriptor. The current source opens a separate
+IOKit client for each logical device. GPU execution and iOS gestures still
+require successful device validation.
 
 Compilation and offline shader validation do not prove that the stock Metal loader,
 PanVK, kernel GPU transport and presentation work together on the phone. Full

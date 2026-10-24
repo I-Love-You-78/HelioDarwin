@@ -49,7 +49,7 @@ struct xnu_dev {
    simple_mtx_t lock;
    struct xnu_bo *bos[MMK_MAX_BOS];
    unsigned bo_count;
-   bool lost;
+   bool lost,owns_connection;
    uint64_t next_atom,completed_success;
 };
 static struct xnu_dev *xd(struct pan_kmod_dev *d)
@@ -69,8 +69,8 @@ xnu_create(int connection,uint32_t flags,const struct pan_kmod_driver *driver,
       !d->query.cpu_page_size || !d->query.shader_present){
       pan_kmod_free(allocator,d);errno=ENODEV;return NULL;
    }
-   /* Mach ports must never reach close(2), and userspace cache op instructions
-    * are unavailable to an iOS process. Force every cache operation to IOKit. */
+   /* Mach ports must never reach close(2). Keep cache maintenance on IOKit,
+    * which owns the BO mappings and their coherency policy. */
    flags=(flags&~PAN_KMOD_DEV_FLAG_OWNS_FD)|PAN_KMOD_DEV_FLAG_MMAP_SYNC_THROUGH_KERNEL;
    pan_kmod_dev_init(&d->base,-1,flags,driver,&kbase_kmod_ops,allocator);
    simple_mtx_init(&d->lock,mtx_plain);
@@ -99,6 +99,30 @@ xnu_create(int connection,uint32_t flags,const struct pan_kmod_driver *driver,
    p->gpu_can_query_timestamp=false;p->timestamp_device_coherent=false;
    return &d->base;
 }
+
+struct pan_kmod_dev *
+pan_kmod_xnu_dev_clone(struct pan_kmod_dev *physical,
+                      const struct pan_kmod_allocator *allocator)
+{
+   uint32_t connection=0;
+   int32_t kr=mmk_darwin_open_peer(xd(physical)->connection,&connection);
+   if(kr){
+      mesa_loge("SweetMali: logical device connection failed %#x",kr);
+      errno=ENODEV;
+      return NULL;
+   }
+   struct pan_kmod_dev *dev=xnu_create((int)connection,physical->flags,
+                                      &physical->driver,allocator);
+   if(!dev){
+      int saved_errno=errno;
+      mmk_darwin_close(connection);
+      errno=saved_errno;
+      return NULL;
+   }
+   xd(dev)->owns_connection=true;
+   return dev;
+}
+
 static void xnu_destroy(struct pan_kmod_dev *base)
 {
    struct xnu_dev *d=xd(base);
@@ -106,6 +130,10 @@ static void xnu_destroy(struct pan_kmod_dev *base)
     * live GPU mapping behind outstanding references if a caller violates it. */
    if(d->bo_count){mesa_loge("SweetMali: device destroyed with %u live BOs",d->bo_count);return;}
    simple_mtx_destroy(&d->lock);pan_kmod_dev_cleanup(base);
+   if(d->owns_connection){
+      int32_t kr=mmk_darwin_close(d->connection);
+      if(kr)mesa_loge("SweetMali: logical device close failed %#x",kr);
+   }
    pan_kmod_dev_free(base,d);
 }
 static struct pan_kmod_bo *

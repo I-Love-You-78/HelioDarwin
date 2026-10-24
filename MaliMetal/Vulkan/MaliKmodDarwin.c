@@ -10,6 +10,10 @@ extern kern_return_t IOConnectCallStructMethod(mach_port_t,uint32_t,
 extern kern_return_t IOConnectMapMemory64(mach_port_t,uint32_t,mach_port_t,
     mach_vm_address_t *,mach_vm_size_t *,uint32_t);
 extern kern_return_t IOConnectUnmapMemory64(mach_port_t,uint32_t,mach_port_t,mach_vm_address_t);
+extern kern_return_t IOConnectGetService(mach_port_t,mach_port_t *);
+extern kern_return_t IOServiceOpen(mach_port_t,mach_port_t,uint32_t,mach_port_t *);
+extern kern_return_t IOServiceClose(mach_port_t);
+extern kern_return_t IOObjectRelease(mach_port_t);
 
 #define MMK_BAD_ARGUMENT ((int32_t)0xe00002c2u)
 #define MMK_BAD_REPLY ((int32_t)0xe00002c7u)
@@ -34,6 +38,23 @@ int32_t mmk_darwin_query(uint32_t connection,MMKQuery *query)
     MMKHeader request=MMK_HDR(MMKHeader);
     memset(query,0,sizeof(*query));
     return call(connection,MMK_QUERY,&request,sizeof(request),query,sizeof(*query));
+}
+
+int32_t mmk_darwin_open_peer(uint32_t connection,uint32_t *peer)
+{
+    if (!connection || !peer) return MMK_BAD_ARGUMENT;
+    *peer=0;
+    mach_port_t service=MACH_PORT_NULL;
+    int32_t kr=IOConnectGetService(connection,&service);
+    if (kr) return kr;
+    kr=IOServiceOpen(service,mach_task_self(),0,peer);
+    IOObjectRelease(service);
+    return kr;
+}
+
+int32_t mmk_darwin_close(uint32_t connection)
+{
+    return connection ? IOServiceClose(connection) : MMK_BAD_ARGUMENT;
 }
 
 static int32_t map_bo(uint32_t connection,MMKDarwinBO *out)

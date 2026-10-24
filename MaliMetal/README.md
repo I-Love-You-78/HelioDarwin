@@ -35,13 +35,14 @@ not been validated on the phone, and Metal or Vulkan conformance is not claimed.
 
 `MaliMetalVulkan.c` contains Metal-to-Vulkan enum conversion.
 
-The first integrated phone boot loaded PanVK, reported GPU identity and texture
-features, and reached `util_cache_granularity`. The kernel trapped its `CTR_EL0` read;
-patch 0193 configures the required user cache-type query on SWEET. Run
-`39984534077` still contained the earlier startup constant, despite the updated
-headers. Assembly now bypasses the restored compiler cache, and the assembled
-register policy is checked before deployment. No GPU job execution has been
-established by these boots.
+Run `40083985422` passed `util_cache_granularity` after rebuilding startup
+assembly with the configured cache-query permission. `vkCreateDevice` then
+returned `VK_ERROR_OUT_OF_HOST_MEMORY`: the logical-device path duplicated the
+transport's deliberately invalid Unix descriptor instead of using IOKit.
+The current source opens and owns a separate IOKit client for each logical
+device, preserves the caller's query connection, and reports connection
+initialization failures separately from host allocations. The updated path
+still requires device validation; GPU job execution is not yet established.
 
 ## Dependencies and build
 

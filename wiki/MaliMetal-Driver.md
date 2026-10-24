@@ -20,6 +20,16 @@ startup constant in the Mach-O before booting. The generic illegal-instruction
 handler remains unchanged. These observations do not establish Vulkan device
 creation, GPU memory mappings or GPU jobs.
 
+Run `40083985422` passed the cache-register query and kept backboardd running.
+It then failed at `vkCreateDevice`: the logical-device constructor used
+`os_dupfd_cloexec(-1)`, although the XNU transport holds an IOKit connection.
+The current port opens a separate client on the same accelerator with
+[IOServiceOpen](https://developer.apple.com/documentation/iokit/1514515-ioserviceopen)
+and closes that owned connection when the logical device is destroyed. The
+physical-device query connection remains borrowed from its caller. Transport
+initialization failures use `VK_ERROR_INITIALIZATION_FAILED`; allocation failures
+retain their allocation error. This updated path is not yet device-validated.
+
 ## Execution layers
 
 | Layer | Implementation |

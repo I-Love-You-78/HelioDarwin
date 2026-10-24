@@ -15,6 +15,10 @@ typedef struct {
     uint64_t mapped_size;
 } MMKDarwinBO;
 int32_t mmk_darwin_query(uint32_t connection, MMKQuery *query);
+/* Open a separate user client on the same accelerator. The returned connection
+ * is owned by the caller and must be closed with mmk_darwin_close(). */
+int32_t mmk_darwin_open_peer(uint32_t connection, uint32_t *peer);
+int32_t mmk_darwin_close(uint32_t connection);
 int32_t mmk_darwin_alloc(uint32_t connection,uint64_t size,uint32_t flags,MMKDarwinBO *out);
 int32_t mmk_darwin_import(uint32_t connection,void *address,uint64_t size,uint32_t flags,MMKDarwinBO *out);
 int32_t mmk_darwin_release(MMKDarwinBO *bo);

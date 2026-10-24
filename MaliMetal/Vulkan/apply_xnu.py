@@ -121,6 +121,18 @@ def apply(work):
     edit('src/panfrost/vulkan/panvk_vX_device.c',
          '   device->vk.copy_sync_payloads = vk_drm_syncobj_copy_payloads;',
          '#if !defined(MESA_XNU)\n   device->vk.copy_sync_payloads = vk_drm_syncobj_copy_payloads;\n#endif')
+    edit('src/panfrost/lib/kmod/pan_kmod.h',
+         '/* Device object. */\nstruct pan_kmod_dev {',
+         '#if defined(MESA_XNU)\nstruct pan_kmod_dev *\npan_kmod_xnu_dev_clone(struct pan_kmod_dev *physical,\n                       const struct pan_kmod_allocator *allocator);\n#endif\n\n/* Device object. */\nstruct pan_kmod_dev {')
+    edit('src/panfrost/vulkan/panvk_vX_device.c',
+         '#ifdef HAVE_PAN_KMOD_KBASE\n   if (physical_device->kbase_node_path[0]) {',
+         '#if defined(MESA_XNU)\n   device->kmod.dev = pan_kmod_xnu_dev_clone(physical_device->kmod.dev,\n                                               &device->kmod.allocator);\n#else\n#ifdef HAVE_PAN_KMOD_KBASE\n   if (physical_device->kbase_node_path[0]) {')
+    edit('src/panfrost/vulkan/panvk_vX_device.c',
+         '         physical_device->kmod.dev->flags, &device->kmod.allocator);\n   }\n\n   if (!device->kmod.dev) {',
+         '         physical_device->kmod.dev->flags, &device->kmod.allocator);\n   }\n#endif\n\n   if (!device->kmod.dev) {')
+    edit('src/panfrost/vulkan/panvk_vX_device.c',
+         '      result = panvk_errorf(instance, VK_ERROR_OUT_OF_HOST_MEMORY,\n                            "cannot create device");',
+         '#if defined(MESA_XNU)\n      result = panvk_errorf(instance, VK_ERROR_INITIALIZATION_FAILED,\n                            "cannot create XNU logical device");\n#else\n      result = panvk_errorf(instance, VK_ERROR_OUT_OF_HOST_MEMORY,\n                            "cannot create device");\n#endif')
     edit('src/panfrost/vulkan/panvk_vX_device.c',
          'device, 128 * 1024 * 1024,',
          'device, (MESA_SYSTEM_HAS_KMS_DRM ? 128 : 8) * 1024 * 1024,',all_occurrences=True)
