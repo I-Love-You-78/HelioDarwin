@@ -88,6 +88,13 @@ pushes and actual pipeline variants. The render/provider ABI is 4 and compute
 dispatch ABI is 2. Its strict native bundle and static review pass; target GPU
 execution remains unverified.
 
+The 2026-10-25 phone capture confirms selected Vulkan 1.3, buffer device
+addresses, dynamic rendering and `VK_EXT_shader_tile_image` color reads.
+backboardd then aborted on a missing Metal texture-copy selector before the
+copy reached Vulkan. A separate kernel panic was traced to diagnostic stack
+sampling. These observations establish the selected native configuration;
+they do not establish successful GPU execution or complete encoder coverage.
+
 ## Execution layers
 
 | Layer | Implementation |

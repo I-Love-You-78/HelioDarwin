@@ -1,6 +1,16 @@
 # Device boot logs
 
-Latest completed captures are listed first. Boot-start times below are for
+The latest [integrated ABI 4 capture](boot-0198-run-40121803596-abi4.log) started
+at 00:31:52 on 2026-10-25, Asia/Yekaterinburg (UTC+5). It used kernel artifact
+[40121803596](https://github.com/squeeeezy/HelioDarwin/actions/runs/40121803596)
+from `6ab5ae8` and userspace `015515c`. The original 217,245-byte console was
+captured at the first rooted Android return. Native Vulkan 1.3 device creation
+and the selected color tile-read feature were recorded. backboardd repeatedly
+aborted on a missing Metal texture-copy selector; dependent services could not
+query displays. The run ended with a kernel data abort in diagnostic stack
+sampling, before its configured reset timer. GPU execution is not established.
+
+Earlier completed captures follow. Boot-start times below are for
 2026-10-24 in Asia/Yekaterinburg (UTC+5). These captures used kernel artifact
 [40106851872](https://github.com/squeeeezy/HelioDarwin/actions/runs/40106851872),
 built from kernel commit `9673976`.
@@ -18,6 +28,6 @@ or contain damaged characters; files must not be normalized as ordinary text.
 The generic `Metal failed to build render pipeline` banner omits the detailed
 termination payload, so the cause above also uses the matching crash report.
 
-Neither capture establishes successful GPU job completion or rendering.
+These captures do not establish successful GPU job completion or rendering.
 The metadata SIGBUS remains under investigation; absence in one boot is not
 a confirmed repair. Older captures remain for comparison.

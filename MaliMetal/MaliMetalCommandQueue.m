@@ -75,6 +75,13 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     MaliMetalEncoderSynchronization *_synchronization;
 }
 - (instancetype)initWithBuffer:(MaliMetalCommandBuffer *)buffer;
+- (BOOL)copySource:(id<MTLTexture>)source destination:(id<MTLTexture>)destination
+       sourceImage:(MMVKImage **)sourceImage destinationImage:(MMVKImage **)destinationImage;
+@end
+@interface MaliMetalTexture (MaliMetalBlitSubresources)
+- (id<MTLTexture>)parentTexture;
+- (NSUInteger)parentRelativeLevel;
+- (NSUInteger)parentRelativeSlice;
 @end
 @interface MaliMetalComputeCommandEncoder : MaliMetalObject <MTLComputeCommandEncoder> {
     MaliMetalCommandBuffer *_buffer;
@@ -466,8 +473,9 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
 - (BOOL)prepareTexture:(id<MTLTexture>)texture {
     if (!texture || ![self useResource:(id)texture])
         return NO;
+    MMVKImage *root = mmvk_image_root([(id)texture maliImage]);
     for (NSUInteger i = 0; i < _sampledTextureCount; i++)
-        if (_sampledTextures[i] == texture)
+        if (mmvk_image_root([(id)_sampledTextures[i] maliImage]) == root)
             return YES;
     id<MTLTexture> *textures =
         realloc(_sampledTextures, (_sampledTextureCount + 1) * sizeof(*textures));
@@ -1010,27 +1018,29 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     if(result){[buffer recordBackendResult:result error:&error];[self release];return nil;}
     for(uint32_t n=0;n<pass.native.color_count;n++){
         if(!pass.colors[n])continue;
-        pass.preserve_color[n]=pass.preserve_color[n]&&![buffer hasWrittenTexture:pass.colors[n]];
+        if(pass.preserve_color[n]&&![buffer prepareTexture:pass.colors[n]]){[self release];return nil;}
         if(![buffer writeTexture:pass.colors[n]]||(pass.resolves[n]&&![buffer writeTexture:pass.resolves[n]])){[self release];return nil;}
         _targetTextures[n]=pass.colors[n];_colorFormats[n]=[pass.colors[n] pixelFormat];
     }
     if(pass.depth_stencil){
-        BOOL first=![buffer hasWrittenTexture:pass.depth_stencil];
-        pass.preserve_depth&=first;pass.preserve_stencil&=first;
+        if((pass.preserve_depth||pass.preserve_stencil)&&![buffer prepareTexture:pass.depth_stencil]){[self release];return nil;}
         if(![buffer writeTexture:pass.depth_stencil]){[self release];return nil;}
     }
     if(pass.depth_stencil_resolve){
-        pass.preserve_depth_stencil_resolve&=![buffer hasWrittenTexture:pass.depth_stencil_resolve];
+        if(pass.preserve_depth_stencil_resolve&&![buffer prepareTexture:pass.depth_stencil_resolve]){[self release];return nil;}
         if(![buffer writeTexture:pass.depth_stencil_resolve]){[self release];return nil;}
     }
     _graphicsPass=pass;
     [buffer appendOperation:^MMVKResult(MMVKCommands *commands,MMVKError *nativeError){
+        /* Host preservation was registered above and runs once per allocation
+         * before command recording. Never upload again after root generations
+         * have been captured by this or an earlier encoder. */
         for(uint32_t n=0;n<pass.native.color_count;n++){
-            if(pass.colors[n]&&![(id)pass.colors[n] maliPrepareImage:pass.preserve_color[n] error:nativeError])return nativeError->code?nativeError->code:MMVK_ERROR_IO;
+            if(pass.colors[n]&&![(id)pass.colors[n] maliPrepareImage:NO error:nativeError])return nativeError->code?nativeError->code:MMVK_ERROR_IO;
             if(pass.resolves[n]&&![(id)pass.resolves[n] maliPrepareImage:NO error:nativeError])return nativeError->code?nativeError->code:MMVK_ERROR_IO;
         }
-        if(pass.depth_stencil&&![(id)pass.depth_stencil maliPrepareImage:pass.preserve_depth||pass.preserve_stencil error:nativeError])return nativeError->code?nativeError->code:MMVK_ERROR_IO;
-        if(pass.depth_stencil_resolve&&![(id)pass.depth_stencil_resolve maliPrepareImage:pass.preserve_depth_stencil_resolve error:nativeError])return nativeError->code?nativeError->code:MMVK_ERROR_IO;
+        if(pass.depth_stencil&&![(id)pass.depth_stencil maliPrepareImage:NO error:nativeError])return nativeError->code?nativeError->code:MMVK_ERROR_IO;
+        if(pass.depth_stencil_resolve&&![(id)pass.depth_stencil_resolve maliPrepareImage:NO error:nativeError])return nativeError->code?nativeError->code:MMVK_ERROR_IO;
         MMVKResult native=mmvk_commands_begin_graphics_pass(commands,&pass.native,nativeError);
         if(native==MMVK_OK)native=mmvk_commands_set_viewport(commands,0,pass.native.height,pass.native.width,-(float)pass.native.height,0,1,nativeError);
         return native;
@@ -1591,6 +1601,47 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
 }
 @end
 
+static uint32_t MaliMetalBlitMipDimension(uint32_t dimension, NSUInteger level) {
+    return level >= 32 || !(dimension >> level) ? 1 : dimension >> level;
+}
+
+static BOOL MaliMetalBlitRegion(MMVKImage *image, NSUInteger slice, NSUInteger level,
+                               MTLOrigin origin, MTLSize size, MMVKImageRegion *region) {
+    const MMVKImageDescriptorEx *descriptor = mmvk_image_descriptor(image);
+    if (!descriptor || level >= descriptor->mip_levels || slice >= descriptor->array_layers ||
+        origin.x > INT32_MAX || origin.y > INT32_MAX || origin.z > INT32_MAX ||
+        size.width > UINT32_MAX || size.height > UINT32_MAX || size.depth > UINT32_MAX)
+        return NO;
+    uint32_t width = MaliMetalBlitMipDimension(descriptor->width, level);
+    uint32_t height = MaliMetalBlitMipDimension(descriptor->height, level);
+    uint32_t depth = MaliMetalBlitMipDimension(descriptor->depth, level);
+    if (origin.x > width || size.width > width - origin.x ||
+        origin.y > height || size.height > height - origin.y ||
+        origin.z > depth || size.depth > depth - origin.z ||
+        (descriptor->type != 7 && (origin.z || size.depth != 1)) ||
+        (descriptor->type <= 1 && (origin.y || size.height != 1)))
+        return NO;
+    *region = (MMVKImageRegion){.level = (uint32_t)level, .layer = (uint32_t)slice,
+        .x = (uint32_t)origin.x, .y = (uint32_t)origin.y, .z = (uint32_t)origin.z,
+        .width = (uint32_t)size.width, .height = (uint32_t)size.height,
+        .depth = (uint32_t)size.depth};
+    return YES;
+}
+
+/* Public texture views are relative to their immediate parent. These offsets
+ * are used only to reject overlap across an entire multi-subresource copy;
+ * the native copy resolves each view's actual subresource range itself. */
+static void MaliMetalBlitRootOffsets(id<MTLTexture> texture, NSUInteger *level,
+                                    NSUInteger *slice) {
+    *level = 0;
+    *slice = 0;
+    while ([(MaliMetalTexture *)texture parentTexture]) {
+        *level += [(MaliMetalTexture *)texture parentRelativeLevel];
+        *slice += [(MaliMetalTexture *)texture parentRelativeSlice];
+        texture = [(MaliMetalTexture *)texture parentTexture];
+    }
+}
+
 @implementation MaliMetalBlitCommandEncoder
 - (void)synchronizeTexture:(id<MTLTexture>)texture slice:(NSUInteger)slice level:(NSUInteger)level {
     [self requireActive];
@@ -1639,6 +1690,197 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
 - (void)requireActive {
     if (_ended)
         [NSException raise:@"NSInternalInconsistencyException" format:@"Encoder has ended"];
+}
+- (BOOL)copySource:(id<MTLTexture>)source destination:(id<MTLTexture>)destination
+       sourceImage:(MMVKImage **)sourceImage destinationImage:(MMVKImage **)destinationImage {
+    if (!source || !destination || [source device] != [self device] ||
+        [destination device] != [self device] || [source isFramebufferOnly] ||
+        [destination isFramebufferOnly] || [source pixelFormat] != [destination pixelFormat]) {
+        [NSException raise:@"NSInvalidArgumentException" format:@"Invalid texture copy resources or pixel formats"];
+        return NO;
+    }
+    if (![(id)source respondsToSelector:@selector(maliImage)] ||
+        ![(id)destination respondsToSelector:@selector(maliImage)] ||
+        !(*sourceImage = [(id)source maliImage]) ||
+        !(*destinationImage = [(id)destination maliImage])) {
+        [_buffer recordUnsupported:"Texture copy needs native image allocations"];
+        return NO;
+    }
+    const MMVKImageDescriptorEx *src = mmvk_image_descriptor(*sourceImage);
+    const MMVKImageDescriptorEx *dst = mmvk_image_descriptor(*destinationImage);
+    if (src->format != dst->format || src->samples != dst->samples ||
+        (src->type <= 1 ? 1 : src->type == 7 ? 3 : 2) !=
+        (dst->type <= 1 ? 1 : dst->type == 7 ? 3 : 2) ||
+        mmvk_image_is_aliasable(*sourceImage) || mmvk_image_is_aliasable(*destinationImage)) {
+        [NSException raise:@"NSInvalidArgumentException" format:@"Incompatible or aliasable texture copy resources"];
+        return NO;
+    }
+    if (!(src->usage & MMVK_IMAGE_TRANSFER_SRC) || !(dst->usage & MMVK_IMAGE_TRANSFER_DST)) {
+        [_buffer recordUnsupported:"Texture copy requires source and destination transfer usage"];
+        return NO;
+    }
+    return YES;
+}
+- (void)copyFromTexture:(id<MTLTexture>)source
+           sourceSlice:(NSUInteger)sourceSlice
+           sourceLevel:(NSUInteger)sourceLevel
+          sourceOrigin:(MTLOrigin)sourceOrigin
+            sourceSize:(MTLSize)sourceSize
+             toTexture:(id<MTLTexture>)destination
+      destinationSlice:(NSUInteger)destinationSlice
+      destinationLevel:(NSUInteger)destinationLevel
+     destinationOrigin:(MTLOrigin)destinationOrigin {
+    [self requireActive];
+    MMVKImage *src = NULL, *dst = NULL;
+    if (![self copySource:source destination:destination sourceImage:&src destinationImage:&dst])
+        return;
+    MMVKImageRegion sourceRegion, destinationRegion;
+    if (!MaliMetalBlitRegion(src, sourceSlice, sourceLevel, sourceOrigin, sourceSize, &sourceRegion) ||
+        !MaliMetalBlitRegion(dst, destinationSlice, destinationLevel, destinationOrigin, sourceSize,
+                            &destinationRegion)) {
+        [NSException raise:@"NSInvalidArgumentException" format:@"Texture copy exceeds its slice, mipmap or dimensions"];
+        return;
+    }
+    if (!sourceSize.width || !sourceSize.height || !sourceSize.depth)
+        return;
+    /* Preserve IOSurface sources and untouched destination texels before any
+     * GPU commands run. Private images keep earlier native GPU contents. */
+    if (![_buffer prepareTexture:source] || ![_buffer prepareTexture:destination] ||
+        ![_buffer writeTexture:destination])
+        return;
+    uint32_t aspects = mmvk_format_aspects(mmvk_image_format(src));
+    [_buffer appendOperation:^MMVKResult(MMVKCommands *commands, MMVKError *error) {
+        /* Packed depth/stencil copies require one Vulkan copy per aspect. */
+        for (uint32_t aspect = 1; aspect <= 4; aspect <<= 1) {
+            if (!(aspects & aspect))
+                continue;
+            MMVKImageRegion s = sourceRegion, d = destinationRegion;
+            s.aspect = d.aspect = aspect;
+            MMVKResult result = mmvk_commands_copy_image_region(commands, src, &s, dst, &d, error);
+            if (result != MMVK_OK)
+                return result;
+        }
+        return MMVK_OK;
+    }];
+}
+- (void)copyFromTexture:(id<MTLTexture>)source
+           sourceSlice:(NSUInteger)sourceSlice
+           sourceLevel:(NSUInteger)sourceLevel
+             toTexture:(id<MTLTexture>)destination
+      destinationSlice:(NSUInteger)destinationSlice
+      destinationLevel:(NSUInteger)destinationLevel
+            sliceCount:(NSUInteger)sliceCount
+            levelCount:(NSUInteger)levelCount {
+    [self requireActive];
+    MMVKImage *src = NULL, *dst = NULL;
+    if (![self copySource:source destination:destination sourceImage:&src destinationImage:&dst])
+        return;
+    const MMVKImageDescriptorEx *s = mmvk_image_descriptor(src), *d = mmvk_image_descriptor(dst);
+    if (sourceLevel > s->mip_levels || levelCount > s->mip_levels - sourceLevel ||
+        destinationLevel > d->mip_levels || levelCount > d->mip_levels - destinationLevel ||
+        sourceSlice > s->array_layers || sliceCount > s->array_layers - sourceSlice ||
+        destinationSlice > d->array_layers || sliceCount > d->array_layers - destinationSlice) {
+        [NSException raise:@"NSInvalidArgumentException" format:@"Texture copy subresource range exceeds its views"];
+        return;
+    }
+    if (!sliceCount || !levelCount)
+        return;
+    if (MaliMetalBlitMipDimension(s->width, sourceLevel) != MaliMetalBlitMipDimension(d->width, destinationLevel) ||
+        MaliMetalBlitMipDimension(s->height, sourceLevel) != MaliMetalBlitMipDimension(d->height, destinationLevel) ||
+        MaliMetalBlitMipDimension(s->depth, sourceLevel) != MaliMetalBlitMipDimension(d->depth, destinationLevel)) {
+        [NSException raise:@"NSInvalidArgumentException" format:@"Texture copy mipmap dimensions differ"];
+        return;
+    }
+    if (mmvk_image_root(src) == mmvk_image_root(dst)) {
+        NSUInteger sourceBaseLevel, sourceBaseSlice, destinationBaseLevel, destinationBaseSlice;
+        MaliMetalBlitRootOffsets(source, &sourceBaseLevel, &sourceBaseSlice);
+        MaliMetalBlitRootOffsets(destination, &destinationBaseLevel, &destinationBaseSlice);
+        sourceBaseLevel += sourceLevel; destinationBaseLevel += destinationLevel;
+        sourceBaseSlice += sourceSlice; destinationBaseSlice += destinationSlice;
+        if (sourceBaseLevel < destinationBaseLevel + levelCount &&
+            destinationBaseLevel < sourceBaseLevel + levelCount &&
+            sourceBaseSlice < destinationBaseSlice + sliceCount &&
+            destinationBaseSlice < sourceBaseSlice + sliceCount) {
+            [NSException raise:@"NSInvalidArgumentException" format:@"Overlapping texture copy subresource ranges"];
+            return;
+        }
+    }
+    for (NSUInteger level = 0; level < levelCount; level++) {
+        MTLSize size = MTLSizeMake(MaliMetalBlitMipDimension(s->width, sourceLevel + level),
+                                  MaliMetalBlitMipDimension(s->height, sourceLevel + level),
+                                  MaliMetalBlitMipDimension(s->depth, sourceLevel + level));
+        for (NSUInteger slice = 0; slice < sliceCount; slice++)
+            [self copyFromTexture:source sourceSlice:sourceSlice + slice sourceLevel:sourceLevel + level
+                    sourceOrigin:MTLOriginMake(0, 0, 0) sourceSize:size toTexture:destination
+               destinationSlice:destinationSlice + slice destinationLevel:destinationLevel + level
+              destinationOrigin:MTLOriginMake(0, 0, 0)];
+    }
+}
+- (void)copyFromTexture:(id<MTLTexture>)source toTexture:(id<MTLTexture>)destination {
+    [self requireActive];
+    MMVKImage *src = NULL, *dst = NULL;
+    if (![self copySource:source destination:destination sourceImage:&src destinationImage:&dst])
+        return;
+    const MMVKImageDescriptorEx *s = mmvk_image_descriptor(src), *d = mmvk_image_descriptor(dst);
+    if (s->type != d->type) {
+        [NSException raise:@"NSInvalidArgumentException" format:@"Whole texture copy requires matching texture types"];
+        return;
+    }
+    NSUInteger sourceLevel = 0, destinationLevel = 0;
+    while (sourceLevel < s->mip_levels && destinationLevel < d->mip_levels) {
+        uint32_t sw = MaliMetalBlitMipDimension(s->width, sourceLevel);
+        uint32_t sh = MaliMetalBlitMipDimension(s->height, sourceLevel);
+        uint32_t sz = MaliMetalBlitMipDimension(s->depth, sourceLevel);
+        uint32_t dw = MaliMetalBlitMipDimension(d->width, destinationLevel);
+        uint32_t dh = MaliMetalBlitMipDimension(d->height, destinationLevel);
+        uint32_t dz = MaliMetalBlitMipDimension(d->depth, destinationLevel);
+        if (sw == dw && sh == dh && sz == dz)
+            break;
+        if (sw >= dw && sh >= dh && sz >= dz)
+            sourceLevel++;
+        else if (dw >= sw && dh >= sh && dz >= sz)
+            destinationLevel++;
+        else
+            break;
+    }
+    if (sourceLevel == s->mip_levels || destinationLevel == d->mip_levels ||
+        (sourceLevel && destinationLevel) ||
+        MaliMetalBlitMipDimension(s->width, sourceLevel) != MaliMetalBlitMipDimension(d->width, destinationLevel) ||
+        MaliMetalBlitMipDimension(s->height, sourceLevel) != MaliMetalBlitMipDimension(d->height, destinationLevel) ||
+        MaliMetalBlitMipDimension(s->depth, sourceLevel) != MaliMetalBlitMipDimension(d->depth, destinationLevel)) {
+        [NSException raise:@"NSInvalidArgumentException" format:@"Textures have no matching base mipmap size"];
+        return;
+    }
+    NSUInteger sourceLevels = s->mip_levels - sourceLevel, destinationLevels = d->mip_levels - destinationLevel;
+    [self copyFromTexture:source sourceSlice:0 sourceLevel:sourceLevel toTexture:destination
+        destinationSlice:0 destinationLevel:destinationLevel
+              sliceCount:s->array_layers < d->array_layers ? s->array_layers : d->array_layers
+              levelCount:sourceLevels < destinationLevels ? sourceLevels : destinationLevels];
+}
+- (void)generateMipmapsForTexture:(id<MTLTexture>)texture {
+    [self requireActive];
+    if (!texture || [texture device] != [self device] || [texture isFramebufferOnly]) {
+        [NSException raise:@"NSInvalidArgumentException" format:@"Invalid mipmap texture"];
+        return;
+    }
+    if (![(id)texture respondsToSelector:@selector(maliImage)] || ![(id)texture maliImage]) {
+        [_buffer recordUnsupported:"Mipmap generation needs a native image allocation"];
+        return;
+    }
+    MMVKImage *image = [(id)texture maliImage];
+    const MMVKImageDescriptorEx *descriptor = mmvk_image_descriptor(image);
+    if (descriptor->mip_levels < 2 || descriptor->samples != 1 ||
+        mmvk_format_aspects(descriptor->format) != 1 || mmvk_image_is_aliasable(image)) {
+        [NSException raise:@"NSInvalidArgumentException" format:@"Mipmap generation requires a non-aliasable, single-sample mipmapped color texture"];
+        return;
+    }
+    if (![_buffer prepareTexture:texture] || ![_buffer writeTexture:texture])
+        return;
+    /* Native creation checks actual transfer/filter support and preserves
+     * typed refusals for formats needing a logical filtering implementation. */
+    [_buffer appendOperation:^MMVKResult(MMVKCommands *commands, MMVKError *error) {
+        return mmvk_commands_generate_mipmaps(commands, image, error);
+    }];
 }
 - (void)copyFromBuffer:(id<MTLBuffer>)source
           sourceOffset:(NSUInteger)sourceOffset

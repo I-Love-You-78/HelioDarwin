@@ -13,6 +13,13 @@ The current bundle passed strict arm64 iOS linking, source/component checks and
 independent static review. Runtime GPU, shared-event and source-compiler checks
 remain separate acceptance gates.
 
+The 2026-10-25 phone boot created the native device with Vulkan 1.3,
+buffer device addresses, dynamic rendering and color tile reads enabled.
+It then exposed a missing Metal texture-copy selector in the blit encoder;
+backboardd aborted before that copy reached Vulkan. The run also ended in a
+kernel panic in diagnostic stack sampling. Enabled features establish device
+configuration, not successful GPU command execution.
+
 - **Kernel transport:** versioned IOKit calls for pinned buffers, GPU address
   spaces, cache maintenance, Job Manager submission, completion and fault
   recovery. Register definitions and product errata were checked against the

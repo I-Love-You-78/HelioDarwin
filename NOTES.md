@@ -47,6 +47,12 @@ structural planning for both observed pipelines. GPU execution and the expanded
 API/helper paths still require device validation. A separate shared-cache
 metadata failure affecting SpringBoard and several services is under investigation.
 
+The 2026-10-25 integrated boot selected Vulkan 1.3, buffer device addresses,
+dynamic rendering and color tile reads on the native device. It exposed a
+missing blit texture-copy selector, causing repeated backboardd aborts and
+dependent display-query failures. The eventual kernel panic was localized to
+an unsafe diagnostic stack read. This run does not establish GPU rendering.
+
 ## Priorities
 
 1. Validate the assembled native display/input/MaliMetal candidate, recording
