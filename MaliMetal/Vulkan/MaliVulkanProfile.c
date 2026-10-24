@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 struct json_writer { char *data; size_t length,capacity; unsigned depth; unsigned first[16]; int failed; };
 struct json_name { uint64_t value; const char *name; };
@@ -42,6 +45,32 @@ static void json_enum(struct json_writer *j,const char *name,uint64_t value,cons
 #define MMVK_JSON_BOOL(j,name,value) do {key(j,name);append(j,(value)?"true":"false");}while(0)
 #define MMVK_JSON_ARRAY(j,name,values,count) do {key(j,name);append(j,"[");for(size_t a_=0;a_<(count);a_++)append(j,"%s%.9g",a_?",":"",(double)(values)[a_]);append(j,"]");}while(0)
 #include "MaliVulkanProfileFields.h"
+
+void mmvk_profile_export(const char *json)
+{
+    const char *path=getenv("MALIMETAL_NATIVE_PROFILE_PATH");
+    if(!path||!path[0]||!json)return;
+    char temporary[4096];
+    int n=snprintf(temporary,sizeof(temporary),"%s.XXXXXX",path);
+    if(path[0]!='/'||n<0||(size_t)n>=sizeof(temporary)){
+        fprintf(stderr,"[MaliMetal] Native profile export path is invalid\n");return;
+    }
+    int fd=mkstemp(temporary);
+    if(fd<0){fprintf(stderr,"[MaliMetal] Native profile export open failed: %d\n",errno);return;}
+    size_t size=strlen(json),offset=0;int failure=0;
+    if(fcntl(fd,F_SETFD,FD_CLOEXEC))failure=errno;
+    while(!failure&&offset<size){
+        ssize_t written=write(fd,json+offset,size-offset);
+        if(written<0&&errno==EINTR)continue;
+        if(written<=0){failure=written<0?errno:EIO;break;}
+        offset+=(size_t)written;
+    }
+    if(!failure&&fsync(fd))failure=errno;
+    if(close(fd)&&!failure)failure=errno;
+    if(!failure&&rename(temporary,path))failure=errno;
+    if(failure){unlink(temporary);fprintf(stderr,"[MaliMetal] Native profile export failed: %d\n",failure);}
+    else fprintf(stderr,"[MaliMetal] Native profile saved: %zu bytes to %s\n",size,path);
+}
 
 char *mmvk_profile_create(VkPhysicalDevice physical,
     const VkPhysicalDeviceFeatures *enabled,const VkPhysicalDeviceVulkan11Features *enabled11,

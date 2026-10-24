@@ -228,6 +228,7 @@ MMVKResult mmvk_device_create(uint32_t connection,const char *path,MMVKDevice **
     d->shader_profile=mmvk_profile_create(d->physical,&d->enabled_features,&d->enabled11,&d->enabled12,
         &d->properties,&d->properties11,&d->properties12,d->GetPhysicalDeviceFormatProperties,d->GetPhysicalDeviceImageFormatProperties2);
     if(!d->shader_profile){errorf(e,MMVK_ERROR_MEMORY,0,"actual device shader profile construction failed");goto fail;}
+    mmvk_profile_export(d->shader_profile);
     const VkPhysicalDeviceLimits *l=&d->properties.limits;
     d->caps=(MMVKCapabilities){.size=sizeof(d->caps),.api_version=d->properties.apiVersion,.gpu_id=q.gpu_id,
         .capabilities=MMVK_CAP_BUFFER|MMVK_CAP_COMPUTE|MMVK_CAP_RENDER|MMVK_CAP_IMAGE_COPY,

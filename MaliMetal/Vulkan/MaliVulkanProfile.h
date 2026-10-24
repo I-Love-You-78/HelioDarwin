@@ -14,4 +14,6 @@ char *mmvk_profile_create(VkPhysicalDevice physical,
     const VkPhysicalDeviceVulkan12Properties *properties12,
     PFN_vkGetPhysicalDeviceFormatProperties get_format,
     PFN_vkGetPhysicalDeviceImageFormatProperties2 get_image_format);
+/* Disabled unless MALIMETAL_NATIVE_PROFILE_PATH names an absolute output path. */
+void mmvk_profile_export(const char *json);
 #endif
