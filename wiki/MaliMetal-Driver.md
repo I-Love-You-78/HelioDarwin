@@ -156,6 +156,13 @@ committed bounded allocations; grow-on-fault paging is not implemented. See
 [GPU Power Sequence](MT6789-GPU-Power-Sequence.md) for rails, clocks, register
 layout and remaining DVFS work.
 
+Patch 0198 implements the target IOSurface shared-event kernel protocol:
+kernel-owned timelines, Mach rights, read-only task mappings, waits and async
+notifications. Local object compilation and patch composition pass. A private
+readiness handshake separates this implementation from older unsupported
+selectors. Runtime rights, mapping, notification and GPU-boundary visibility
+validation are still required before shared-event support is considered working.
+
 ## Build and provenance
 
 Build the pinned dependencies separately and provide matching iOS libraries;

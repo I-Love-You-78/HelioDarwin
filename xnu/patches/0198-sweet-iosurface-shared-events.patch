@@ -1,0 +1,979 @@
+diff --git a/iokit/Kernel/arm/SweetSurface.cpp b/iokit/Kernel/arm/SweetSurface.cpp
+--- a/iokit/Kernel/arm/SweetSurface.cpp
++++ b/iokit/Kernel/arm/SweetSurface.cpp
+@@ -45,6 +45,7 @@
+ #include <libkern/c++/OSUnserialize.h>
+ #include <libkern/c++/OSSerialize.h>
+ #include <sys/proc.h>
++#include "SweetSharedEvent.h"
+ 
+ enum {
+ 	kSweetSurfaceCreate             = 0,
+@@ -489,6 +490,7 @@
+ 		return false;
+ 	}
+ 	sweet_surface_init_lock();
++	(void)sweet_shared_event_init();
+ 	setProperty(kIOUserClientClassKey, "IOSurfaceRootUserClient");
+ 	registerService();
+ 	IOLog("SWEET SURF: IOCoreSurfaceRoot registered\n");
+@@ -502,6 +504,8 @@
+ 	IOLock  *fLock;
+ 	OSArray *fRefs;
+ 	OSArray *fZombies;      /* released views whose state page is still mapped, oldest first */
++	SweetSharedEventContext *fSharedEvents;
++	static IOReturn deliverSharedEvent(OSAsyncReference64 reference, io_user_reference_t *payload);
+ 
+ 	SweetSurfaceRef *findRef(uint32_t id, unsigned int *index, bool detached = false);
+ 	IOReturn addRef(SweetSurface *s, SweetSurfaceRef **refOut, bool *existing);
+@@ -554,12 +558,31 @@
+ 	fLock = IOLockAlloc();
+ 	fRefs = OSArray::withCapacity(16);
+ 	fZombies = OSArray::withCapacity(16);
++	fSharedEvents = NULL;
++	if (sweet_event_lock != NULL && sweet_event_delivery != NULL) {
++		fSharedEvents = OSTypeAlloc(SweetSharedEventContext);
++		if (fSharedEvents != NULL && fSharedEvents->init()) {
++			task_reference(owningTask);
++			fSharedEvents->task = owningTask;
++			fSharedEvents->deliver = &IOSurfaceRootUserClient::deliverSharedEvent;
++		} else {
++			OSSafeReleaseNULL(fSharedEvents);
++		}
++	}
+ 	return fLock != NULL && fRefs != NULL;
++}
++
++IOReturn
++IOSurfaceRootUserClient::deliverSharedEvent(OSAsyncReference64 reference, io_user_reference_t *payload)
++{
++	return sendAsyncResult64WithOptions(reference, kIOReturnSuccess, payload, 3,
++	           kIOUserNotifyOptionCanDrop);
+ }
+ 
+ void
+ IOSurfaceRootUserClient::free()
+ {
++	OSSafeReleaseNULL(fSharedEvents);
+ 	OSSafeReleaseNULL(fRefs);
+ 	OSSafeReleaseNULL(fZombies);
+ 	if (fLock != NULL) {
+@@ -572,6 +595,9 @@
+ IOReturn
+ IOSurfaceRootUserClient::clientClose(void)
+ {
++	if (fSharedEvents != NULL) {
++		fSharedEvents->close();
++	}
+ 	IOLockLock(fLock);
+ 	fRefs->flushCollection();
+ 	if (fZombies != NULL) {
+@@ -1225,6 +1251,28 @@
+     __unused IOExternalMethodDispatch *dispatch, __unused OSObject *target,
+     __unused void *reference)
+ {
++	if (sweet_shared_event_selector(selector)) {
++		if (fSharedEvents == NULL) {
++			return kIOReturnNotReady;
++		}
++		/* A blocking call must keep its context alive through client close/death. */
++		fSharedEvents->retain();
++		/* callExternalMethod holds this gate; close/death needs its write side. */
++		bool dropGate = selector == kSweetSharedEventWait && defaultLocking;
++		if (dropGate) {
++			IORWLockUnlock(&lock);
++		}
++		IOReturn result = fSharedEvents->call(selector, args);
++		if (dropGate) {
++			if (defaultLockingSingleThreadExternalMethod) {
++				IORWLockWrite(&lock);
++			} else {
++				IORWLockRead(&lock);
++			}
++		}
++		fSharedEvents->release();
++		return result;
++	}
+ 	uint64_t arg0 = args->scalarInputCount > 0 ? args->scalarInput[0] : 0;
+ 
+ 	switch (selector) {
+diff --git a/iokit/Kernel/arm/SweetSharedEvent.h b/iokit/Kernel/arm/SweetSharedEvent.h
+new file mode 100644
+--- /dev/null
++++ b/iokit/Kernel/arm/SweetSharedEvent.h
+@@ -0,0 +1,875 @@
++/* Kernel-owned IOSurface shared timelines. Included by SweetSurface.cpp only. */
++#ifndef SWEET_SHARED_EVENT_H
++#define SWEET_SHARED_EVENT_H
++
++#include <kern/clock.h>
++#include <kern/task.h>
++#include <kern/thread.h>
++#include <kern/thread_call.h>
++#include <mach/mach_time.h>
++#include <mach/message.h>
++#include <os/atomic_private.h>
++#include <vm/vm_map.h>
++
++enum {
++	kSweetSharedEventCreate = 36,
++	kSweetSharedEventSignal = 37,
++	kSweetSharedEventInfo = 38,
++	kSweetSharedEventNotify = 39,
++	kSweetSharedEventAddListener = 40,
++	kSweetSharedEventRemoveListener = 41,
++	kSweetSharedEventWait = 45,
++	kSweetSharedEventCapabilities = 0x53574501,
++};
++
++static const uint64_t kSweetSharedEventMagic = 0x4d4d534845563031ULL;
++static const uint64_t kSweetSharedEventFeatures = 31; /* map, max, wait, notify, rights */
++static const unsigned kSweetEventLimit = 1024;
++static const unsigned kSweetMapLimit = 4096;
++static const unsigned kSweetClientMapLimit = 256;
++static const unsigned kSweetListenerLimit = 512;
++static const unsigned kSweetClientListenerLimit = 32;
++static const unsigned kSweetNotificationLimit = 4096;
++static const unsigned kSweetClientNotificationLimit = 256;
++static const unsigned kSweetWaitLimit = 1024;
++static const unsigned kSweetClientWaitLimit = 64;
++
++class SweetSharedEvent;
++class SweetSharedEventContext;
++class SweetSharedEventListener;
++struct SweetEventMap;
++struct SweetEventNotification;
++struct SweetEventWait;
++typedef IOReturn (*SweetSharedEventDeliver)(OSAsyncReference64, io_user_reference_t *);
++
++/* Protects timeline state and all lease/registration lists, never held across IPC or VM work. */
++static IOLock *sweet_event_lock;
++static thread_call_t sweet_event_delivery;
++static unsigned sweet_event_count, sweet_event_map_count, sweet_event_listener_count;
++static unsigned sweet_event_notification_count, sweet_event_wait_count;
++static uint64_t sweet_event_next_trace = 1;
++static SweetEventNotification *sweet_event_notifications;
++
++class SweetSharedEvent : public OSObject {
++	OSDeclareDefaultStructors(SweetSharedEvent);
++public:
++	IOBufferMemoryDescriptor *memory;
++	volatile uint64_t *value;
++	uint64_t traceID;
++	SweetEventMap *maps;
++	bool charged;
++	bool init() APPLE_KEXT_OVERRIDE;
++	void free() APPLE_KEXT_OVERRIDE;
++};
++
++class SweetSharedEventListener : public OSObject {
++	OSDeclareDefaultStructors(SweetSharedEventListener);
++public:
++	SweetSharedEventListener *next;
++	IOLock *deliveryLock;
++	OSAsyncReference64 reference;
++	SweetSharedEventDeliver deliver;
++	uint64_t token;
++	uint64_t retryAfter;                     /* shared channel backpressure, event lock */
++	unsigned retryShift;
++	bool active, ownsPort, charged;
++	bool init() APPLE_KEXT_OVERRIDE;
++	void free() APPLE_KEXT_OVERRIDE;
++	void cancel();
++};
++
++/* A mapping does not retain its event: the IDENT port's no-senders retain owns event lifetime. */
++struct SweetEventMap {
++	SweetEventMap *clientNext, *eventNext, *disposeNext;
++	SweetSharedEventContext *owner;
++	SweetSharedEvent *event;
++	IOMemoryMap *mapping;
++};
++
++struct SweetEventNotification {
++	SweetEventNotification *globalNext, *clientNext, *disposeNext;
++	SweetSharedEventContext *owner;
++	SweetSharedEvent *event;                 /* retained until completion/cancellation */
++	SweetSharedEventListener *listener;      /* retained, contains the owned async right */
++	uint64_t eventCookie, blockCookie, threshold, retryAfter;
++	bool inFlight, cancelled;
++};
++
++struct SweetEventWait {
++	SweetEventWait *next;
++	SweetSharedEvent *event;
++};
++
++class SweetSharedEventContext : public OSObject {
++	OSDeclareDefaultStructors(SweetSharedEventContext);
++public:
++	task_t task;
++	IOLock *operationLock;                   /* close/create/import/register serialization */
++	SweetSharedEventDeliver deliver;
++	SweetEventMap *maps;
++	SweetSharedEventListener *listeners;
++	SweetEventNotification *notifications;
++	SweetEventWait *waits;
++	unsigned mapCount, listenerCount, notificationCount, waitCount;
++	bool closed;
++	bool init() APPLE_KEXT_OVERRIDE;
++	void free() APPLE_KEXT_OVERRIDE;
++	void close();
++	IOReturn call(uint32_t selector, IOExternalMethodArguments *args);
++	IOReturn mapEvent(SweetSharedEvent *event, uint64_t *address);
++	IOReturn addListener(IOExternalMethodArguments *args, bool *takePort);
++	IOReturn removeListener(uint64_t token);
++	IOReturn notify(SweetSharedEvent *event, const uint64_t *input);
++	IOReturn wait(SweetSharedEvent *event, uint64_t threshold, uint64_t timeoutMS);
++};
++
++OSDefineMetaClassAndStructors(SweetSharedEvent, OSObject);
++OSDefineMetaClassAndStructors(SweetSharedEventListener, OSObject);
++OSDefineMetaClassAndStructors(SweetSharedEventContext, OSObject);
++
++static bool
++sweet_shared_event_selector(uint32_t selector)
++{
++	return (selector >= kSweetSharedEventCreate && selector <= kSweetSharedEventRemoveListener) ||
++	       selector == kSweetSharedEventWait || selector == kSweetSharedEventCapabilities;
++}
++
++/* Lock held; all releases and VM unmaps are performed by the caller after unlocking. */
++static void
++sweet_event_detach_map(SweetEventMap *map)
++{
++	SweetEventMap **link = &map->owner->maps;
++	while (*link != map) {
++		link = &(*link)->clientNext;
++	}
++	*link = map->clientNext;
++	map->owner->mapCount--;
++	link = &map->event->maps;
++	while (*link != map) {
++		link = &(*link)->eventNext;
++	}
++	*link = map->eventNext;
++	sweet_event_map_count--;
++	map->owner = NULL;
++	map->event = NULL;
++}
++
++static void
++sweet_event_dispose_maps(SweetEventMap *maps)
++{
++	while (maps != NULL) {
++		SweetEventMap *next = maps->disposeNext;
++		OSSafeReleaseNULL(maps->mapping);
++		IOFreeData(maps, sizeof(*maps));
++		maps = next;
++	}
++}
++
++/* In-flight records may outlive their client; clear their weak owner before close returns. */
++static void
++sweet_event_detach_notification_owner(SweetEventNotification *note)
++{
++	if (note->owner != NULL) {
++		SweetEventNotification **link = &note->owner->notifications;
++		while (*link != note) {
++			link = &(*link)->clientNext;
++		}
++		*link = note->clientNext;
++		note->owner->notificationCount--;
++		note->owner = NULL;
++	}
++}
++
++static void
++sweet_event_detach_notification(SweetEventNotification *note)
++{
++	sweet_event_detach_notification_owner(note);
++	SweetEventNotification **link = &sweet_event_notifications;
++	while (*link != note) {
++		link = &(*link)->globalNext;
++	}
++	*link = note->globalNext;
++	sweet_event_notification_count--;
++}
++
++static void
++sweet_event_dispose_notifications(SweetEventNotification *notes)
++{
++	while (notes != NULL) {
++		SweetEventNotification *next = notes->disposeNext;
++		OSSafeReleaseNULL(notes->event);
++		OSSafeReleaseNULL(notes->listener);
++		IOFreeData(notes, sizeof(*notes));
++		notes = next;
++	}
++}
++
++static void
++sweet_event_deliver(__unused thread_call_param_t param0, __unused thread_call_param_t param1)
++{
++	/* One serial callout, bounded work per invocation; full ports retain bounded registrations. */
++	for (unsigned budget = 0; budget < 64; budget++) {
++		IOLockLock(sweet_event_lock);
++		uint64_t now = mach_absolute_time();
++		uint64_t retry = UINT64_MAX;
++		SweetEventNotification *chosen = NULL;
++		for (SweetEventNotification *n = sweet_event_notifications; n != NULL; n = n->globalNext) {
++			if (n->inFlight) {
++				continue;
++			}
++			bool cancelled = n->cancelled || !os_atomic_load(&n->listener->active, acquire);
++			if (!cancelled && os_atomic_load(n->event->value, acquire) < n->threshold) {
++				continue;
++			}
++			uint64_t nextTry = MAX(n->retryAfter, n->listener->retryAfter);
++			if (!cancelled && nextTry > now) {
++				if (nextTry < retry) {
++					retry = nextTry;
++				}
++				continue;
++			}
++			chosen = n;
++			n->inFlight = true;
++			break;
++		}
++		if (chosen == NULL) {
++			if (retry != UINT64_MAX) {
++				thread_call_enter_delayed(sweet_event_delivery, retry);
++			}
++			IOLockUnlock(sweet_event_lock);
++			return;
++		}
++		IOLockUnlock(sweet_event_lock);
++
++		SweetSharedEventListener *listener = chosen->listener;
++		IOReturn result = kIOReturnAborted;
++		IOLockLock(listener->deliveryLock);
++		if (os_atomic_load(&listener->active, acquire)) {
++			io_user_reference_t payload[3] = {
++				chosen->blockCookie, chosen->eventCookie,
++				os_atomic_load(chosen->event->value, acquire)
++			};
++			result = listener->deliver(listener->reference, payload);
++			if (result != kIOReturnSuccess && result != MACH_SEND_TIMED_OUT) {
++				os_atomic_store(&listener->active, false, release);
++			}
++		}
++		IOLockUnlock(listener->deliveryLock);
++
++		bool dispose;
++		IOLockLock(sweet_event_lock);
++		dispose = chosen->cancelled || !os_atomic_load(&listener->active, acquire) ||
++		    result != MACH_SEND_TIMED_OUT;
++		if (dispose) {
++			if (result == kIOReturnSuccess) {
++				listener->retryAfter = 0;
++				listener->retryShift = 0;
++			}
++			sweet_event_detach_notification(chosen);
++			chosen->disposeNext = NULL;
++		} else {
++			uint64_t interval;
++			uint64_t delayMS = MIN(10ULL << listener->retryShift, 1000ULL);
++			if (listener->retryShift < 7) {
++				listener->retryShift++;
++			}
++			nanoseconds_to_absolutetime(delayMS * NSEC_PER_MSEC, &interval);
++			listener->retryAfter = mach_absolute_time() + interval;
++			chosen->retryAfter = listener->retryAfter;
++			chosen->inFlight = false;
++		}
++		IOLockUnlock(sweet_event_lock);
++		if (dispose) {
++			sweet_event_dispose_notifications(chosen);
++		}
++	}
++	IOLockLock(sweet_event_lock);
++	thread_call_enter(sweet_event_delivery);
++	IOLockUnlock(sweet_event_lock);
++}
++
++/* Called during service start, before any client can open the service. */
++static bool
++sweet_shared_event_init()
++{
++	if (sweet_event_lock != NULL) {
++		return sweet_event_delivery != NULL;
++	}
++	sweet_event_lock = IOLockAlloc();
++	if (sweet_event_lock == NULL) {
++		return false;
++	}
++	sweet_event_delivery = thread_call_allocate_with_options(sweet_event_deliver, NULL,
++	    THREAD_CALL_PRIORITY_KERNEL, THREAD_CALL_OPTIONS_ONCE);
++	return sweet_event_delivery != NULL;
++}
++
++bool
++SweetSharedEvent::init()
++{
++	memory = NULL;
++	value = NULL;
++	maps = NULL;
++	charged = false;
++	if (!OSObject::init()) {
++		return false;
++	}
++	IOLockLock(sweet_event_lock);
++	if (sweet_event_count == kSweetEventLimit || sweet_event_next_trace == 0) {
++		IOLockUnlock(sweet_event_lock);
++		return false;
++	}
++	sweet_event_count++;
++	charged = true;
++	traceID = sweet_event_next_trace++;
++	IOLockUnlock(sweet_event_lock);
++	memory = IOBufferMemoryDescriptor::inTaskWithOptions(kernel_task,
++	    kIODirectionInOut | kIOMemoryKernelUserShared, PAGE_SIZE, PAGE_SIZE);
++	if (memory == NULL || memory->getBytesNoCopy() == NULL) {
++		return false;
++	}
++	bzero(memory->getBytesNoCopy(), PAGE_SIZE);
++	value = (volatile uint64_t *)memory->getBytesNoCopy();
++	return true;
++}
++
++void
++SweetSharedEvent::free()
++{
++	SweetEventMap *retired = NULL;
++	if (charged) {
++		IOLockLock(sweet_event_lock);
++		while (maps != NULL) {
++			SweetEventMap *map = maps;
++			sweet_event_detach_map(map);
++			map->disposeNext = retired;
++			retired = map;
++		}
++		sweet_event_count--;
++		IOLockUnlock(sweet_event_lock);
++	}
++	sweet_event_dispose_maps(retired);
++	OSSafeReleaseNULL(memory);
++	OSObject::free();
++}
++
++bool
++SweetSharedEventListener::init()
++{
++	next = NULL;
++	deliveryLock = NULL;
++	active = ownsPort = charged = false;
++	retryAfter = 0;
++	retryShift = 0;
++	bzero(reference, sizeof(reference));
++	if (!OSObject::init()) {
++		return false;
++	}
++	deliveryLock = IOLockAlloc();
++	return deliveryLock != NULL;
++}
++
++void
++SweetSharedEventListener::cancel()
++{
++	/* No kernel send can begin after this returns. Already queued successes remain valid. */
++	IOLockLock(deliveryLock);
++	os_atomic_store(&active, false, release);
++	IOLockUnlock(deliveryLock);
++}
++
++void
++SweetSharedEventListener::free()
++{
++	if (ownsPort) {
++		IOUserClient::releaseAsyncReference64(reference);
++	}
++	if (charged) {
++		IOLockLock(sweet_event_lock);
++		sweet_event_listener_count--;
++		IOLockUnlock(sweet_event_lock);
++	}
++	if (deliveryLock != NULL) {
++		IOLockFree(deliveryLock);
++	}
++	OSObject::free();
++}
++
++bool
++SweetSharedEventContext::init()
++{
++	task = TASK_NULL;
++	operationLock = NULL;
++	maps = NULL;
++	listeners = NULL;
++	notifications = NULL;
++	waits = NULL;
++	mapCount = listenerCount = notificationCount = waitCount = 0;
++	closed = false;
++	if (!OSObject::init()) {
++		return false;
++	}
++	operationLock = IOLockAlloc();
++	return operationLock != NULL;
++}
++
++void
++SweetSharedEventContext::close()
++{
++	if (operationLock == NULL) {
++		return;
++	}
++	IOLockLock(operationLock);
++	IOLockLock(sweet_event_lock);
++	if (closed) {
++		IOLockUnlock(sweet_event_lock);
++		IOLockUnlock(operationLock);
++		return;
++	}
++	closed = true;
++	for (SweetEventWait *w = waits; w != NULL; w = w->next) {
++		IOLockWakeup(sweet_event_lock, (void *)w->event->value, false);
++	}
++	SweetSharedEventListener *retiredListeners = listeners;
++	listeners = NULL;
++	listenerCount = 0;
++	IOLockUnlock(sweet_event_lock);
++	for (SweetSharedEventListener *l = retiredListeners; l != NULL; l = l->next) {
++		l->cancel();
++	}
++
++	SweetEventNotification *retiredNotes = NULL;
++	SweetEventMap *retiredMaps = NULL;
++	IOLockLock(sweet_event_lock);
++	while (notifications != NULL) {
++		SweetEventNotification *n = notifications;
++		n->cancelled = true;
++		if (n->inFlight) {
++			sweet_event_detach_notification_owner(n);
++		} else {
++			sweet_event_detach_notification(n);
++			n->disposeNext = retiredNotes;
++			retiredNotes = n;
++		}
++	}
++	while (maps != NULL) {
++		SweetEventMap *m = maps;
++		sweet_event_detach_map(m);
++		m->disposeNext = retiredMaps;
++		retiredMaps = m;
++	}
++	IOLockUnlock(sweet_event_lock);
++	IOLockUnlock(operationLock);
++	sweet_event_dispose_notifications(retiredNotes);
++	sweet_event_dispose_maps(retiredMaps);
++	while (retiredListeners != NULL) {
++		SweetSharedEventListener *next = retiredListeners->next;
++		retiredListeners->release();
++		retiredListeners = next;
++	}
++}
++
++void
++SweetSharedEventContext::free()
++{
++	close();
++	if (task != TASK_NULL) {
++		task_deallocate(task);
++	}
++	if (operationLock != NULL) {
++		IOLockFree(operationLock);
++	}
++	OSObject::free();
++}
++
++/* The caller holds operationLock and a retained event. */
++IOReturn
++SweetSharedEventContext::mapEvent(SweetSharedEvent *event, uint64_t *address)
++{
++	IOLockLock(sweet_event_lock);
++	for (SweetEventMap *m = maps; m != NULL; m = m->clientNext) {
++		if (m->event == event) {
++			*address = m->mapping->getAddress();
++			IOLockUnlock(sweet_event_lock);
++			return kIOReturnSuccess;
++		}
++	}
++	if (mapCount == kSweetClientMapLimit || sweet_event_map_count == kSweetMapLimit) {
++		IOLockUnlock(sweet_event_lock);
++		return kIOReturnNoResources;
++	}
++	mapCount++;
++	sweet_event_map_count++;
++	IOLockUnlock(sweet_event_lock);
++
++	SweetEventMap *lease = (SweetEventMap *)IOMallocZeroData(sizeof(*lease));
++	IOMemoryMap *mapping = lease != NULL ? event->memory->createMappingInTask(task, 0,
++	    kIOMapAnywhere | kIOMapReadOnly | kIOMapDefaultCache) : NULL;
++	uint64_t addr = mapping != NULL ? mapping->getAddress() : 0;
++	bool valid = addr != 0 && (addr & PAGE_MASK) == 0 && mapping->getLength() == PAGE_SIZE;
++	if (valid) {
++		/* Bound maximum as well as current protection; a user vm_protect cannot grant write. */
++		valid = vm_map_protect(get_task_map(task), addr, addr + PAGE_SIZE,
++		    VM_PROT_READ, TRUE) == KERN_SUCCESS;
++	}
++	if (!valid) {
++		OSSafeReleaseNULL(mapping);
++		if (lease != NULL) {
++			IOFreeData(lease, sizeof(*lease));
++		}
++		IOLockLock(sweet_event_lock);
++		mapCount--;
++		sweet_event_map_count--;
++		IOLockUnlock(sweet_event_lock);
++		return lease == NULL ? kIOReturnNoMemory : kIOReturnVMError;
++	}
++	lease->event = event;
++	lease->owner = this;
++	lease->mapping = mapping;
++	IOLockLock(sweet_event_lock);
++	lease->clientNext = maps;
++	maps = lease;
++	lease->eventNext = event->maps;
++	event->maps = lease;
++	IOLockUnlock(sweet_event_lock);
++	*address = addr;
++	return kIOReturnSuccess;
++}
++
++IOReturn
++SweetSharedEventContext::addListener(IOExternalMethodArguments *args, bool *takePort)
++{
++	if (!IPC_PORT_VALID(args->asyncWakePort) ||
++	    args->asyncReference == NULL ||
++	    args->asyncReferenceCount != 3 || args->asyncReference[1] == 0 || args->asyncReference[2] == 0) {
++		return kIOReturnBadArgument;
++	}
++	SweetSharedEventListener *listener = OSTypeAlloc(SweetSharedEventListener);
++	if (listener == NULL || !listener->init()) {
++		OSSafeReleaseNULL(listener);
++		return kIOReturnNoMemory;
++	}
++	listener->token = args->asyncReference[2];
++	listener->deliver = deliver;
++	memcpy(listener->reference, args->asyncReference, 3 * sizeof(io_user_reference_t));
++	IOReturn result = kIOReturnSuccess;
++	IOLockLock(sweet_event_lock);
++	for (SweetSharedEventListener *l = listeners; l != NULL; l = l->next) {
++		if (l->token == listener->token) {
++			result = kIOReturnExclusiveAccess;
++			break;
++		}
++	}
++	if (result == kIOReturnSuccess &&
++	    (listenerCount == kSweetClientListenerLimit || sweet_event_listener_count == kSweetListenerLimit)) {
++		result = kIOReturnNoResources;
++	}
++	if (result == kIOReturnSuccess) {
++		listenerCount++;
++		sweet_event_listener_count++;
++		listener->charged = listener->ownsPort = true;
++		listener->next = listeners;
++		listeners = listener;
++		os_atomic_store(&listener->active, true, release);
++		*takePort = true; /* The async MIG call handed us one send-right reference. */
++	}
++	IOLockUnlock(sweet_event_lock);
++	if (result != kIOReturnSuccess) {
++		listener->release();
++	}
++	return result;
++}
++
++IOReturn
++SweetSharedEventContext::removeListener(uint64_t token)
++{
++	IOLockLock(sweet_event_lock);
++	SweetSharedEventListener **link = &listeners;
++	while (*link != NULL && (*link)->token != token) {
++		link = &(*link)->next;
++	}
++	SweetSharedEventListener *listener = *link;
++	if (listener != NULL) {
++		*link = listener->next;
++		listenerCount--;
++	}
++	IOLockUnlock(sweet_event_lock);
++	if (listener == NULL) {
++		return kIOReturnNotFound;
++	}
++	listener->cancel();
++	SweetEventNotification *retired = NULL;
++	IOLockLock(sweet_event_lock);
++	SweetEventNotification *note = notifications;
++	while (note != NULL) {
++		SweetEventNotification *next = note->clientNext;
++		if (note->listener == listener) {
++			note->cancelled = true;
++			if (note->inFlight) {
++				sweet_event_detach_notification_owner(note);
++			} else {
++				sweet_event_detach_notification(note);
++				note->disposeNext = retired;
++				retired = note;
++			}
++		}
++		note = next;
++	}
++	IOLockUnlock(sweet_event_lock);
++	sweet_event_dispose_notifications(retired);
++	listener->release();
++	return kIOReturnSuccess;
++}
++
++IOReturn
++SweetSharedEventContext::notify(SweetSharedEvent *event, const uint64_t *input)
++{
++	if (input[1] == 0 || input[2] == 0 || input[3] == 0) {
++		return kIOReturnBadArgument;
++	}
++	SweetSharedEventListener *listener = NULL;
++	IOLockLock(sweet_event_lock);
++	for (SweetSharedEventListener *l = listeners; l != NULL; l = l->next) {
++		if (l->token == input[1]) {
++			listener = l;
++			listener->retain();
++			break;
++		}
++	}
++	IOLockUnlock(sweet_event_lock);
++	if (listener == NULL) {
++		return kIOReturnNotFound;
++	}
++	SweetEventNotification *note = (SweetEventNotification *)IOMallocZeroData(sizeof(*note));
++	if (note == NULL) {
++		listener->release();
++		return kIOReturnNoMemory;
++	}
++	event->retain();
++	note->event = event;
++	note->listener = listener;
++	note->eventCookie = input[2];
++	note->blockCookie = input[3];
++	note->threshold = input[4];
++	IOReturn result = kIOReturnSuccess;
++	IOLockLock(sweet_event_lock);
++	if (!os_atomic_load(&listener->active, acquire)) {
++		result = kIOReturnNotOpen;
++	} else if (notificationCount == kSweetClientNotificationLimit ||
++	    sweet_event_notification_count == kSweetNotificationLimit) {
++		result = kIOReturnNoResources;
++	} else {
++		note->owner = this;
++		note->clientNext = notifications;
++		notifications = note;
++		note->globalNext = sweet_event_notifications;
++		sweet_event_notifications = note;
++		notificationCount++;
++		sweet_event_notification_count++;
++		thread_call_enter(sweet_event_delivery);
++	}
++	IOLockUnlock(sweet_event_lock);
++	if (result != kIOReturnSuccess) {
++		sweet_event_dispose_notifications(note);
++	}
++	return result;
++}
++
++/* operationLock is held on entry and is always dropped here, including error exits. */
++IOReturn
++SweetSharedEventContext::wait(SweetSharedEvent *event, uint64_t threshold, uint64_t timeoutMS)
++{
++	IOLockLock(sweet_event_lock);
++	bool reached = os_atomic_load(event->value, acquire) >= threshold;
++	IOLockUnlock(sweet_event_lock);
++	if (reached || timeoutMS == 0) {
++		IOLockUnlock(operationLock);
++		return reached ? kIOReturnSuccess : kIOReturnTimeout;
++	}
++	if (timeoutMS > UINT64_MAX / NSEC_PER_MSEC) {
++		IOLockUnlock(operationLock);
++		return kIOReturnBadArgument;
++	}
++	uint64_t interval, deadline, now = mach_absolute_time();
++	nanoseconds_to_absolutetime(timeoutMS * NSEC_PER_MSEC, &interval);
++	if (interval > UINT64_MAX - now) {
++		IOLockUnlock(operationLock);
++		return kIOReturnBadArgument;
++	}
++	deadline = now + interval;
++	SweetEventWait waiter = { NULL, event };
++	IOLockLock(sweet_event_lock);
++	if (waitCount == kSweetClientWaitLimit || sweet_event_wait_count == kSweetWaitLimit) {
++		IOLockUnlock(sweet_event_lock);
++		IOLockUnlock(operationLock);
++		return kIOReturnNoResources;
++	}
++	waitCount++;
++	sweet_event_wait_count++;
++	waiter.next = waits;
++	waits = &waiter;
++	IOLockUnlock(operationLock);
++	IOReturn result;
++	int wake = THREAD_AWAKENED;
++	for (;;) {
++		if (closed) {
++			result = kIOReturnAborted;
++			break;
++		}
++		if (os_atomic_load(event->value, acquire) >= threshold) {
++			result = kIOReturnSuccess;
++			break;
++		}
++		if (timeoutMS == 0 || wake == THREAD_TIMED_OUT) {
++			result = kIOReturnTimeout;
++			break;
++		}
++		if (wake == THREAD_INTERRUPTED || wake == THREAD_RESTART) {
++			result = kIOReturnAborted;
++			break;
++		}
++		wake = IOLockSleepDeadline(sweet_event_lock, (void *)event->value,
++		    deadline, THREAD_ABORTSAFE);
++	}
++	SweetEventWait **link = &waits;
++	while (*link != &waiter) {
++		link = &(*link)->next;
++	}
++	*link = waiter.next;
++	waitCount--;
++	sweet_event_wait_count--;
++	IOLockUnlock(sweet_event_lock);
++	return result;
++}
++
++static IOReturn
++sweet_event_copy(task_t task, uint64_t name, SweetSharedEvent **event)
++{
++	*event = NULL;
++	if (name == 0 || name >= UINT32_MAX) {
++		return kIOReturnBadArgument;
++	}
++	OSObject *object = NULL;
++	IOReturn result = IOUserClient::copyObjectForPortNameInTask(task, (mach_port_name_t)name, &object);
++	if (result != kIOReturnSuccess) {
++		return result;
++	}
++	*event = OSDynamicCast(SweetSharedEvent, object);
++	if (*event == NULL) {
++		object->release();
++		return kIOReturnBadArgument;
++	}
++	return kIOReturnSuccess; /* Lookup owns the returned reference. */
++}
++
++IOReturn
++SweetSharedEventContext::call(uint32_t selector, IOExternalMethodArguments *args)
++{
++	bool takePort = false;
++	IOReturn result = kIOReturnBadArgument;
++	if (args == NULL) {
++		return result;
++	}
++	unsigned inCount = 0, outCount = 0;
++	switch (selector) {
++	case kSweetSharedEventCapabilities: outCount = 3; break;
++	case kSweetSharedEventCreate: outCount = 2; break;
++	case kSweetSharedEventSignal: inCount = 2; break;
++	case kSweetSharedEventInfo: inCount = 1; outCount = 3; break;
++	case kSweetSharedEventNotify: inCount = 5; break;
++	case kSweetSharedEventAddListener: break;
++	case kSweetSharedEventRemoveListener: inCount = 1; break;
++	case kSweetSharedEventWait: inCount = 3; break;
++	default: goto done;
++	}
++	if (current_task() != task) {
++		result = kIOReturnNotPrivileged;
++		goto done;
++	}
++	if (args->scalarInputCount != inCount || args->scalarOutputCount != outCount ||
++	    (inCount && args->scalarInput == NULL) || (outCount && args->scalarOutput == NULL) ||
++	    args->structureInputSize || args->structureOutputSize ||
++	    args->structureInputDescriptor != NULL || args->structureOutputDescriptor != NULL ||
++	    args->structureOutputDescriptorSize ||
++	    (selector != kSweetSharedEventAddListener &&
++	    (args->asyncWakePort != MACH_PORT_NULL || args->asyncReferenceCount != 0))) {
++		goto done;
++	}
++	IOLockLock(operationLock);
++	if (closed) {
++		IOLockUnlock(operationLock);
++		result = kIOReturnNotOpen;
++		goto done;
++	}
++	if (selector == kSweetSharedEventCapabilities) {
++		args->scalarOutput[0] = kSweetSharedEventMagic;
++		args->scalarOutput[1] = PAGE_SIZE;
++		args->scalarOutput[2] = kSweetSharedEventFeatures;
++		result = kIOReturnSuccess;
++	} else if (selector == kSweetSharedEventCreate) {
++		SweetSharedEvent *event = OSTypeAlloc(SweetSharedEvent);
++		if (event == NULL || !event->init()) {
++			OSSafeReleaseNULL(event);
++			result = kIOReturnNoResources;
++		} else {
++			uint64_t address;
++			result = mapEvent(event, &address);
++			if (result == kIOReturnSuccess) {
++				mach_port_name_t name = 0;
++				result = IOUserClient::copyPortNameForObjectInTask(task, event, &name);
++				if (result == kIOReturnSuccess && (name == 0 || name == UINT32_MAX)) {
++					result = kIOReturnIPCError;
++				}
++				if (result == kIOReturnSuccess) {
++					args->scalarOutput[0] = name;
++					args->scalarOutput[1] = address;
++				}
++			}
++			event->release();
++		}
++	} else if (selector == kSweetSharedEventAddListener) {
++		result = addListener(args, &takePort);
++	} else if (selector == kSweetSharedEventRemoveListener) {
++		result = removeListener(args->scalarInput[0]);
++	} else {
++		SweetSharedEvent *event = NULL;
++		result = sweet_event_copy(task, args->scalarInput[0], &event);
++		if (result == kIOReturnSuccess) {
++			if (selector == kSweetSharedEventInfo) {
++				uint64_t address;
++				result = mapEvent(event, &address);
++				if (result == kIOReturnSuccess) {
++					args->scalarOutput[0] = 0; /* Reserved: target callers ignore this field. */
++					args->scalarOutput[1] = address;
++					args->scalarOutput[2] = event->traceID;
++				}
++			} else if (selector == kSweetSharedEventSignal) {
++				IOLockLock(sweet_event_lock);
++				uint64_t target = args->scalarInput[1];
++				if (target > os_atomic_load(event->value, acquire)) {
++					os_atomic_store(event->value, target, release);
++					IOLockWakeup(sweet_event_lock, (void *)event->value, false);
++					thread_call_enter(sweet_event_delivery);
++				}
++				IOLockUnlock(sweet_event_lock);
++			} else if (selector == kSweetSharedEventNotify) {
++				result = notify(event, args->scalarInput);
++			} else if (selector == kSweetSharedEventWait) {
++				/* Wait owns neither operationLock nor any surface lock while asleep. */
++				result = wait(event, args->scalarInput[1], args->scalarInput[2]);
++				event->release();
++				goto done;
++			}
++			event->release();
++		}
++	}
++	IOLockUnlock(operationLock);
++done:
++	/* MIG destroys the incoming async right on error; success transfers ownership to us. */
++	if (result == kIOReturnSuccess && !takePort && args->asyncWakePort != MACH_PORT_NULL) {
++		IOUserClient::releaseNotificationPort(args->asyncWakePort);
++	}
++	return result;
++}
++
++#endif /* SWEET_SHARED_EVENT_H */
