@@ -32,7 +32,26 @@ adb shell su -c 'cat /sys/fs/pstore/console-ramoops-0'
 
 Save it before another shim boot initializes the region. The deployment helper preserves original console bytes under `x676c/shim/out/xnu-<run>.log`, despite the `.log` suffix. The auto-deploy watcher also preserves the previous record as a `.bin` file. Do not pass binary thumbnails through a text decoder or PowerShell `Set-Content`.
 
+Capture as soon as a root shell is available. Another Android restart can replace
+the imported XNU console with Android output. Check the record's contents before
+attributing it to an iOS attempt; its filename alone does not identify the OS.
+
 Useful boundaries are the shim's CPU/payload messages, XNU early-boot markers, UFS initialization, HID service opens and the first userspace failures. Console output is evidence of that path executing; a rendered frame in a log is not proof that the physical panel presented it. See [Display Pipeline](Display-Pipeline.md) and [Input and HID](Input-and-HID.md).
+
+## Opt-in read and fault samples
+
+Patch 0197 adds bounded snapshots for investigating file-data mismatches.
+`ufsreadtrace=PARTITION_BYTE_OFFSET` samples 64 bytes from a completed read
+covering that range; `ufsreadpart=PARTITION_NAME` selects the partition and
+defaults to `iosroot`. `UFSREAD` records include the I/O result and buffer's
+physical address.
+
+`sweetfaultaddr=UNSLID_USER_ADDRESS` samples the matching 64-byte neighborhood
+on SIGBUS/SIGSEGV, accounting for the process's shared-cache slide.
+`FAULTMAP` reports the VM region; `FAULTBYTES` records the copy result and
+physical page numbers before and after the read. Each path emits at most eight
+samples and is disabled without its boot argument. These diagnostics do not
+change cache maintenance, memory protections or fault handling.
 
 ## Reset and fallback are separate
 

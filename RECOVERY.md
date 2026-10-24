@@ -10,6 +10,7 @@ Preserve the current boot image, 32-byte boot-control record and root volume
 outside Git. Confirm the selected phone, Android slot B and a successful,
 bootable fallback slot. Use explicit artifact/image inputs and verify readback.
 Do not overwrite a root image that is mounted or currently backing the running OS.
+Confirm sufficient battery charge before starting a diagnostic boot.
 
 ## One attempt and reset
 
@@ -59,10 +60,15 @@ The boot helper leaves `iosroot` unchanged. Its default command line has no rese
 deadline. It waits up to 20 minutes for return, then reports failure if Android
 does not complete boot; host waiting itself cannot reset the phone.
 
+If the root executable is outside Android's `PATH`, pass its path with `-Su`
+to either PowerShell helper, or `--su` to the root-image flasher.
+
 ## Logs
 
 Capture `/sys/fs/pstore/console-ramoops-0` as raw bytes after Android returns and
-before another shim boot. The record is bounded and may omit late output.
+before another shim boot or Android restart. Android can replace the imported
+record on its next restart, so verify which OS produced the saved contents.
+The record is bounded and may omit late output.
 The boot helper preserves raw bytes under its ignored output directory.
 See [Dual-Boot Safety](wiki/Dual-Boot-Safety.md) and
 [Pstore Debugging](wiki/Pstore-Debugging-on-MediaTek.md).

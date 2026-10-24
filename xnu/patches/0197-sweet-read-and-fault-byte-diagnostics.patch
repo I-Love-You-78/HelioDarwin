@@ -1,0 +1,143 @@
+diff --git a/bsd/dev/ufs/ufs_disk.c b/bsd/dev/ufs/ufs_disk.c
+--- a/bsd/dev/ufs/ufs_disk.c
++++ b/bsd/dev/ufs/ufs_disk.c
+@@ -36,6 +36,7 @@
+ #include <pexpert/device_tree.h>
+ #include <libkern/libkern.h>
+ #include <libkern/crc.h>
++#include <os/atomic_private.h>
+ #include "ufshci.h"
+ 
+ extern ppnum_t pmap_find_phys(pmap_t pmap, addr64_t va);
+@@ -67,6 +68,10 @@
+ 	lck_mtx_t bounce_lock;
+ 	int init_error;
+ 	bool inited;
++	bool read_trace_enabled;
++	uint64_t read_trace_offset;
++	char read_trace_part[NAME_MAX_GPT + 1];
++	unsigned read_trace_count;
+ } ud;
+ 
+ static LCK_GRP_DECLARE(ufs_disk_grp, "ufs_disk");
+@@ -402,6 +407,30 @@
+ 	return 0;
+ }
+ 
++/* Opt-in sample of one partition-relative byte range after read completion. */
++static void
++ufs_disk_read_trace(const struct ufs_part *p, uint64_t off, caddr_t va,
++    uint32_t len, int error)
++{
++	uint64_t words[8];
++	uint64_t target = ud.read_trace_offset;
++	if (!ud.read_trace_enabled || strcmp(p->name, ud.read_trace_part) ||
++	    target < off || target - off > len || sizeof(words) > len - (target - off)) {
++		return;
++	}
++	if (os_atomic_inc_orig(&ud.read_trace_count, relaxed) >= 8) {
++		return;
++	}
++	vm_offset_t sample = (vm_offset_t)(va + (target - off));
++	ppnum_t pn = pmap_find_phys(kernel_pmap, (addr64_t)sample);
++	uint64_t pa = pn ? ptoa_64(pn) | (sample & PAGE_MASK) : 0;
++	memcpy(words, (const void *)sample, sizeof(words));
++	printf("UFSREAD %s off 0x%llx len 0x%x target 0x%llx error %d pa 0x%llx "
++	    "%016llx %016llx %016llx %016llx %016llx %016llx %016llx %016llx\n",
++	    p->name, off, len, target, error, pa, words[0], words[1], words[2], words[3],
++	    words[4], words[5], words[6], words[7]);
++}
++
+ static void
+ ufs_disk_strategy(buf_t bp)
+ {
+@@ -436,6 +465,9 @@
+ 	bool aligned = !(off % UFS_BLOCK) && !(len % UFS_BLOCK) && !((vm_offset_t)va & 3);
+ 	error = aligned ? part_io_direct(p, write, off, va, len) :
+ 	    part_io_bounce(p, write, off, va, len);
++	if (!write) {
++		ufs_disk_read_trace(p, off, va, len, error);
++	}
+ 	buf_unmap(bp);
+ 	if (!error) {
+ 		buf_setresid(bp, 0);
+@@ -641,6 +673,13 @@
+ 		return error;
+ 	}
+ 
++	ud.read_trace_enabled = PE_parse_boot_argn("ufsreadtrace", &ud.read_trace_offset,
++	    sizeof(ud.read_trace_offset));
++	if (ud.read_trace_enabled) {
++		strlcpy(ud.read_trace_part, "iosroot", sizeof(ud.read_trace_part));
++		(void)PE_parse_boot_argn("ufsreadpart", ud.read_trace_part, sizeof(ud.read_trace_part));
++	}
++
+ 	char rw[NAME_MAX_GPT + 1] = "";
+ 	PE_parse_boot_argn("ufsrw", rw, sizeof(rw));
+ 	struct ufs_part *wp = rw[0] ? part_named(rw) : NULL;
+diff --git a/osfmk/kern/exception.c b/osfmk/kern/exception.c
+--- a/osfmk/kern/exception.c
++++ b/osfmk/kern/exception.c
+@@ -824,6 +824,8 @@
+ #if defined(ARM64_BOARD_CONFIG_SWEET)
+ #include <vm/vm_shared_region.h>
+ #include <arm/thread.h>
++#include <vm/pmap.h>
++#include <os/atomic_private.h>
+ 
+ /*
+  * SWEET crash report on the console. The phone has no way to get crash
+@@ -836,6 +838,45 @@
+ void sweet_crash_log(const char *name, int pid, int sig, uint64_t code, uint64_t subcode);
+ static void sweet_crash_strings(const char *name);
+ 
++/* Match an unslid address from a boot argument, independent of ASLR. */
++static void
++sweet_crash_fault_bytes(const char *name, uint64_t far, uint64_t slide)
++{
++	static unsigned samples;
++	uint64_t target;
++	uint64_t words[8] = { 0 };
++	if (!PE_parse_boot_argn("sweetfaultaddr", &target, sizeof(target)) || far < slide ||
++	    ((far - slide) & ~63ull) != (target & ~63ull)) {
++		return;
++	}
++	if (os_atomic_inc_orig(&samples, relaxed) >= 8) {
++		return;
++	}
++	uint64_t addr = far & ~63ull;
++	vm_map_offset_t region = addr;
++	vm_map_size_t size = 0;
++	natural_t depth = 64;
++	vm_region_submap_info_data_64_t info;
++	mach_msg_type_number_t count = VM_REGION_SUBMAP_INFO_V2_COUNT_64;
++	kern_return_t kr = vm_map_region_recurse_64(current_map(), &region, &size, &depth,
++	    (vm_region_submap_info_64_t)&info, &count);
++	if (kr == KERN_SUCCESS) {
++		printf("FAULTMAP %s base 0x%llx size 0x%llx offset 0x%llx prot %d/%d "
++		    "share %d submap %d depth %u\n", name, (uint64_t)region, (uint64_t)size,
++		    (uint64_t)info.offset, info.protection, info.max_protection,
++		    info.share_mode, info.is_submap, depth);
++	} else {
++		printf("FAULTMAP %s error %d\n", name, kr);
++	}
++	ppnum_t before = pmap_find_phys(current_map()->pmap, addr);
++	int error = copyin((user_addr_t)addr, words, sizeof(words));
++	ppnum_t after = pmap_find_phys(current_map()->pmap, addr);
++	printf("FAULTBYTES %s va 0x%llx unslid 0x%llx error %d ppn 0x%x/0x%x "
++	    "%016llx %016llx %016llx %016llx %016llx %016llx %016llx %016llx\n",
++	    name, addr, addr - slide, error, before, after,
++	    words[0], words[1], words[2], words[3], words[4], words[5], words[6], words[7]);
++}
++
+ void
+ sweet_crash_log(const char *name, int pid, int sig, uint64_t code, uint64_t subcode)
+ {
+@@ -877,6 +918,7 @@
+ 	if (sig == 11 || sig == 10) {
+ 		/* Which mapping the faulting address is in, or which two it falls between. */
+ 		uint64_t far = (uint64_t)saved_state64(ss)->far;
++		sweet_crash_fault_bytes(name, far, slide);
+ 		vm_map_t map = current_map();
+ 		vm_map_entry_t entry;
+ 		vm_map_lock_read(map);

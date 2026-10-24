@@ -52,6 +52,7 @@ def main():
     parser.add_argument('image', type=Path)
     parser.add_argument('--adb', default=os.environ.get('ADB', 'adb'))
     parser.add_argument('--serial', default=os.environ.get('ANDROID_SERIAL'))
+    parser.add_argument('--su', default='su', help='Android root executable name or absolute path')
     args = parser.parse_args()
     image = args.image.resolve(strict=True)
     if not image.is_file():
@@ -72,7 +73,7 @@ def main():
     adb += ['-s', serial]
 
     def phone(command):
-        return subprocess.check_output([*adb, 'exec-out', 'su -c ' + shlex.quote(command)], timeout=180)
+        return subprocess.check_output([*adb, 'exec-out', shlex.quote(args.su) + ' -c ' + shlex.quote(command)], timeout=180)
 
     if phone('id -u').strip() != b'0':
         raise RuntimeError('Root shell is unavailable')
@@ -92,7 +93,7 @@ def main():
     acknowledgement = b'ROOT_WRITE_COMPLETE'
     command = 'set -e; set -o pipefail; base64 -d | gzip -d > ' + DEVICE + '; sync; printf ROOT_WRITE_COMPLETE'
     receiver = subprocess.Popen(
-        [*adb, 'shell', '-T', '-e', 'none', 'su -c ' + shlex.quote(command)],
+        [*adb, 'shell', '-T', '-e', 'none', shlex.quote(args.su) + ' -c ' + shlex.quote(command)],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     digest = hashlib.sha256()
     started = reported = time.monotonic()

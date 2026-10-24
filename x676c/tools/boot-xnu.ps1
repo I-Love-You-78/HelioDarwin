@@ -10,6 +10,7 @@ param(
     [Parameter(Mandatory)] [ValidatePattern('^[0-9]+$')] [string]$Run,
     [string]$Adb = "adb",
     [string]$Serial = "",
+    [ValidatePattern('^(?:/[A-Za-z0-9_.-]+)+$|^[A-Za-z0-9_.-]+$')] [string]$Su = "su",
     [ValidateRange(1, 120)] [int]$ReturnWaitMinutes = 20,
     [string]$BootArgs = "debug=0xc serial=3 cpus=6 keepsyms=1 -v -enable_kprintf_spam wdt=-1 wdt_test=no_user_checkin rd=ufs ufsroot=iosroot ufsrw=iosroot unentitled_ios_sim_launch=1 ignition_level=1 launchd_unsecure_cache=1 sweetsample=- ufsbeat=64 sweetscan=backboardd,SpringBoard,PosterBoard sweetnull=launchd,dyld,init,backboardd,SpringBoard,lsd,containermanagerd sweetfb_noconsole=1 sweetfb_native=1 sweetfb_stayon=1"
 )
@@ -23,7 +24,7 @@ if ($Serial) { $adbArguments = @('-s', $Serial) }
 New-Item -ItemType Directory -Force $out | Out-Null
 
 function Phone([string]$cmd) {
-    & $adb @adbArguments shell su -c "$cmd"
+    & $adb @adbArguments shell $Su -c "$cmd"
     if ($LASTEXITCODE) { throw "ADB root command failed ($LASTEXITCODE)" }
 }
 function Push-Lf([string]$path, [string]$text) {
@@ -100,7 +101,7 @@ for ($i = 0; $i -lt 60; $i++) {
 }
 if ($bc -notmatch '1') { throw "Android did not finish booting within the return window" }
 $log = Join-Path $out "xnu-$Run.log"
-python -c 'import pathlib, subprocess, sys; pathlib.Path(sys.argv[1]).write_bytes(subprocess.check_output(sys.argv[2:]))' $log $adb @adbArguments exec-out su -c 'cat /sys/fs/pstore/console-ramoops-0'
+python -c 'import pathlib, subprocess, sys; pathlib.Path(sys.argv[1]).write_bytes(subprocess.check_output(sys.argv[2:]))' $log $adb @adbArguments exec-out $Su -c 'cat /sys/fs/pstore/console-ramoops-0'
 if ($LASTEXITCODE) { throw "pstore capture failed; Android return is not confirmed" }
 "$(Get-Date -f HH:mm:ss) back in Android (slot $(& $adb @adbArguments shell getprop ro.boot.slot_suffix 2>$null)), log: $log"
 Get-Content $log -Tail 60
