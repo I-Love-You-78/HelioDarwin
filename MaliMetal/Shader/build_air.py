@@ -15,12 +15,48 @@ distributing an LGPL combined work. Building is not a redistribution license.
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
+import tempfile
 
 HERE = Path(__file__).resolve().parent
 PIN = 'a2c440b8bcdcf20d34aa1694b61ae22c2a7ea68b'
+
+
+def compiler_identity(source, patches, output):
+    """Verify the working tree equals the pinned tree plus exactly this series."""
+    base = subprocess.check_output(['git', '-C', str(source), 'rev-parse', PIN + '^{tree}'], text=True).strip()
+    patch_inputs = [{'path': str(path), 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+                    for path in patches]
+    descriptor, name = tempfile.mkstemp(prefix='compiler-index-', dir=output)
+    os.close(descriptor)
+    index = Path(name)
+    index.unlink()
+    environment = dict(os.environ, GIT_INDEX_FILE=str(index))
+    def git(*arguments):
+        return subprocess.check_output(['git', '-C', str(source), *arguments],
+                                       env=environment, text=True).strip()
+    try:
+        git('read-tree', PIN)
+        for path in patches:
+            git('apply', '--cached', '--binary', str(path))
+        expected = git('write-tree')
+        git('add', '--all', '--', '.')
+        actual = git('write-tree')
+        if actual != expected:
+            raise ValueError('Compiler working tree differs from the pinned tree and declared patch series')
+    finally:
+        index.unlink(missing_ok=True)
+        Path(str(index) + '.lock').unlink(missing_ok=True)
+    return {'compiler_tree': base, 'compiler_effective_tree': expected, 'compiler_patches': patch_inputs}
+
+
+def adapter_inputs():
+    inputs = list((HERE / 'air-compiler/src').rglob('*.rs'))
+    inputs += [HERE / 'air-compiler/Cargo.toml.in', HERE / 'air-compiler/Cargo.lock', Path(__file__)]
+    return {str(path.resolve()): hashlib.sha256(path.read_bytes()).hexdigest() for path in inputs}
 
 
 def main():
@@ -30,6 +66,10 @@ def main():
     p.add_argument('--target', default='aarch64-apple-ios')
     p.add_argument('--host-dll', action='store_true', help='also build a native shared library for offline inspection')
     p.add_argument('--allow-rust-197', action='store_true')
+    p.add_argument('--compiler-patch', action='append', type=Path, default=[],
+                   help='verify this ordered patch series is already applied to the pinned checkout')
+    p.add_argument('--shader-tile-image', action='store_true',
+                   help='build the tile-image contract supplied by the declared compiler patch series')
     args = p.parse_args()
     source = args.compiler_source.resolve(strict=True)
     output = args.out.resolve()
@@ -38,8 +78,12 @@ def main():
     head = subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip()
     if head != PIN:
         p.error(f'compiler must be pinned to {PIN}; got {head}')
-    subprocess.run(['git', '-C', str(source), 'diff', '--exit-code', 'HEAD', '--'], check=True, capture_output=True)
     output.mkdir(parents=True, exist_ok=True)
+    patches = [path.resolve(strict=True) for path in args.compiler_patch]
+    if args.shader_tile_image and not patches:
+        p.error('--shader-tile-image requires its declared compiler patch series')
+    identity = compiler_identity(source, patches, output)
+    adapter_before = adapter_inputs()
     manifest_dir = output / 'adapter'
     manifest_dir.mkdir(exist_ok=True)
     template = (HERE / 'air-compiler/Cargo.toml.in').read_text()
@@ -56,12 +100,24 @@ def main():
         command.append('--locked')
     if args.allow_rust_197:
         command.append('--ignore-rust-version')
-    subprocess.run(command, check=True)
+    if args.shader_tile_image:
+        command += ['--features', 'shader-tile-image']
+    environment = dict(os.environ, MALIMETAL_COMPILER_EFFECTIVE_TREE=identity['compiler_effective_tree'])
+    subprocess.run(command, check=True, env=environment)
+    if adapter_inputs() != adapter_before or compiler_identity(source, patches, output) != identity:
+        raise ValueError('Compiler or adapter inputs changed during the build; no provenance manifest is written')
     licenses = output / 'licenses/metal2vulkan'
     licenses.mkdir(parents=True, exist_ok=True)
     for name in ('LICENSE', 'LICENSE-GPL-2.0', 'LICENSE-GPL-3.0', 'LICENSE-LGPL-3.0'):
         shutil.copy2(source / name, licenses / name)
-    (licenses / 'SOURCE.txt').write_text(f'https://github.com/steelbrain/metal2vulkan/tree/{PIN}\n', encoding='utf-8')
+    source_notice = f'https://github.com/steelbrain/metal2vulkan/tree/{PIN}\n'
+    source_notice += f'Baseline tree: {identity["compiler_tree"]}\nEffective tree: {identity["compiler_effective_tree"]}\n'
+    for index, patch in enumerate(identity['compiler_patches']):
+        destination = licenses / 'patches' / f'{index + 1:04d}-{Path(patch["path"]).name}'
+        destination.parent.mkdir(exist_ok=True)
+        shutil.copy2(patch['path'], destination)
+        source_notice += f'Patch: {destination.name} SHA256 {patch["sha256"]}\n'
+    (licenses / 'SOURCE.txt').write_text(source_notice, encoding='utf-8')
     metadata = json.loads(subprocess.check_output(
         ['cargo', 'metadata', '--manifest-path', str(manifest), '--locked',
          '--format-version', '1', '--filter-platform', args.target], text=True))
@@ -80,8 +136,9 @@ def main():
     artifacts = [path for path in (manifest_dir / 'target' / args.target / 'release').glob('*MaliMetalAIR*')
                  if path.suffix in ('.a', '.lib', '.dll', '.dylib')]
     hashes = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in artifacts if path.is_file()}
-    result = {'compiler_revision': PIN, 'compiler_abi': 3, 'compute_abi': 1, 'target': args.target,
-              'compiler_tree': subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD^{tree}'], text=True).strip(),
+    result = {'compiler_revision': PIN, 'compiler_abi': 4, 'compute_abi': 2, 'target': args.target,
+              **identity,
+              'compiler_features': ['shader-tile-image'] if args.shader_tile_image else [],
               'rustc_version': subprocess.check_output(['rustc', '--version'], text=True).strip(),
               'cargo_lock_sha256': hashlib.sha256((manifest_dir / 'Cargo.lock').read_bytes()).hexdigest(),
               'adapter_sha256': hashlib.sha256((HERE / 'air-compiler/src/lib.rs').read_bytes()).hexdigest(),

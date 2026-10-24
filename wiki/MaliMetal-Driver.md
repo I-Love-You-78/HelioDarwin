@@ -79,7 +79,14 @@ parsing: format flags had been serialized without their `VkFormatProperties`
 wrapper. The corrected serializer preserves the queried capabilities and sample
 counts in the structure the Khronos reader expects. An isolated offline check
 reproduced the exact rejection before the correction and passed profile parsing
-afterward. Device validation of that correction remains pending.
+afterward. The following phone attempt passed that schema check and exposed
+the static adapter's refusal of Whole/signed buffer windows.
+
+The current integrated candidate replaces static binding guesses with canonical
+per-draw planning, including logical resource bounds, typed views, sampler facts,
+pushes and actual pipeline variants. The render/provider ABI is 4 and compute
+dispatch ABI is 2. Its strict native bundle and static review pass; target GPU
+execution remains unverified.
 
 ## Execution layers
 
@@ -107,7 +114,9 @@ Vulkan support alone is insufficient to advertise a Metal feature.
 
 ## Resources and commands
 
-Buffers and single-sample 2D images use real Vulkan allocations. Shared buffers
+Buffers and typed images use real Vulkan allocations. Resource modules include
+mip/array/cube/3D views and transfers, queried heaps/aliasing and conditional BDA.
+Shared buffers
 and IOSurface-backed textures preserve host ownership, locking and row stride;
 Private resources use native storage and do not expose CPU contents. IOSurface
 interoperability currently uses staging/copy/readback, not imported zero-copy GPU
@@ -121,18 +130,22 @@ by exact interior/edge regions, rather than rounded-up extra invocations.
 Unsupported operations produce explicit errors.
 
 Color attachment count is bounded to eight and the native device limit, using
-the supported 32-bit RGBA8/BGRA8 formats. Independent blending is enabled only
+the queried format paths. Independent blending is enabled only
 when reported by the native Vulkan device. The backend consumes the compiler's
 effective attachment states, which can differ from the input states when it
-removes unwritten outputs. The render compiler/provider interface is ABI 3;
-older providers are rejected during the bundle build.
+removes unwritten outputs. The render compiler/provider interface is ABI 4,
+with compute ABI 2; older providers are rejected during the bundle build.
+Native graphics helpers include depth/stencil/MSAA/resolve and dynamic rendering,
+but existing frontend restrictions and runtime gates still apply.
 
 ## AIR and native shader compilation
 
 The parser reads precompiled Metal libraries, function metadata and constants.
 The native compiler emits SPIR-V and typed plans for argument ranges, vertex
-layouts, constants and dispatch specialization. Runtime MSL source compilation
-is not implemented. Rust is confined to the AIR compiler adapter; the frontend,
+layouts, constants and dispatch specialization. A genuine system MSL frontend
+adapter is linked and validates returned MTLB/AIR; native execution and broader
+source-option coverage remain validation gates. Rust is confined to the AIR
+compiler adapter; the frontend,
 Vulkan backend and kernel transport use Objective-C/C/C++.
 
 Offline checks used actual CoreAnimation clear, upsample, a selected specialized
@@ -185,11 +198,12 @@ runtime compatibility of this implementation.
 
 ## Remaining coverage and validation
 
-Framebuffer fetch, constant-blend-color and dual-source modes, depth/stencil,
-MSAA, mipmaps, texture arrays/3D and broader shader/resource forms remain
-unsupported. Advanced Metal interfaces and private SPI coverage
-also need further work. Explicit compute barrier selectors and storage-image
-write kernels are not part of the verified initial compute path.
+Patched coherent color tile reads, native depth/stencil/MSAA helpers, views and
+compute write/indirect paths are now integrated source, with device validation
+pending. Full frontend coverage is not implied: constant-blend and pipeline
+restrictions remain, resource argument/root consumers are disabled, and XR
+render/shadow semantics and broader formats/advanced APIs need further work.
+Shared-event runtime transport and the system MSL frontend are unverified.
 
 Offline source/patch composition and compilation are separate from the next
 device checks: stock Metal loading, GPU power/VM access, native pipeline creation,

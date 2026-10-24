@@ -26,7 +26,10 @@ source uses a separately owned IOKit connection for each logical device.
 Run `40090751567` subsequently created a native Vulkan device. Frontend updates
 passed Metal registration and reached CoreAnimation shader loading; the observed
 function-descriptor API gap passed a phone check and exposed missing MRT/blending.
-That path is now implemented and compiled, with phone validation pending.
+The integrated ABI 4/compute ABI 2 candidate now uses canonical per-draw and
+dispatch planning, with native graphics/resource/synchronization modules and
+declared compiler patches. Strict linking/static review pass; target GPU execution
+and expanded API behavior still require validation.
 A separate shared-cache metadata failure affecting SpringBoard and several
 services is under investigation. Touch interaction was confirmed and kernel HID
 logs include physical power/volume-key events. GPU jobs, multi-touch, volume and

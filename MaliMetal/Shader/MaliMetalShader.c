@@ -1,3 +1,4 @@
+#include "MaliMetalRender.h"
 #include "MaliMetalShader.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -477,11 +478,11 @@ const void *MMShaderLibraryAIR(const MMShaderLibrary *library, uint32_t i, size_
 }
 
 #ifdef MM_SHADER_ENABLE_AIR_COMPILER
-extern const MMShaderCompiler *MMAIRCompilerV3(void);
+extern const MMShaderCompiler *MMAIRCompilerV4(void);
 #endif
 const MMShaderCompiler *MMShaderGetNativeCompiler(void) {
 #ifdef MM_SHADER_ENABLE_AIR_COMPILER
-    return MMAIRCompilerV3();
+    return MMAIRCompilerV4();
 #else
     return NULL;
 #endif
@@ -541,4 +542,10 @@ void MMShaderRenderOutputDestroy(MMShaderRenderOutput *output) {
 void MMShaderRenderOutputReleaseCode(MMShaderRenderOutput *output) {
     if (output && output->release_code)
         output->release_code(output);
+}
+
+void MMShaderRenderDrawPlanDestroy(MMShaderRenderDrawPlan *plan) {
+    if (!plan) return;
+    if (plan->destroy) plan->destroy(plan);
+    memset(plan, 0, sizeof(*plan));
 }

@@ -60,15 +60,18 @@ freshness, IOKit connection discovery and physical cache-address conversion.
 The updated frontend passed Metal registration and reached CoreAnimation shader
 loading. The function-descriptor call subsequently passed on the phone and
 reached a missing MRT/blending path. That path is now implemented and compiled,
-with phone validation pending. A separate shared-cache
+along with canonical per-draw/dispatch binding and native resource, graphics,
+synchronization and API modules. The integrated ABI 4/compute ABI 2 bundle passes
+strict linking and static review, with phone validation pending. A separate shared-cache
 metadata failure affects SpringBoard and several services and remains under
 investigation. These milestones do not establish GPU job completion or rendering.
 
 Compilation and offline shader validation do not prove that the stock Metal loader,
 PanVK, kernel GPU transport and presentation work together on the phone. Full
-Metal or Vulkan conformance is not claimed. Framebuffer fetch, broader blend modes,
-texture variants, depth/stencil and multisampling remain among the unsupported
-paths.
+Metal or Vulkan conformance is not claimed. Resource argument consumers, XR render
+semantics, broader formats and advanced API paths remain limited or gated. Native
+tile/depth/MSAA helpers and successful linking do not establish full frontend
+coverage or GPU execution.
 
 ## Development
 

@@ -11,6 +11,9 @@ name = "MaliMetalAIR"
 crate-type = [@CRATE_TYPES@]
 path = "@ADAPTER_SOURCE@"
 
+[features]
+shader-tile-image = []
+
 [dependencies]
 metal2vulkan = { path = "@COMPILER_SOURCE@/crates/metal2vulkan", features = ["serde"] }
 serde_json = "=1.0.154"

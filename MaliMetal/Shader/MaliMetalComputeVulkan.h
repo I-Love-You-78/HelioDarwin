@@ -19,7 +19,34 @@ typedef struct MMShaderVulkanComputeResources {
     MMVKImage *textures[128];
     uint32_t threadgroup_lengths[31];
     MMVKBuffer *constant_buffers[MM_SHADER_MAX_BINDINGS];
+    uint32_t metal_pixel_formats[128]; /* From actual MTLTexture.pixelFormat. */
+    MMShaderComputeSampler sampler_facts[16]; /* Preserve the original Metal descriptor. */
+    uint32_t stage_in_region_bound, stage_in_origin[3], stage_in_size[3], imageblock_size[2];
+    MMVKBuffer *indirect_buffer;
+    uint64_t indirect_length;
+    /* Dispatch-owned resources indexed by the settled binding layout. */
+    MMVKBuffer *dispatch_buffers[MM_SHADER_MAX_BINDINGS];
+    MMVKImage *dispatch_images[MM_SHADER_MAX_BINDINGS];
+    MMVKSampler *dispatch_samplers[MM_SHADER_MAX_BINDINGS];
 } MMShaderVulkanComputeResources;
+
+typedef struct MMShaderVulkanComputeExecution MMShaderVulkanComputeExecution;
+/* Creates native pipelines from the plan's settled module, exact alias views,
+ * translated samplers, immutable constant blobs and instantiated table uploads.
+ * Owns them until destroy; caller keeps plan and Metal resources alive through
+ * proven native retirement. Completion must be checked before Metal success.
+ * A generic DEVICE_LOST or transport/wait failure is NOT retirement proof:
+ * quarantine the entire command buffer, plan, device and resource owners while
+ * retirement is unknown. Destroy is allowed after proven retirement, or before
+ * any submission could own this execution. Destroy execution before its plan. */
+MMVKResult MMShaderVulkanCreateComputeExecution(MMVKDevice *, const MMShaderComputeOutput *,
+    const MMShaderVulkanComputeResources *, const MMShaderComputeDispatchPlan *,
+    MMShaderVulkanComputeExecution **, MMVKError *);
+MMVKResult MMShaderVulkanRecordComputeExecution(MMVKCommands *, MMShaderVulkanComputeExecution *, MMVKError *);
+MMVKResult MMShaderVulkanCompleteComputeExecution(MMShaderVulkanComputeExecution *, MMVKError *);
+void MMShaderVulkanDestroyComputeExecution(MMShaderVulkanComputeExecution *);
+/* A conservative Metal compute memoryBarrier: recorded at the requested point. */
+MMVKResult MMShaderVulkanComputeMemoryBarrier(MMVKCommands *, MMVKError *);
 
 /* Views refer to this description and the retained compiler output. A native
  * program validates this generic module/layout; only a compiled specialization

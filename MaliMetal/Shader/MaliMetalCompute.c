@@ -72,7 +72,12 @@ MMShaderStatus MMShaderPrepareComputeDispatch(const MMShaderComputeOutput *outpu
         return status;
     }
     if (plan->abi_version != MM_SHADER_COMPUTE_ABI_VERSION || !plan->destroy ||
-        plan->descriptor_count != output->binding_count ||
+        plan->descriptor_count != plan->binding_count ||
+        plan->binding_count > MM_SHADER_MAX_BINDINGS ||
+        (plan->binding_count && !plan->bindings) ||
+        plan->stage.vulkan_stage != 32 || !plan->stage.words || plan->stage.word_count < 5 ||
+        plan->stage.word_count > SIZE_MAX / sizeof(uint32_t) ||
+        plan->stage.words[0] != 0x07230203 || !plan->stage.entry_point ||
         (plan->descriptor_count && !plan->descriptors) || (plan->region_count && !plan->regions)) {
         MMShaderComputeDispatchPlanDestroy(plan);
         return compute_error(error, MM_SHADER_COMPILE_FAILED,

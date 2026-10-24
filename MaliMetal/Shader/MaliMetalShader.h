@@ -8,7 +8,8 @@
 extern "C" {
 #endif
 
-#define MM_SHADER_ABI_VERSION 3u
+#define MM_SHADER_ABI_VERSION 4u
+enum { MM_SHADER_COMPILER_CAP_TILE_IMAGE = 1u };
 #define MM_SHADER_NO_FRAGMENT UINT32_MAX
 
 typedef enum MMShaderStatus {
@@ -137,7 +138,14 @@ typedef struct MMShaderBackendPlan {
     MMShaderBackendVertexAttribute vertex_attributes[31];
     uint32_t color_attachment_count;
     MMShaderBackendColor colors[8];
+    uint32_t color_outputs, raster_samples, depth_format, stencil_format;
+    uint32_t alpha_to_coverage, alpha_to_one, rasterizer_discard, sample_shading;
+    uint32_t tile_image_color_reads, has_sample_mask, sample_mask;
 } MMShaderBackendPlan;
+
+struct MMShaderRenderBindings;
+struct MMShaderRenderDrawRequest;
+struct MMShaderRenderDrawPlan;
 
 typedef struct MMShaderRenderOutput {
     uint32_t abi_version, module_count;
@@ -154,6 +162,10 @@ typedef struct MMShaderRenderOutput {
     /* NULL when backend_plan is available; otherwise the exact refused form. */
     const char *backend_plan_error;
     void (*release_code)(struct MMShaderRenderOutput *output);
+    MMShaderStatus (*prepare_draw)(const struct MMShaderRenderOutput *,
+                                  const struct MMShaderRenderBindings *,
+                                  const struct MMShaderRenderDrawRequest *,
+                                  struct MMShaderRenderDrawPlan *, MMShaderError *);
 } MMShaderRenderOutput;
 
 typedef struct MMShaderCompilerRequest {
@@ -194,10 +206,11 @@ typedef struct MMShaderCompiler {
     void (*free_string)(char *);
     MMShaderStatus (*compile_compute)(const struct MMShaderComputeRequest *,
                                       struct MMShaderComputeOutput *, MMShaderError *);
+    uint64_t capabilities;
 } MMShaderCompiler;
 
-/* Returns NULL in the C-only build. The optional pinned native AIR compiler
- * emits SPIR-V 1.5 for Vulkan >=1.2; it never silently lowers that requirement. */
+/* Returns NULL in the C-only build. Compilation uses the supported SPIR-V
+ * level of the actual enabled Vulkan 1.2+ device profile. */
 const MMShaderCompiler *MMShaderGetNativeCompiler(void);
 MMShaderStatus MMShaderCompileRender(const MMShaderCompiler *compiler,
                                      const MMShaderLibrary *vertex_library, uint32_t vertex_index,
@@ -206,8 +219,7 @@ MMShaderStatus MMShaderCompileRender(const MMShaderCompiler *compiler,
                                      const MMShaderCompilerRequest *options,
                                      MMShaderRenderOutput *output, MMShaderError *error);
 void MMShaderRenderOutputDestroy(MMShaderRenderOutput *output);
-/* After native pipeline creation, discard retained SPIR-V while keeping all
- * binding metadata and immutable constant bytes valid until output destroy. */
+/* The provider may retain code needed by per-draw variants until output destroy. */
 void MMShaderRenderOutputReleaseCode(MMShaderRenderOutput *output);
 
 #ifdef __cplusplus

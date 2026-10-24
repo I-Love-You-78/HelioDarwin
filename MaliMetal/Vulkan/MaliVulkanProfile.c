@@ -76,15 +76,30 @@ char *mmvk_profile_create(VkPhysicalDevice physical,
     const VkPhysicalDeviceFeatures *enabled,const VkPhysicalDeviceVulkan11Features *enabled11,
     const VkPhysicalDeviceVulkan12Features *enabled12,const VkPhysicalDeviceProperties *p,
     const VkPhysicalDeviceVulkan11Properties *p11,const VkPhysicalDeviceVulkan12Properties *p12,
-    PFN_vkGetPhysicalDeviceFormatProperties get_format,PFN_vkGetPhysicalDeviceImageFormatProperties2 get_image_format)
+    PFN_vkGetPhysicalDeviceFormatProperties get_format,PFN_vkGetPhysicalDeviceImageFormatProperties2 get_image_format,
+    const MMVKProfileSelection *selection)
 {
     if(!physical||!enabled||!enabled11||!enabled12||!p||!p11||!p12||!get_format||!get_image_format||p->apiVersion<VK_API_VERSION_1_2)return NULL;
     struct json_writer j={0};VkSampleCountFlags color_samples[185]={0};
-    object(&j,NULL);key(&j,"profiles");append(&j,"{\"actual\":{\"api-version\":\"1.2.0\",\"capabilities\":[\"actual\"]}}");
+    uint32_t api=selection?selection->api_version:VK_API_VERSION_1_2;
+    if(api<VK_API_VERSION_1_2||api>p->apiVersion)return NULL;
+    object(&j,NULL);key(&j,"profiles");append(&j,"{\"actual\":{\"api-version\":\"%u.%u.%u\",\"capabilities\":[\"actual\"]}}",
+        VK_API_VERSION_MAJOR(api),VK_API_VERSION_MINOR(api),VK_API_VERSION_PATCH(api));
     object(&j,"capabilities");object(&j,"actual");object(&j,"features");
     object(&j,"VkPhysicalDeviceFeatures");serialize_VkPhysicalDeviceFeatures(&j,enabled);close_object(&j);
     object(&j,"VkPhysicalDeviceVulkan11Features");serialize_VkPhysicalDeviceVulkan11Features(&j,enabled11);close_object(&j);
     object(&j,"VkPhysicalDeviceVulkan12Features");serialize_VkPhysicalDeviceVulkan12Features(&j,enabled12);close_object(&j);
+    if(api>=VK_API_VERSION_1_3){
+        if(!selection||!selection->features13||!selection->properties13){free(j.data);return NULL;}
+        object(&j,"VkPhysicalDeviceVulkan13Features");serialize_VkPhysicalDeviceVulkan13Features(&j,selection->features13);close_object(&j);
+    }
+    if(selection&&selection->graphics&&(selection->graphics->extensions&MMVK_GRAPHICS_EXT_TILE_IMAGE)){
+        const MMVKGraphicsCapabilities *g=selection->graphics;
+        object(&j,"VkPhysicalDeviceShaderTileImageFeaturesEXT");
+        MMVK_JSON_BOOL(&j,"shaderTileImageColorReadAccess",g->tile_color_read);
+        MMVK_JSON_BOOL(&j,"shaderTileImageDepthReadAccess",g->tile_depth_read);
+        MMVK_JSON_BOOL(&j,"shaderTileImageStencilReadAccess",g->tile_stencil_read);close_object(&j);
+    }
     close_object(&j);object(&j,"properties");object(&j,"VkPhysicalDeviceProperties");
     json_unsigned(&j,"apiVersion",p->apiVersion);json_unsigned(&j,"driverVersion",p->driverVersion);
     json_unsigned(&j,"vendorID",p->vendorID);json_unsigned(&j,"deviceID",p->deviceID);
@@ -92,6 +107,14 @@ char *mmvk_profile_create(VkPhysicalDevice physical,
     object(&j,"limits");serialize_VkPhysicalDeviceLimits(&j,&p->limits);close_object(&j);close_object(&j);
     object(&j,"VkPhysicalDeviceVulkan11Properties");serialize_VkPhysicalDeviceVulkan11Properties(&j,p11);close_object(&j);
     object(&j,"VkPhysicalDeviceVulkan12Properties");serialize_VkPhysicalDeviceVulkan12Properties(&j,p12);close_object(&j);
+    if(api>=VK_API_VERSION_1_3){object(&j,"VkPhysicalDeviceVulkan13Properties");serialize_VkPhysicalDeviceVulkan13Properties(&j,selection->properties13);close_object(&j);}
+    if(selection&&selection->graphics&&(selection->graphics->extensions&MMVK_GRAPHICS_EXT_TILE_IMAGE)){
+        const MMVKGraphicsCapabilities *g=selection->graphics;
+        object(&j,"VkPhysicalDeviceShaderTileImagePropertiesEXT");
+        MMVK_JSON_BOOL(&j,"shaderTileImageCoherentReadAccelerated",g->tile_coherent_accelerated);
+        MMVK_JSON_BOOL(&j,"shaderTileImageReadSampleFromPixelRateInvocation",g->tile_sample_from_pixel);
+        MMVK_JSON_BOOL(&j,"shaderTileImageReadFromHelperInvocation",g->tile_helper_reads);close_object(&j);
+    }
     close_object(&j);object(&j,"formats");
     for(const struct json_name *f=VkFormat_names;f->name;f++){
         VkFormatProperties props;get_format(physical,(VkFormat)f->value,&props);
@@ -107,7 +130,10 @@ char *mmvk_profile_create(VkPhysicalDevice physical,
             if(get_image_format(physical,&info,&out)==VK_SUCCESS)color_samples[f->value]=out.imageFormatProperties.sampleCounts;
         }
     }
-    close_object(&j);object(&j,"extensions");close_object(&j);close_object(&j);close_object(&j);
+    close_object(&j);object(&j,"extensions");
+    if(selection&&selection->graphics&&(selection->graphics->extensions&MMVK_GRAPHICS_EXT_TILE_IMAGE))
+        json_unsigned(&j,VK_EXT_SHADER_TILE_IMAGE_EXTENSION_NAME,VK_EXT_SHADER_TILE_IMAGE_SPEC_VERSION);
+    close_object(&j);close_object(&j);close_object(&j);
     object(&j,"m2v_color_attachment_sample_counts");object(&j,"actual");
     for(const struct json_name *f=VkFormat_names;f->name;f++)if(color_samples[f->value])json_flags(&j,f->name,color_samples[f->value],VkSampleCountFlags_names);
     close_object(&j);close_object(&j);close_object(&j);

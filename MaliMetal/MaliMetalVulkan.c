@@ -1,17 +1,7 @@
 #include "MaliMetalVulkan.h"
+#include "Vulkan/MaliVulkanResources.h"
 MMVKFormat MaliMetalPixelFormat(MTLPixelFormat format) {
-    switch (format) {
-    case MTLPixelFormatRGBA8Unorm:
-        return MMVK_FORMAT_RGBA8_UNORM;
-    case MTLPixelFormatBGRA8Unorm:
-        return MMVK_FORMAT_BGRA8_UNORM;
-    case MTLPixelFormatRGBA8Unorm_sRGB:
-        return MMVK_FORMAT_RGBA8_SRGB;
-    case MTLPixelFormatBGRA8Unorm_sRGB:
-        return MMVK_FORMAT_BGRA8_SRGB;
-    default:
-        return 0;
-    }
+    return mmvk_format_from_metal((uint32_t)format);
 }
 /* MTLVertexFormat scalar/vector types to VkFormat. Packed/normalized formats
  * outside this table must be rejected instead of interpreting their bytes. */

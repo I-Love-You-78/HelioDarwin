@@ -1,6 +1,12 @@
 /* Native command recording. Completion is derived from the Vulkan fence. */
 #import "MaliMetalCommandQueue.h"
 #import "MaliMetalDevice.h"
+#import "MaliMetalResources.h"
+#import "MaliMetalRender.h"
+#import "MaliMetalGraphics.h"
+#import "MaliMetalResources.h"
+#import "MaliMetalSynchronization.h"
+#import "MaliMetalPresentation.h"
 #import "Shader/MaliMetalShaderVulkan.h"
 #import "Shader/MaliMetalComputeVulkan.h"
 #include <pthread.h>
@@ -38,12 +44,18 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
 @interface MaliMetalCommandBuffer ()
 - (void)execute;
 - (void)notifyCompleted;
+- (void)prepareSynchronizationForSubmission;
+- (void)markNativeSubmissionScheduled;
 - (void)requireEncoding;
 @end
 
 @interface MaliMetalRenderCommandEncoder : MaliMetalObject <MTLRenderCommandEncoder> {
+    MMVKGraphicsState _graphicsState;
+    MaliMetalGraphicsPass _graphicsPass;
+    float _blendColor[4];
     MaliMetalCommandBuffer *_buffer;
     BOOL _ended;
+    MaliMetalEncoderSynchronization *_synchronization;
     id _pipeline;
     MTLPixelFormat _colorFormats[8];
     id<MTLTexture> _targetTextures[8];
@@ -60,6 +72,7 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
 @interface MaliMetalBlitCommandEncoder : MaliMetalObject <MTLBlitCommandEncoder> {
     MaliMetalCommandBuffer *_buffer;
     BOOL _ended;
+    MaliMetalEncoderSynchronization *_synchronization;
 }
 - (instancetype)initWithBuffer:(MaliMetalCommandBuffer *)buffer;
 @end
@@ -67,35 +80,54 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     MaliMetalCommandBuffer *_buffer;
     id _pipeline;
     BOOL _ended;
+    MaliMetalEncoderSynchronization *_synchronization;
     id<MTLBuffer> _buffers[31];
     NSUInteger _offsets[31];
     id<MTLTexture> _textures[128];
     id<MTLSamplerState> _samplers[16];
     uint32_t _threadgroupLengths[31];
+    BOOL _stageInRegionBound;
+    uint32_t _stageInOrigin[3],_stageInSize[3],_imageblockSize[2];
+    id<MTLBuffer> _indirectBuffer;
+    uint64_t _indirectOffset;
 }
 - (instancetype)initWithBuffer:(MaliMetalCommandBuffer *)buffer;
 @end
 @interface MaliMetalComputeDispatchRecord : NSObject {
     MMShaderComputeDispatchPlan _plan;
+    MMShaderVulkanComputeExecution *_execution;
+    MaliMetalDevice *_device;
 }
-- (instancetype)initWithPlan:(MMShaderComputeDispatchPlan *)plan;
-- (const MMShaderComputeDispatchPlan *)plan;
+- (instancetype)initWithPlan:(MMShaderComputeDispatchPlan *)plan device:(MaliMetalDevice *)device
+    output:(const MMShaderComputeOutput *)output resources:(const MMShaderVulkanComputeResources *)resources
+    error:(MMVKError *)error;
+- (id<MTLDevice>)device;
+- (MMVKResult)record:(MMVKCommands *)commands error:(MMVKError *)error;
+- (MMVKResult)maliCompleteComputeExecution:(MMVKError *)error;
 @end
 @implementation MaliMetalComputeDispatchRecord
-- (instancetype)initWithPlan:(MMShaderComputeDispatchPlan *)plan {
-    self = [super init];
-    if (self) {
-        _plan = *plan;
-        memset(plan, 0, sizeof(*plan));
+- (instancetype)initWithPlan:(MMShaderComputeDispatchPlan *)plan device:(MaliMetalDevice *)device
+    output:(const MMShaderComputeOutput *)output resources:(const MMShaderVulkanComputeResources *)resources
+    error:(MMVKError *)error {
+    self=[super init];
+    if(self){
+        _device=[device retain];_plan=*plan;memset(plan,0,sizeof(*plan));
+        if(MMShaderVulkanCreateComputeExecution([device backendDevice],output,resources,&_plan,&_execution,error)!=MMVK_OK){
+            [self release];return nil;
+        }
     }
     return self;
 }
-- (const MMShaderComputeDispatchPlan *)plan {
-    return &_plan;
+- (id<MTLDevice>)device { return _device; }
+- (MMVKResult)record:(MMVKCommands *)commands error:(MMVKError *)error {
+    return MMShaderVulkanRecordComputeExecution(commands,_execution,error);
+}
+- (MMVKResult)maliCompleteComputeExecution:(MMVKError *)error {
+    return MMShaderVulkanCompleteComputeExecution(_execution,error);
 }
 - (void)dealloc {
-    MMShaderComputeDispatchPlanDestroy(&_plan);
-    [super dealloc];
+    MMShaderVulkanDestroyComputeExecution(_execution);
+    MMShaderComputeDispatchPlanDestroy(&_plan);[_device release];[super dealloc];
 }
 @end
 
@@ -218,6 +250,7 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
         MaliMetalCommandBuffer *buffer = _pending[0];
         --_pendingCount;
         memmove(_pending, _pending + 1, _pendingCount * sizeof(*_pending));
+        [buffer prepareSynchronizationForSubmission];
         dispatch_async(_submissionQueue, ^{
             @autoreleasepool {
                 [buffer execute];
@@ -241,10 +274,13 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     MMVKResult (^*_operations)(MMVKCommands *, MMVKError *);
     NSUInteger _operationCount;
     MMVKFence *_fence;
+    MMVKSyncStream *_syncStream;
+    MaliMetalFenceSubmission *_fenceSubmission;
+    MaliMetalExecutedResources *_visibility;
     NSError *_error;
     MTLCommandBufferStatus _status;
     BOOL _retainedReferences, _activeEncoder, _slotReleased;
-    BOOL _scheduledHandlersDone, _completedHandlersDone, _submitted;
+    BOOL _scheduledHandlersDone, _completedHandlersDone, _submitted, _nativeQuarantined;
     pthread_mutex_t _lock;
     pthread_cond_t _changed;
     id *_resources;
@@ -257,8 +293,7 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     NSUInteger _sampledTextureCount;
     id<MTLBuffer> *_writtenBuffers;
     NSUInteger _writtenBufferCount;
-    id<MTLDrawable> *_drawables;
-    CFTimeInterval *_presentTimes;
+    MaliMetalPresentation **_presentations;
     NSUInteger _drawableCount;
     MTLCommandBufferHandler *_scheduledHandlers, *_completedHandlers;
     NSUInteger _scheduledCount, _completedCount;
@@ -293,7 +328,7 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     for (NSUInteger i = 0; i < _ownedResourceCount; i++)
         [_ownedResources[i] release];
     for (NSUInteger i = 0; i < _drawableCount; i++)
-        [(id)_drawables[i] release];
+        [_presentations[i] release];
     for (NSUInteger i = 0; i < _scheduledCount; i++)
         [(id)_scheduledHandlers[i] release];
     for (NSUInteger i = 0; i < _completedCount; i++)
@@ -303,14 +338,15 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     free(_outputs);
     free(_sampledTextures);
     free(_writtenBuffers);
-    free(_drawables);
-    free(_presentTimes);
+    free(_presentations);
     free(_operations);
     free(_scheduledHandlers);
     free(_completedHandlers);
     if (!_slotReleased)
         [_queue releaseCommandBuffer];
     [_error release];
+    [_visibility release];
+    [_fenceSubmission release];
     [_queue release];
     pthread_cond_destroy(&_changed);
     pthread_mutex_destroy(&_lock);
@@ -358,12 +394,19 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
 - (void)recordBackendResult:(MMVKResult)result error:(const MMVKError *)error {
     if (result == MMVK_OK)
         return;
+    MaliMetalFenceSubmission *failedSubmission=nil;
     pthread_mutex_lock(&_lock);
-    if (!_error)
+    if (!_error) {
         _error = [MaliMetalCommandError(result, error && error->message[0]
                                                     ? error->message
                                                     : mmvk_result_string(result)) retain];
+        failedSubmission=[_fenceSubmission retain];
+    }
     pthread_mutex_unlock(&_lock);
+    /* Do not signal missing generations. Only native signals actually accepted
+     * by QueueSubmit survive; downstream waits observe unpublished failures. */
+    [failedSubmission failUnsubmittedWithResult:result error:error];
+    [failedSubmission release];
 }
 - (void)recordUnsupported:(const char *)message {
     MMVKError error = {0};
@@ -407,6 +450,8 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     }
     _ownedResources = objects;
     _ownedResources[_ownedResourceCount++] = [resource retain];
+    if([resource respondsToSelector:@selector(maliCompleteComputeExecution:)])
+        [self recordExecutedCompletion:resource];
     return YES;
 }
 - (BOOL)sampleTexture:(id<MTLTexture>)texture {
@@ -441,6 +486,7 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     return NO;
 }
 - (void)writeBuffer:(id<MTLBuffer>)buffer {
+    [self recordExecutedWrite:(id)buffer];
     for (NSUInteger i = 0; i < _writtenBufferCount; i++)
         if (_writtenBuffers[i] == buffer)
             return;
@@ -455,6 +501,7 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
 - (BOOL)writeTexture:(id<MTLTexture>)texture {
     if (![self useResource:(id)texture])
         return NO;
+    [self recordExecutedWrite:(id)texture];
     for (NSUInteger i = 0; i < _outputCount; i++)
         if (_outputs[i] == texture)
             return YES;
@@ -514,34 +561,152 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     _completedHandlers = handlers;
     _completedHandlers[_completedCount++] = [(id)handler copy];
 }
+- (void)queuePresentation:(id<MTLDrawable>)drawable
+                     mode:(MaliMetalPresentationMode)mode time:(CFTimeInterval)time {
+    [self requireEncoding];
+    if (!drawable || !isfinite(time) || time < 0) {
+        [NSException raise:@"NSInvalidArgumentException" format:@"Invalid drawable or presentation time"];
+        return;
+    }
+    for (NSUInteger i=0; i<_drawableCount; i++)
+        if ([_presentations[i] drawable] == drawable) {
+            [NSException raise:@"NSInvalidArgumentException" format:@"Drawable is already scheduled for presentation"];
+            return;
+        }
+    MaliMetalPresentation *request=[[MaliMetalPresentation alloc] initWithDrawable:drawable mode:mode time:time];
+    if (!request) {
+        [self recordUnsupported:"Drawable does not provide the requested native presentation selector"];
+        return;
+    }
+    MaliMetalPresentation **requests=realloc(_presentations,(_drawableCount+1)*sizeof(*requests));
+    if (!requests) {
+        [request release];[self recordBackendResult:MMVK_ERROR_MEMORY error:NULL];return;
+    }
+    _presentations=requests;_presentations[_drawableCount++]=request;
+}
 - (void)presentDrawable:(id<MTLDrawable>)drawable {
-    [self presentDrawable:drawable atTime:0];
+    [self queuePresentation:drawable mode:MaliMetalPresentImmediately time:0];
 }
 - (void)presentDrawable:(id<MTLDrawable>)drawable atTime:(CFTimeInterval)time {
-    [self requireEncoding];
-    if (!drawable || !isfinite(time) || time < 0)
-        [NSException raise:@"NSInvalidArgumentException"
-                    format:@"Invalid drawable or presentation time"];
-    for (NSUInteger i = 0; i < _drawableCount; i++)
-        if (_drawables[i] == drawable)
-            [NSException raise:@"NSInvalidArgumentException"
-                        format:@"Drawable is already scheduled for presentation"];
-    id<MTLDrawable> *drawables = realloc(_drawables, (_drawableCount + 1) * sizeof(*drawables));
-    if (!drawables)
-        [NSException raise:@"NSMallocException" format:@"Cannot store drawable"];
-    _drawables = drawables;
-    CFTimeInterval *times = realloc(_presentTimes, (_drawableCount + 1) * sizeof(CFTimeInterval));
-    if (!times)
-        [NSException raise:@"NSMallocException" format:@"Cannot store presentation time"];
-    _presentTimes = times;
-    _drawables[_drawableCount] = (id)[(id)drawable retain];
-    _presentTimes[_drawableCount++] = time;
+    [self queuePresentation:drawable mode:MaliMetalPresentAtTime time:time];
 }
 - (void)presentDrawable:(id<MTLDrawable>)drawable afterMinimumDuration:(CFTimeInterval)duration {
+    [self queuePresentation:drawable mode:MaliMetalPresentAfterMinimumDuration time:duration];
+}
+- (void)markNativeSubmissionScheduled {
+        pthread_mutex_lock(&_lock);
+        if(_scheduledHandlersDone){pthread_mutex_unlock(&_lock);return;}
+        _submitted = YES;
+        _status = MTLCommandBufferStatusScheduled;
+        pthread_cond_broadcast(&_changed);
+        pthread_mutex_unlock(&_lock);
+        for (NSUInteger i = 0; i < _scheduledCount; i++) {
+            MTLCommandBufferHandler handler = _scheduledHandlers[i];
+            _scheduledHandlers[i] = nil;
+            handler(self);
+            [(id)handler release];
+        }
+        _scheduledCount = 0;
+        pthread_mutex_lock(&_lock);
+        _scheduledHandlersDone = YES;
+        pthread_cond_broadcast(&_changed);
+        pthread_mutex_unlock(&_lock);
+}
+- (void)prepareSynchronizationForSubmission {
+    /* Keep the error check and reservation atomic with recordBackendResult.
+     * Failed buffers publish no generations, even when enqueue FIFO drains. */
+    MMVKError error={0};MMVKResult result=MMVK_OK;
+    pthread_mutex_lock(&_lock);
+    if(!_error && _fenceSubmission)
+        result=[_fenceSubmission prepareForSubmissionWithError:&error];
+    pthread_mutex_unlock(&_lock);
+    if(result!=MMVK_OK)[self recordBackendResult:result error:&error];
+}
+- (NSUInteger)synchronizationOperationCount { return _operationCount; }
+- (void)insertSynchronizationOperation:(MMVKResult (^)(MMVKCommands *,MMVKError *))operation
+                     atOperationIndex:(NSUInteger)index {
     [self requireEncoding];
-    (void)drawable;
-    (void)duration;
-    [self recordUnsupported:"Minimum-duration presentation is unsupported"];
+    if(index>_operationCount) {
+        [NSException raise:@"NSInvalidArgumentException" format:@"Invalid synchronization operation index"];return;
+    }
+    NSUInteger previous=_operationCount;
+    if(![self appendOperation:operation]) return;
+    void *stored=(void *)_operations[previous];
+    memmove(_operations+index+1,_operations+index,(previous-index)*sizeof(*_operations));
+    _operations[index]=stored;
+}
+- (MaliMetalExecutedResources *)visibilityTracker {
+    if(!_visibility)_visibility=[[MaliMetalExecutedResources alloc] init];
+    if(!_visibility)[self recordBackendResult:MMVK_ERROR_MEMORY error:NULL];
+    return _visibility;
+}
+- (void)recordExecutedWrite:(id)resource {
+    MaliMetalExecutedResources *tracker=[self visibilityTracker];
+    if(!tracker)return;
+    [self appendOperation:^MMVKResult(MMVKCommands *commands,MMVKError *error){
+        (void)commands;return [tracker noteWrite:resource error:error];
+    }];
+}
+- (void)recordExecutedCompletion:(id)resource {
+    MaliMetalExecutedResources *tracker=[self visibilityTracker];
+    if(!tracker)return;
+    [self appendOperation:^MMVKResult(MMVKCommands *commands,MMVKError *error){
+        (void)commands;return [tracker noteCompletion:resource error:error];
+    }];
+}
+- (void)appendSynchronizationWithEvent:(id)event value:(uint64_t)value signal:(BOOL)signal {
+    [self requireEncoding];
+    BOOL shared=MaliMetalIsNativeSharedEvent(event);
+    if(_activeEncoder || !event || (!shared &&
+       (![event isKindOfClass:[MaliMetalEvent class]] || [event device]!=[self device]))) {
+        [NSException raise:@"NSInvalidArgumentException" format:@"Invalid event, device or active encoder"];return;
+    }
+    if(shared) {
+        if(!MaliMetalSharedEventTransportReady()) {
+            [self recordUnsupported:"Shared-event kernel transport is unavailable"];return;
+        }
+        if(![self visibilityTracker])return;
+        /* The copied operation retains the native shared object independently
+         * of its intentionally nil device; it must not enter useResource. */
+        void *owner=(void *)self;
+        [self appendOperation:^MMVKResult(MMVKCommands *unused,MMVKError *error){
+            (void)unused;MaliMetalCommandBuffer *buffer=(id)owner;
+            return MaliMetalSharedEventBoundary((id)[buffer device],&buffer->_syncStream,
+                &buffer->_commands,event,value,signal,buffer->_visibility,
+                ^{[buffer markNativeSubmissionScheduled];},
+                ^MMVKResult(MMVKError *refreshError){
+                    return [buffer->_visibility refreshConsumerResources:buffer->_resources
+                        count:buffer->_resourceCount error:refreshError];
+                },error);
+        }];
+        return;
+    }
+    if(![self useOwnedResource:event])return;
+    void *owner=(void *)self;
+    [self appendOperation:^MMVKResult(MMVKCommands *unused,MMVKError *error) {
+        (void)unused;MaliMetalCommandBuffer *buffer=(id)owner;
+        return MaliMetalSynchronizationBoundary((id)[buffer device],&buffer->_syncStream,
+            &buffer->_commands,event,value,signal,^{[buffer markNativeSubmissionScheduled];},error);
+    }];
+}
+- (void)insertFence:(MaliMetalFence *)fence update:(BOOL)update atOperationIndex:(NSUInteger)index {
+    [self requireEncoding];
+    if(!fence || ![fence isKindOfClass:[MaliMetalFence class]] || [fence device]!=[self device]) {
+        [NSException raise:@"NSInvalidArgumentException" format:@"Fence belongs to another device"];return;
+    }
+    if(![self useOwnedResource:fence]) return;
+    if(!_fenceSubmission) _fenceSubmission=[[MaliMetalFenceSubmission alloc] init];
+    MaliMetalFenceCommand *fenceCommand=[_fenceSubmission addFence:fence update:update];
+    if(!fenceCommand) {[self recordBackendResult:MMVK_ERROR_MEMORY error:NULL];return;}
+    void *owner=(void *)self;
+    [self insertSynchronizationOperation:^MMVKResult(MMVKCommands *unused,MMVKError *error) {
+        (void)unused;MaliMetalCommandBuffer *buffer=(id)owner;
+        uint64_t value=[fenceCommand value];
+        /* The boundary publishes a real accepted prefix before any predecessor
+         * wait, with Scheduled callbacks outside the execution lock. */
+        return MaliMetalSynchronizationBoundary((id)[buffer device],&buffer->_syncStream,
+            &buffer->_commands,fence,value,update,^{[buffer markNativeSubmissionScheduled];},error);
+    } atOperationIndex:index];
 }
 - (void)commit {
     if ([self status] == MTLCommandBufferStatusNotEnqueued)
@@ -578,6 +743,19 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     if (options)
         [self recordUnsupported:
                   "Protected command buffers require a supported secure GPU memory path"];
+}
+- (void)quarantineNativeOwners {
+    if(_nativeQuarantined)return;
+    _nativeQuarantined=YES;
+    if(!_retainedReferences){
+        for(NSUInteger i=0;i<_resourceCount;i++)[_resources[i] retain];
+        _retainedReferences=YES;
+    }
+    /* This port may latch device loss after an IOKit transport failure without
+     * a physical retirement acknowledgement. Keep the full owner graph, while
+     * still reporting logical Error and waking API waiters below. */
+    [self retain];
+    NSLog(@"[MaliMetal] Submitted command owners quarantined; native retirement is unknown");
 }
 - (void)execute {
     MaliMetalDevice *device = (MaliMetalDevice *)[self device];
@@ -618,43 +796,34 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
         for (NSUInteger i = 0; i < _operationCount; i++) {
             MMVKResult result = _operations[i](_commands, &error);
             [self recordBackendResult:result error:&error];
-            if (result != MMVK_OK)
+            if (result != MMVK_OK || [self error])
                 break;
         }
     if (!_error)
         [self recordBackendResult:mmvk_commands_submit(_commands, &_fence, &error) error:&error];
     if (!_error) {
-        pthread_mutex_lock(&_lock);
-        _submitted = YES;
-        _status = MTLCommandBufferStatusScheduled;
-        pthread_cond_broadcast(&_changed);
-        pthread_mutex_unlock(&_lock);
-        for (NSUInteger i = 0; i < _scheduledCount; i++) {
-            MTLCommandBufferHandler handler = _scheduledHandlers[i];
-            _scheduledHandlers[i] = nil;
-            handler(self);
-            [(id)handler release];
-        }
-        _scheduledCount = 0;
-        pthread_mutex_lock(&_lock);
-        _scheduledHandlersDone = YES;
-        pthread_cond_broadcast(&_changed);
-        pthread_mutex_unlock(&_lock);
+        [self markNativeSubmissionScheduled];
         MMVKResult result;
-        /* Timeout is nonterminal: keep all native objects alive while the GPU
-         * still owns them. Only a signaled fence or terminal native error ends
-         * this worker. Kernel/device recovery must turn hangs into device loss. */
+        /* Pending timeouts keep ownership. Other failures are reported now;
+         * this transport cannot infer physical retirement from its loss latch. */
         do {
-            result = mmvk_fence_wait(_fence, 5000000000ull, &error);
-            if (result != MMVK_OK && result != MMVK_TIMEOUT && result != MMVK_NOT_READY &&
-                result != MMVK_ERROR_DEVICE_LOST) {
-                /* Host allocation or wait errors do not establish GPU quiescence. */
-                [self recordBackendResult:result error:&error];
-                struct timespec pause = {0, 100000000};
-                nanosleep(&pause, NULL);
-            }
-        } while (result != MMVK_OK && result != MMVK_ERROR_DEVICE_LOST);
+            result=mmvk_fence_wait(_fence,5000000000ull,&error);
+            if(result<0){mmvk_device_mark_quarantined([device backendDevice]);break;}
+        } while(result==MMVK_TIMEOUT||result==MMVK_NOT_READY);
         [self recordBackendResult:result error:&error];
+    }
+    if(mmvk_device_is_quarantined([device backendDevice])){
+        if(!_error)[self recordBackendResult:MMVK_ERROR_DEVICE_LOST error:&error];
+        if(_fence||_submitted||(_syncStream&&mmvk_sync_stream_has_submissions(_syncStream)))[self quarantineNativeOwners];
+    }
+    if (!_error) {
+        for (NSUInteger i=0;i<_ownedResourceCount;i++) {
+            id resource=_ownedResources[i];
+            if([resource respondsToSelector:@selector(maliCompleteComputeExecution:)]) {
+                [self recordBackendResult:[resource maliCompleteComputeExecution:&error] error:&error];
+                if(_error)break;
+            }
+        }
     }
     if (!_error) {
         for (NSUInteger i = 0; i < _writtenBufferCount; i++) {
@@ -674,22 +843,30 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
             }
         }
     }
-    /* Release native command storage while referenced resources still live. */
-    if (_fence) {
-        mmvk_fence_destroy(_fence);
-        _fence = NULL;
+    /* Every segment retains its command storage/fence until native retirement,
+     * including earlier successful submits when later encoding/submission fails. */
+    if(_syncStream){
+        MMVKResult pending;
+        do{pending=mmvk_sync_stream_drain(_syncStream,5000000000ull,&error);}
+        while(pending==MMVK_TIMEOUT||pending==MMVK_NOT_READY);
+        [self recordBackendResult:pending error:&error];
+        if(pending<0)mmvk_device_mark_quarantined([device backendDevice]);
+        if(mmvk_device_is_quarantined([device backendDevice])){
+            mmvk_sync_stream_quarantine(_syncStream);[self quarantineNativeOwners];
+        }else{
+            [self recordBackendResult:mmvk_sync_stream_destroy(_syncStream,&error) error:&error];
+            _syncStream=NULL;
+        }
     }
-    if (_commands) {
-        mmvk_commands_destroy(_commands);
-        _commands = NULL;
+    if(mmvk_device_is_quarantined([device backendDevice])&&(_fence||_submitted))[self quarantineNativeOwners];
+    if(!_nativeQuarantined){
+        if(_fence){mmvk_fence_destroy(_fence);_fence=NULL;}
+        if(_commands){mmvk_commands_destroy(_commands);_commands=NULL;}
     }
     [device unlockExecution];
     if (!_error) {
         for (NSUInteger i = 0; i < _drawableCount; i++) {
-            if (_presentTimes[i] > 0)
-                [_drawables[i] presentAtTime:_presentTimes[i]];
-            else
-                [_drawables[i] present];
+            [self recordBackendResult:[_presentations[i] presentAfterGPUCompletion:&error] error:&error];
         }
     }
     pthread_mutex_lock(&_lock);
@@ -720,6 +897,7 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
         _scheduledHandlers[i] = nil;
     }
     _scheduledCount = 0;
+    if(!_nativeQuarantined){
     for (NSUInteger i = 0; i < _operationCount; i++)
         [(id)_operations[i] release];
     _operationCount = 0;
@@ -732,12 +910,17 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     for (NSUInteger i = 0; i < _ownedResourceCount; i++)
         [_ownedResources[i] release];
     _ownedResourceCount = 0;
+    [_visibility release];
+    [_fenceSubmission release];
+    _fenceSubmission=nil;
+    _visibility=nil;
     for (NSUInteger i = 0; i < _drawableCount; i++)
-        [(id)_drawables[i] release];
+        [_presentations[i] release];
     _drawableCount = 0;
     _outputCount = 0;
     _sampledTextureCount = 0;
     _writtenBufferCount = 0;
+    }
     pthread_mutex_lock(&_lock);
     _completedHandlersDone = YES;
     pthread_cond_broadcast(&_changed);
@@ -803,102 +986,64 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
 @end
 
 @implementation MaliMetalRenderCommandEncoder
+- (void)updateFence:(id<MTLFence>)fence afterStages:(NSUInteger)stages {
+    [self requireActive];
+    if(!stages || (stages & ~3ul)) {[_buffer recordUnsupported:"Fence stage mask is unsupported"];return;}
+    [_synchronization updateFence:fence];
+}
+- (void)waitForFence:(id<MTLFence>)fence beforeStages:(NSUInteger)stages {
+    [self requireActive];
+    if(!stages || (stages & ~3ul)) {[_buffer recordUnsupported:"Fence stage mask is unsupported"];return;}
+    [_synchronization waitForFence:fence];
+}
 - (instancetype)initWithBuffer:(MaliMetalCommandBuffer *)buffer
                     descriptor:(MTLRenderPassDescriptor *)descriptor {
-    self = [super init];
-    if (!self)
-        return nil;
-    _buffer = [buffer retain];
-    if (descriptor &&
-        ([[descriptor depthAttachment] texture] || [[descriptor stencilAttachment] texture])) {
-        [buffer recordUnsupported:"Depth and stencil attachments are unsupported"];
-        [self release];
-        return nil;
+    self=[super init];if(!self)return nil;
+    _buffer=[buffer retain];
+    _synchronization=[[MaliMetalEncoderSynchronization alloc] initWithBuffer:buffer];
+    if(!_synchronization){[buffer recordBackendResult:MMVK_ERROR_MEMORY error:NULL];[self release];return nil;}
+    mmvk_graphics_state_default(&_graphicsState);
+    MaliMetalGraphicsWinding(0,&_graphicsState,NULL);
+    MaliMetalGraphicsPass pass;
+    MMVKError error={0};
+    MMVKResult result=MaliMetalGraphicsCapturePass(descriptor,&pass,&error);
+    if(result){[buffer recordBackendResult:result error:&error];[self release];return nil;}
+    for(uint32_t n=0;n<pass.native.color_count;n++){
+        if(!pass.colors[n])continue;
+        pass.preserve_color[n]=pass.preserve_color[n]&&![buffer hasWrittenTexture:pass.colors[n]];
+        if(![buffer writeTexture:pass.colors[n]]||(pass.resolves[n]&&![buffer writeTexture:pass.resolves[n]])){[self release];return nil;}
+        _targetTextures[n]=pass.colors[n];_colorFormats[n]=[pass.colors[n] pixelFormat];
     }
-    if (!descriptor) {
-        [buffer recordUnsupported:"Render pass descriptor is nil"];
-        [self release];
-        return nil;
+    if(pass.depth_stencil){
+        BOOL first=![buffer hasWrittenTexture:pass.depth_stencil];
+        pass.preserve_depth&=first;pass.preserve_stencil&=first;
+        if(![buffer writeTexture:pass.depth_stencil]){[self release];return nil;}
     }
-    struct {
-        void *textures[8];
-        BOOL preserve[8], clear[8];
-        MTLClearColor colors[8];
-        uint32_t count, width, height;
-    } pass = {0};
-    for (NSUInteger i = 0; i < 8; i++) {
-        MTLRenderPassColorAttachmentDescriptor *attachment =
-            [[descriptor colorAttachments] objectAtIndexedSubscript:i];
-        id<MTLTexture> texture = [attachment texture];
-        if (!texture)
-            continue;
-        BOOL previouslyWritten = [buffer hasWrittenTexture:texture];
-        if (![buffer writeTexture:texture] || [attachment level] || [attachment slice] ||
-            [attachment depthPlane] || [attachment resolveTexture] ||
-            [attachment loadAction] > MTLLoadActionClear ||
-            [attachment storeAction] != MTLStoreActionStore ||
-            ([texture usage] && !([texture usage] & MTLTextureUsageRenderTarget)) ||
-            [texture width] > UINT32_MAX || [texture height] > UINT32_MAX ||
-            (pass.count && (pass.width != [texture width] || pass.height != [texture height]))) {
-            [buffer recordUnsupported:
-                "Unsupported render attachment, dimensions, subresource, usage or store action"];
-            [self release];
-            return nil;
+    if(pass.depth_stencil_resolve){
+        pass.preserve_depth_stencil_resolve&=![buffer hasWrittenTexture:pass.depth_stencil_resolve];
+        if(![buffer writeTexture:pass.depth_stencil_resolve]){[self release];return nil;}
+    }
+    _graphicsPass=pass;
+    [buffer appendOperation:^MMVKResult(MMVKCommands *commands,MMVKError *nativeError){
+        for(uint32_t n=0;n<pass.native.color_count;n++){
+            if(pass.colors[n]&&![(id)pass.colors[n] maliPrepareImage:pass.preserve_color[n] error:nativeError])return nativeError->code?nativeError->code:MMVK_ERROR_IO;
+            if(pass.resolves[n]&&![(id)pass.resolves[n] maliPrepareImage:NO error:nativeError])return nativeError->code?nativeError->code:MMVK_ERROR_IO;
         }
-        for (NSUInteger k = 0; k < i; k++)
-            if (texture == _targetTextures[k] ||
-                ([texture iosurface] && [texture iosurface] == [_targetTextures[k] iosurface])) {
-                [buffer recordUnsupported:"Render attachments alias the same texture"];
-                [self release];
-                return nil;
-            }
-        _colorFormats[i] = [texture pixelFormat];
-        _targetTextures[i] = texture;
-        pass.textures[i] = (void *)texture;
-        pass.preserve[i] = !previouslyWritten && [attachment loadAction] == MTLLoadActionLoad;
-        pass.clear[i] = [attachment loadAction] == MTLLoadActionClear;
-        pass.colors[i] = [attachment clearColor];
-        pass.count = (uint32_t)i + 1;
-        pass.width = (uint32_t)[texture width];
-        pass.height = (uint32_t)[texture height];
-    }
-    if (!pass.count) {
-        [buffer recordUnsupported:"Render pass requires a color attachment"];
-        [self release];
-        return nil;
-    }
-    [buffer appendOperation:^MMVKResult(MMVKCommands *commands, MMVKError *error) {
-        MMVKRenderTarget targets[8] = {0};
-        for (uint32_t i = 0; i < pass.count; i++) {
-            id target = (id)pass.textures[i];
-            if (!target)
-                continue;
-            if (![target maliPrepareImage:pass.preserve[i] error:error])
-                return error->code ? error->code : MMVK_ERROR_IO;
-            targets[i].image = [target maliImage];
-            targets[i].clear = pass.clear[i];
-            MTLClearColor color = pass.colors[i];
-            targets[i].rgba[0] = (float)color.red;
-            targets[i].rgba[1] = (float)color.green;
-            targets[i].rgba[2] = (float)color.blue;
-            targets[i].rgba[3] = (float)color.alpha;
-        }
-        MMVKResult result =
-            mmvk_commands_begin_render_targets(commands, targets, pass.count, error);
-        if (result == MMVK_OK)
-            result = mmvk_commands_set_viewport(commands, 0, pass.height, pass.width,
-                                                -(float)pass.height, 0, 1, error);
-        if (result == MMVK_OK)
-            result = mmvk_commands_set_scissor(commands, 0, 0, pass.width, pass.height, error);
-        return result;
+        if(pass.depth_stencil&&![(id)pass.depth_stencil maliPrepareImage:pass.preserve_depth||pass.preserve_stencil error:nativeError])return nativeError->code?nativeError->code:MMVK_ERROR_IO;
+        if(pass.depth_stencil_resolve&&![(id)pass.depth_stencil_resolve maliPrepareImage:pass.preserve_depth_stencil_resolve error:nativeError])return nativeError->code?nativeError->code:MMVK_ERROR_IO;
+        MMVKResult native=mmvk_commands_begin_graphics_pass(commands,&pass.native,nativeError);
+        if(native==MMVK_OK)native=mmvk_commands_set_viewport(commands,0,pass.native.height,pass.native.width,-(float)pass.native.height,0,1,nativeError);
+        return native;
     }];
-    if ([buffer error]) {
-        [self release];
-        return nil;
-    }
-    return self;
+    if([buffer error]){[self release];return nil;}return self;
 }
+/* Canonical draw integration copies this state and the pass layout into its
+ * immutable variant key before recording; these pointers are encoder-local. */
+- (const MMVKGraphicsState *)maliGraphicsState {return &_graphicsState;}
+- (const MMVKRenderPassDescriptor *)maliGraphicsPass {return &_graphicsPass.native;}
+- (const float *)maliBlendColor {return _blendColor;}
 - (void)dealloc {
+    [_synchronization release];
     [_buffer release];
     [super dealloc];
 }
@@ -916,18 +1061,9 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
         [_buffer recordUnsupported:"Render pipeline has no executable native shader"];
         return;
     }
-    for (NSUInteger i = 0; i < 8; i++)
-        if ([(id)pipeline maliColorFormatAtIndex:i] != _colorFormats[i]) {
-            [_buffer recordUnsupported:"Pipeline formats differ from render attachments"];
-            return;
-        }
-    if (![_buffer useResource:(id)pipeline])
-        return;
-    _pipeline = (id)pipeline;
-    MMVKPipeline *native = [(id)pipeline maliPipeline];
-    [_buffer appendOperation:^MMVKResult(MMVKCommands *commands, MMVKError *error) {
-        return mmvk_commands_bind_pipeline(commands, native, error);
-    }];
+    if (![_buffer useResource:(id)pipeline]) return;
+    _pipeline=(id)pipeline;
+
 }
 - (void)setVertexBuffer:(id<MTLBuffer>)buffer offset:(NSUInteger)offset atIndex:(NSUInteger)index {
     [self requireActive];
@@ -1023,19 +1159,42 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
         [self setFragmentBuffer:buffers[i] offset:offsets[i] atIndex:range.location + i];
 }
 - (void)setDepthStencilState:(id)state {
-    [self requireActive];
-    if (state)
-        [_buffer recordUnsupported:"Depth/stencil state is unsupported"];
+    [self requireActive];MMVKError error={0};
+    MMVKResult result=MaliMetalGraphicsApplyDepthStencil(state,[self device],&_graphicsState,&error);
+    if(result)[_buffer recordBackendResult:result error:&error];
 }
 - (void)setCullMode:(NSUInteger)mode {
-    [self requireActive];
-    if (mode)
-        [_buffer recordUnsupported:"Face culling is unsupported"];
+    [self requireActive];MMVKError error={0};MMVKResult result=MaliMetalGraphicsCullMode(mode,&_graphicsState,&error);
+    if(result)[_buffer recordBackendResult:result error:&error];
 }
 - (void)setDepthClipMode:(NSUInteger)mode {
+    [self requireActive];MMVKError error={0};MMVKResult result=MaliMetalGraphicsDepthClipMode(mode,&_graphicsState,&error);
+    if(result)[_buffer recordBackendResult:result error:&error];
+}
+- (void)setFrontFacingWinding:(NSUInteger)winding {
+    [self requireActive];MMVKError error={0};MMVKResult result=MaliMetalGraphicsWinding(winding,&_graphicsState,&error);
+    if(result)[_buffer recordBackendResult:result error:&error];
+}
+- (void)setTriangleFillMode:(NSUInteger)mode {
+    [self requireActive];MMVKError error={0};MMVKResult result=MaliMetalGraphicsFillMode(mode,&_graphicsState,&error);
+    if(result)[_buffer recordBackendResult:result error:&error];
+}
+- (void)setBlendColorRed:(float)red green:(float)green blue:(float)blue alpha:(float)alpha {
     [self requireActive];
-    if (mode)
-        [_buffer recordUnsupported:"Depth clamping is unsupported"];
+    if(!isfinite(red)||!isfinite(green)||!isfinite(blue)||!isfinite(alpha)){[_buffer recordUnsupported:"Invalid blend color"];return;}
+    struct {float value[4];} color={{red,green,blue,alpha}};
+    memcpy(_blendColor,color.value,sizeof(_blendColor));
+    [_buffer appendOperation:^MMVKResult(MMVKCommands *commands,MMVKError *error){return mmvk_commands_set_blend_constants(commands,color.value,error);}];
+}
+- (void)setStencilReferenceValue:(uint32_t)value {[self setStencilFrontReferenceValue:value backReferenceValue:value];}
+- (void)setStencilFrontReferenceValue:(uint32_t)front backReferenceValue:(uint32_t)back {
+    [self requireActive];
+    [_buffer appendOperation:^MMVKResult(MMVKCommands *commands,MMVKError *error){return mmvk_commands_set_stencil_reference(commands,front,back,error);}];
+}
+- (void)setDepthBias:(float)bias slopeScale:(float)slope clamp:(float)clamp {
+    [self requireActive];
+    if(!isfinite(bias)||!isfinite(slope)||!isfinite(clamp)){[_buffer recordUnsupported:"Invalid depth bias"];return;}
+    [_buffer appendOperation:^MMVKResult(MMVKCommands *commands,MMVKError *error){return mmvk_commands_set_depth_bias(commands,bias,slope,clamp,error);}];
 }
 - (void)setFragmentTexture:(id<MTLTexture>)texture atIndex:(NSUInteger)index {
     [self requireActive];
@@ -1075,7 +1234,7 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
         return;
     }
     if (sampler &&
-        (![(id)sampler respondsToSelector:@selector(maliSampler)] || ![(id)sampler maliSampler])) {
+        (![(id)sampler isKindOfClass:[MaliMetalSampler class]] || [(id)sampler device] != [self device])) {
         [_buffer recordUnsupported:"Sampler has no native state"];
         return;
     }
@@ -1098,7 +1257,7 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
         return;
     }
     if (sampler &&
-        (![(id)sampler respondsToSelector:@selector(maliSampler)] || ![(id)sampler maliSampler])) {
+        (![(id)sampler isKindOfClass:[MaliMetalSampler class]] || [(id)sampler device] != [self device])) {
         [_buffer recordUnsupported:"Sampler has no native state"];
         return;
     }
@@ -1189,9 +1348,9 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
         return NO;
     }
     for (uint32_t i = 0; i < plan->binding_count; i++)
-        if (plan->bindings[i].vulkan_type == 1) {
+        if (plan->bindings[i].vulkan_type >= 1 && plan->bindings[i].vulkan_type <= 3) {
             const MMShaderBackendBinding *binding = plan->bindings + i;
-            if (binding->metal_index >= 128 || binding->sampler_index >= 16 ||
+            if (binding->metal_index >= 128 || (binding->sampler_index != UINT32_MAX && binding->sampler_index >= 16) ||
                 binding->metal_stage > MM_SHADER_FRAGMENT) {
                 [_buffer recordUnsupported:"Invalid compiled sampled resource slot"];
                 return NO;
@@ -1199,15 +1358,14 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
             id<MTLTexture> texture = binding->metal_stage == MM_SHADER_VERTEX
                                          ? _vertexTextures[binding->metal_index]
                                          : _fragmentTextures[binding->metal_index];
-            id<MTLSamplerState> sampler = binding->metal_stage == MM_SHADER_VERTEX
-                                              ? _vertexSamplers[binding->sampler_index]
-                                              : _fragmentSamplers[binding->sampler_index];
+            id<MTLSamplerState> sampler = binding->sampler_index==UINT32_MAX?nil:
+                (binding->metal_stage == MM_SHADER_VERTEX?_vertexSamplers[binding->sampler_index]:_fragmentSamplers[binding->sampler_index]);
             BOOL aliases = NO;
             for (NSUInteger k = 0; k < 8; k++)
                 if (texture == _targetTextures[k] ||
                     ([texture iosurface] && [texture iosurface] == [_targetTextures[k] iosurface]))
                     aliases = YES;
-            if (!sampler || !texture || aliases) {
+            if ((binding->sampler_index!=UINT32_MAX&&!sampler) || !texture || aliases) {
                 [_buffer recordUnsupported:
                              "Sampled image/sampler is missing or aliases the render target"];
                 return NO;
@@ -1225,6 +1383,56 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     }
     *resources = bindings;
     return YES;
+}
+- (void)recordCanonicalDraw:(const MMShaderRenderDrawRequest *)request
+                  resources:(const MMShaderVulkanBindings *)resources indices:(MMVKBuffer *)indices {
+    MMShaderRenderBindings facts={0};
+    facts.render_width=_graphicsPass.native.width;facts.render_height=_graphicsPass.native.height;
+    facts.render_target_array_length=_graphicsPass.native.layers;facts.viewport_count=1;
+    memcpy(facts.blend_color,_blendColor,sizeof(facts.blend_color));
+    for(NSUInteger i=0;i<8;i++)facts.color_formats[i]=(uint32_t)_colorFormats[i];
+    for(NSUInteger i=0;i<31;i++){
+        id vertex=(id)_vertexBuffers[i],fragment=(id)_fragmentBuffers[i];
+        facts.vertex.buffers[i]=(MMShaderRenderBuffer){.length=[vertex length],.offset=_vertexOffsets[i],.bound=vertex!=nil,
+            .gpu_address=mmvk_buffer_device_address([vertex maliBuffer]),.device_address=mmvk_buffer_device_address([vertex maliBuffer])};
+        facts.fragment.buffers[i]=(MMShaderRenderBuffer){.length=[fragment length],.offset=_fragmentOffsets[i],.bound=fragment!=nil,
+            .gpu_address=mmvk_buffer_device_address([fragment maliBuffer]),.device_address=mmvk_buffer_device_address([fragment maliBuffer])};
+    }
+    for(NSUInteger i=0;i<128;i++){
+        if(_vertexTextures[i])facts.vertex.textures[i]=[(MaliMetalTexture *)_vertexTextures[i] maliRenderTextureFacts];
+        if(_fragmentTextures[i])facts.fragment.textures[i]=[(MaliMetalTexture *)_fragmentTextures[i] maliRenderTextureFacts];
+    }
+    for(NSUInteger i=0;i<16;i++){
+        if(_vertexSamplers[i])facts.vertex.samplers[i]=[(MaliMetalSampler *)_vertexSamplers[i] maliRenderSamplerFacts];
+        if(_fragmentSamplers[i])facts.fragment.samplers[i]=[(MaliMetalSampler *)_fragmentSamplers[i] maliRenderSamplerFacts];
+    }
+    MMVKGraphicsState state=_graphicsState;
+    const MMVKGraphicsState *compiled=[_pipeline maliGraphicsPipelineState];
+    state.sample_count=compiled->sample_count;state.alpha_to_coverage=compiled->alpha_to_coverage;
+    state.alpha_to_one=compiled->alpha_to_one;state.rasterizer_discard=compiled->rasterizer_discard;
+    MMVKError error={0};
+    if(MaliMetalGraphicsTopology(request->primitive_type,&state.topology,&error)!=MMVK_OK){[_buffer recordBackendResult:error.code error:&error];return;}
+    MMVKPassLayout pass={.color_count=_graphicsPass.native.color_count,.sample_count=1};
+    for(uint32_t n=0;n<pass.color_count;n++)if(_graphicsPass.native.colors[n].view.image){
+        MMVKImage *image=_graphicsPass.native.colors[n].view.image;
+        pass.color_formats[n]=mmvk_image_format(image);pass.sample_count=mmvk_image_descriptor(image)->samples;
+        if(_graphicsPass.native.colors[n].resolve.image)pass.resolve_mask|=1u<<n;
+    }
+    if(_graphicsPass.native.depth_stencil.view.image){
+        MMVKImage *image=_graphicsPass.native.depth_stencil.view.image;
+        pass.depth_stencil_format=mmvk_image_format(image);pass.sample_count=mmvk_image_descriptor(image)->samples;
+        pass.depth_resolve_mode=_graphicsPass.native.depth_stencil.depth_resolve_mode;
+        pass.stencil_resolve_mode=_graphicsPass.native.depth_stencil.stencil_resolve_mode;
+    }
+    MaliMetalRenderDraw *draw=[[MaliMetalRenderDraw alloc] initWithPipeline:_pipeline program:[_pipeline maliRenderProgram]
+        resources:resources bindings:&facts request:request state:&state pass:&pass error:&error];
+    if(!draw){[_buffer recordBackendResult:error.code?error.code:MMVK_ERROR_MEMORY error:&error];return;}
+    if(![_buffer useOwnedResource:draw]){[draw release];return;}
+    void *record=(void *)draw;
+    [_buffer appendOperation:^MMVKResult(MMVKCommands *commands,MMVKError *nativeError){
+        return [(MaliMetalRenderDraw *)record record:commands indices:indices error:nativeError];
+    }];
+    [draw release];
 }
 - (BOOL)validateVertexBindingsForStart:(uint64_t)start
                                  count:(uint64_t)count
@@ -1292,14 +1500,10 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
                                                                          instanceCount:instances
                                                                                indexed:NO])
         return;
-    const MMShaderRenderOutput *output = [_pipeline maliShaderOutput];
-    [_buffer appendOperation:^MMVKResult(MMVKCommands *commands, MMVKError *error) {
-        MMVKResult result = MMShaderVulkanBindResources(commands, output, &bindings, error);
-        if (result == MMVK_OK)
-            result = mmvk_commands_draw(commands, (uint32_t)start, (uint32_t)count,
-                                        (uint32_t)instances, (uint32_t)baseInstance, error);
-        return result;
-    }];
+    MMShaderRenderDrawRequest request={.kind=0,.primitive_type=(uint32_t)type,.start=(uint32_t)start,
+        .count=(uint32_t)count,.instance_count=(uint32_t)instances,.base_instance=(uint32_t)baseInstance};
+    [self recordCanonicalDraw:&request resources:&bindings indices:NULL];
+
 }
 - (void)drawIndexedPrimitives:(NSUInteger)type
                    indexCount:(NSUInteger)count
@@ -1370,37 +1574,62 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
                                                                          instanceCount:instances
                                                                                indexed:YES])
         return;
-    const MMShaderRenderOutput *output = [_pipeline maliShaderOutput];
-    MMVKBuffer *indices = [(id)indexBuffer maliBuffer];
-    [_buffer appendOperation:^MMVKResult(MMVKCommands *commands, MMVKError *error) {
-        MMVKResult result = MMShaderVulkanBindResources(commands, output, &bindings, error);
-        if (result == MMVK_OK)
-            result = mmvk_commands_bind_index_buffer(commands, indices, offset, (uint32_t)indexType,
-                                                     error);
-        if (result == MMVK_OK)
-            result = mmvk_commands_draw_indexed(commands, (uint32_t)count, (uint32_t)instances, 0,
-                                                (int32_t)baseVertex, (uint32_t)baseInstance, error);
-        return result;
-    }];
+    MMShaderRenderDrawRequest request={.kind=1,.primitive_type=(uint32_t)type,.count=(uint32_t)count,
+        .instance_count=(uint32_t)instances,.base_instance=(uint32_t)baseInstance,.base_vertex=(int32_t)baseVertex,
+        .index_type=(uint32_t)indexType,.index_length=[indexBuffer length],.index_offset=offset};
+    [self recordCanonicalDraw:&request resources:&bindings indices:[(id)indexBuffer maliBuffer]];
+
 }
 - (void)endEncoding {
     [self requireActive];
     [_buffer appendOperation:^MMVKResult(MMVKCommands *commands, MMVKError *error) {
         return mmvk_commands_end_render(commands, error);
     }];
+    [_synchronization endEncoding];
     _ended = YES;
     [_buffer endEncoder];
 }
 @end
 
 @implementation MaliMetalBlitCommandEncoder
+- (void)synchronizeTexture:(id<MTLTexture>)texture slice:(NSUInteger)slice level:(NSUInteger)level {
+    [self requireActive];
+    if(slice || level) {[_buffer recordUnsupported:"Non-base texture host synchronization needs a subresource readback contract"];return;}
+    [self synchronizeResource:(id)texture];
+}
+- (void)synchronizeResource:(id<MTLResource>)resource {
+    [self requireActive];
+    if(!resource || [resource device]!=[self device]) {
+        [NSException raise:@"NSInvalidArgumentException" format:@"Invalid synchronized resource"];return;
+    }
+    if(![_buffer useResource:(id)resource]) return;
+    if([(id)resource respondsToSelector:@selector(maliBuffer)]) {
+        MMVKBuffer *native=[(id)resource maliBuffer];
+        if(!native) {[_buffer recordUnsupported:"Synchronized buffer has no native allocation"];return;}
+        [_buffer writeBuffer:(id)resource];
+        [_buffer appendOperation:^MMVKResult(MMVKCommands *commands,MMVKError *error) {
+            return mmvk_commands_synchronize_buffer(commands,native,error);
+        }];
+    } else if([(id)resource respondsToSelector:@selector(maliImage)]) {
+        if(![_buffer writeTexture:(id)resource]) return;
+        [_buffer appendOperation:^MMVKResult(MMVKCommands *commands,MMVKError *error) {
+            return mmvk_commands_full_barrier(commands,error);
+        }];
+    } else [_buffer recordUnsupported:"Resource has no host synchronization contract"];
+}
+- (void)updateFence:(id<MTLFence>)fence { [self requireActive];[_synchronization updateFence:fence]; }
+- (void)waitForFence:(id<MTLFence>)fence { [self requireActive];[_synchronization waitForFence:fence]; }
 - (instancetype)initWithBuffer:(MaliMetalCommandBuffer *)buffer {
     self = [super init];
-    if (self)
+    if (self) {
         _buffer = [buffer retain];
+        _synchronization=[[MaliMetalEncoderSynchronization alloc] initWithBuffer:buffer];
+        if(!_synchronization){[buffer recordBackendResult:MMVK_ERROR_MEMORY error:NULL];[self release];return nil;}
+    }
     return self;
 }
 - (void)dealloc {
+    [_synchronization release];
     [_buffer release];
     [super dealloc];
 }
@@ -1466,19 +1695,26 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
 }
 - (void)endEncoding {
     [self requireActive];
+    [_synchronization endEncoding];
     _ended = YES;
     [_buffer endEncoder];
 }
 @end
 
 @implementation MaliMetalComputeCommandEncoder
+- (void)updateFence:(id<MTLFence>)fence { [self requireActive];[_synchronization updateFence:fence]; }
+- (void)waitForFence:(id<MTLFence>)fence { [self requireActive];[_synchronization waitForFence:fence]; }
 - (instancetype)initWithBuffer:(MaliMetalCommandBuffer *)buffer {
     self = [super init];
-    if (self)
+    if (self) {
         _buffer = [buffer retain];
+        _synchronization = [[MaliMetalEncoderSynchronization alloc] initWithBuffer:buffer];
+    if(!_synchronization) {[buffer recordBackendResult:MMVK_ERROR_MEMORY error:NULL];[self release];return nil;}
+    }
     return self;
 }
 - (void)dealloc {
+    [_synchronization release];
     [_buffer release];
     [super dealloc];
 }
@@ -1585,7 +1821,7 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
         return;
     }
     if (sampler &&
-        (![(id)sampler respondsToSelector:@selector(maliSampler)] || ![(id)sampler maliSampler])) {
+        (![(id)sampler isKindOfClass:[MaliMetalSampler class]] || [(id)sampler device] != [self device])) {
         [_buffer recordUnsupported:"Compute sampler has no native state"];
         return;
     }
@@ -1612,6 +1848,40 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     }
     _threadgroupLengths[index] = (uint32_t)length;
 }
+- (void)setStageInRegion:(MTLRegion)region {
+    [self requireActive];
+    NSUInteger values[6]={region.origin.x,region.origin.y,region.origin.z,region.size.width,region.size.height,region.size.depth};
+    for(unsigned i=0;i<6;i++)if(values[i]>UINT32_MAX){[_buffer recordUnsupported:"Stage-in region exceeds compute ABI"];return;}
+    _stageInRegionBound=YES;
+    for(unsigned i=0;i<3;i++){_stageInOrigin[i]=(uint32_t)values[i];_stageInSize[i]=(uint32_t)values[i+3];}
+}
+- (void)setImageblockWidth:(NSUInteger)width height:(NSUInteger)height {
+    [self requireActive];
+    if(width>UINT32_MAX||height>UINT32_MAX){[_buffer recordUnsupported:"Imageblock size exceeds compute ABI"];return;}
+    _imageblockSize[0]=(uint32_t)width;_imageblockSize[1]=(uint32_t)height;
+}
+- (void)dispatchThreadgroupsWithIndirectBuffer:(id<MTLBuffer>)buffer indirectBufferOffset:(NSUInteger)offset threadsPerThreadgroup:(MTLSize)threads {
+    [self requireActive];
+    if(!buffer||offset%4||offset>[buffer length]||12>[buffer length]-offset||
+       ![(id)buffer respondsToSelector:@selector(maliBuffer)]||![(id)buffer maliBuffer]) {
+        [_buffer recordUnsupported:"Indirect dispatch requires twelve aligned bytes in a native buffer"];return;
+    }
+    if(![_buffer useResource:(id)buffer])return;
+    _indirectBuffer=buffer;_indirectOffset=offset;
+    [self encodeDispatch:MM_SHADER_DISPATCH_INDIRECT grid:MTLSizeMake(1,1,1) threadsPerThreadgroup:threads];
+    _indirectBuffer=nil;_indirectOffset=0;
+}
+- (void)memoryBarrierWithScope:(MTLBarrierScope)scope {
+    [self requireActive];
+    if(!scope||(scope&~7u)){[_buffer recordUnsupported:"Invalid compute barrier scope"];return;}
+    [_buffer appendOperation:^MMVKResult(MMVKCommands *commands,MMVKError *error){return MMShaderVulkanComputeMemoryBarrier(commands,error);}];
+}
+- (void)memoryBarrierWithResources:(const id<MTLResource> *)resources count:(NSUInteger)count {
+    [self requireActive];
+    if(count&&!resources){[_buffer recordUnsupported:"Missing compute barrier resources"];return;}
+    for(NSUInteger i=0;i<count;i++)if(!resources[i]||![_buffer useResource:(id)resources[i]])return;
+    if(count)[_buffer appendOperation:^MMVKResult(MMVKCommands *commands,MMVKError *error){return MMShaderVulkanComputeMemoryBarrier(commands,error);}];
+}
 - (void)dispatchThreadgroups:(MTLSize)groups threadsPerThreadgroup:(MTLSize)threads {
     [self encodeDispatch:MM_SHADER_DISPATCH_THREADGROUPS grid:groups threadsPerThreadgroup:threads];
 }
@@ -1630,7 +1900,7 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
         [_buffer recordUnsupported:"Compute grid or threadgroup size exceeds the native ABI"];
         return;
     }
-    if (!grid.width || !grid.height || !grid.depth)
+    if (kind != MM_SHADER_DISPATCH_INDIRECT && (!grid.width || !grid.height || !grid.depth))
         return;
     const MMShaderComputeOutput *output = [_pipeline maliComputeOutput];
     if (!output || !output->prepare_dispatch || output->binding_count > MM_SHADER_MAX_BINDINGS) {
@@ -1654,8 +1924,23 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
         resources.logical_lengths[i] = [_buffers[i] length];
         resources.threadgroup_lengths[i] = _threadgroupLengths[i];
     }
-    for (NSUInteger i = 0; i < 128; i++)
+    for (NSUInteger i = 0; i < 128; i++) {
         resources.textures[i] = [(id)_textures[i] maliImage];
+        resources.metal_pixel_formats[i]=(uint32_t)[_textures[i] pixelFormat];
+    }
+    for(NSUInteger i=0;i<16;i++)if(_samplers[i]){
+        MMShaderRenderSampler f=[(MaliMetalSampler *)_samplers[i] maliRenderSamplerFacts];
+        resources.sampler_facts[i]=(MMShaderComputeSampler){.bound=f.bound,.min_filter=f.min_filter,
+            .mag_filter=f.mag_filter,.mip_filter=f.mip_filter,.address={f.s_address_mode,f.t_address_mode,f.r_address_mode},
+            .border_color=f.border_color,.normalized_coordinates=f.normalized_coordinates,.lod_average=f.lod_average,
+            .max_anisotropy=f.max_anisotropy,.compare_function=f.compare_function,.reduction_mode=f.reduction_mode,
+            .lod_min_clamp=f.lod_min_clamp,.lod_max_clamp=f.lod_max_clamp};
+    }
+    resources.stage_in_region_bound=_stageInRegionBound;
+    memcpy(resources.stage_in_origin,_stageInOrigin,sizeof(_stageInOrigin));
+    memcpy(resources.stage_in_size,_stageInSize,sizeof(_stageInSize));
+    memcpy(resources.imageblock_size,_imageblockSize,sizeof(_imageblockSize));
+    resources.indirect_buffer=[(id)_indirectBuffer maliBuffer];resources.indirect_length=[_indirectBuffer length];
     MMVKBuffer *const *constants = [_pipeline maliComputeConstants];
     if (constants)
         memcpy(resources.constant_buffers, constants, sizeof(resources.constant_buffers));
@@ -1691,9 +1976,10 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
         return;
     }
     MMShaderComputeDispatchRequest request = {
-        kind,
-        {(uint32_t)grid.width, (uint32_t)grid.height, (uint32_t)grid.depth},
-        {(uint32_t)threads.width, (uint32_t)threads.height, (uint32_t)threads.depth}};
+        .kind=kind,
+        .grid={(uint32_t)grid.width, (uint32_t)grid.height, (uint32_t)grid.depth},
+        .threads_per_threadgroup={(uint32_t)threads.width, (uint32_t)threads.height, (uint32_t)threads.depth},
+        .indirect_length=resources.indirect_length,.indirect_offset=_indirectOffset};
     MMShaderComputeDispatchPlan plan = {0};
     MMShaderError shaderError = {0};
     MMShaderStatus status =
@@ -1717,41 +2003,20 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
         MMShaderComputeDispatchPlanDestroy(&plan);
         return;
     }
-    MaliMetalComputeDispatchRecord *record =
-        [[MaliMetalComputeDispatchRecord alloc] initWithPlan:&plan];
-    if (!record) {
+    MaliMetalComputeDispatchRecord *record = [[MaliMetalComputeDispatchRecord alloc]
+        initWithPlan:&plan device:(MaliMetalDevice *)[self device] output:output resources:&resources error:&nativeError];
+    if(!record){
         MMShaderComputeDispatchPlanDestroy(&plan);
-        [_buffer recordBackendResult:MMVK_ERROR_MEMORY error:NULL];
-        return;
+        [_buffer recordBackendResult:nativeError.code?nativeError.code:MMVK_ERROR_MEMORY error:&nativeError];return;
     }
-    void *rawPipeline = (void *)_pipeline;
-    [_buffer appendOperation:^MMVKResult(MMVKCommands *commands, MMVKError *error) {
-        const MMShaderComputeDispatchPlan *dispatch = [record plan];
-        id pipeline = (id)rawPipeline;
-        for (uint32_t r = 0; r < dispatch->region_count; r++) {
-            const MMShaderComputeRegion *region = dispatch->regions + r;
-            MMVKPipeline *variant = [pipeline maliComputeVariantForRegion:region error:error];
-            if (!variant)
-                return error->code ? error->code : MMVK_ERROR_SHADER;
-            MMVKResult native = mmvk_commands_bind_pipeline(commands, variant, error);
-            if (native == MMVK_OK)
-                native = MMShaderVulkanBindComputeResources(commands, output, &resources, dispatch,
-                                                            error);
-            if (native == MMVK_OK)
-                native = MMShaderVulkanPushComputeRegion(commands, output, region, error);
-            if (native == MMVK_OK)
-                native =
-                    mmvk_commands_dispatch(commands, region->group_count[0], region->group_count[1],
-                                           region->group_count[2], error);
-            if (native != MMVK_OK)
-                return native;
-        }
-        return MMVK_OK;
+    if([_buffer useOwnedResource:record])[_buffer appendOperation:^MMVKResult(MMVKCommands *commands,MMVKError *error){
+        return [record record:commands error:error];
     }];
     [record release];
 }
 - (void)endEncoding {
     [self requireActive];
+    [_synchronization endEncoding];
     _ended = YES;
     [_buffer endEncoder];
 }

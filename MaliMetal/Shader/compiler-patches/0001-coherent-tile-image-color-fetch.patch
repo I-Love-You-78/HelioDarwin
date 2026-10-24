@@ -1,0 +1,1320 @@
+--- a/crates/metal2vulkan-runtime/src/device/create.rs
++++ b/crates/metal2vulkan-runtime/src/device/create.rs
+@@ -751,6 +751,12 @@
+ /// set.
+ pub(crate) fn enable_set(description: &DeviceDescription, options: &DeviceOptions) -> EnableSet {
+     let mut set = description.recommended_enables(&options.policy);
++    // This runtime's pass consumer still uses VkRenderPass. Descriptor-free tile
++    // reads require a dynamic-rendering consumer, so do not select that lowering.
++    set.features
++        .remove(&VkFeature::ShaderTileImageColorReadAccess);
++    set.features.remove(&VkFeature::DynamicRendering);
++    set.extensions.remove(&VkExtension::ExtShaderTileImage);
+     set.features
+         .retain(|feature| !options.withheld_features.contains(feature));
+     let host_memory = VkExtension::ExtExternalMemoryHost;
+--- a/crates/metal2vulkan/src/ash_interop/query.rs
++++ b/crates/metal2vulkan/src/ash_interop/query.rs
+@@ -308,6 +308,8 @@
+     barycentric: avk::PhysicalDeviceFragmentShaderBarycentricFeaturesKHR<'static>,
+     interlock: avk::PhysicalDeviceFragmentShaderInterlockFeaturesEXT<'static>,
+     raster_order: avk::PhysicalDeviceRasterizationOrderAttachmentAccessFeaturesEXT<'static>,
++    tile_image: avk::PhysicalDeviceShaderTileImageFeaturesEXT<'static>,
++    dynamic_rendering: avk::PhysicalDeviceDynamicRenderingFeatures<'static>,
+     dynamic_state: avk::PhysicalDeviceExtendedDynamicStateFeaturesEXT<'static>,
+     dynamic_state2: avk::PhysicalDeviceExtendedDynamicState2FeaturesEXT<'static>,
+     dynamic_state3: avk::PhysicalDeviceExtendedDynamicState3FeaturesEXT<'static>,
+@@ -403,6 +405,8 @@
+     barycentric: bool,
+     interlock: bool,
+     raster_order: bool,
++    tile_image: bool,
++    dynamic_rendering: bool,
+     dynamic_state: bool,
+     dynamic_state2: bool,
+     dynamic_state3: bool,
+@@ -450,6 +454,8 @@
+             barycentric: x.ext(EXT_BARYCENTRIC),
+             interlock: x.ext(EXT_INTERLOCK),
+             raster_order: x.ext(EXT_RASTER_ORDER),
++            tile_image: x.core(3) && x.ext(&["VK_EXT_shader_tile_image"]),
++            dynamic_rendering: pre13(&["VK_KHR_dynamic_rendering"]),
+             // Core in 1.3 without a feature bit.
+             dynamic_state: !v13 && x.ext(EXT_DYNAMIC_STATE),
+             dynamic_state2: !v13 && x.ext(EXT_DYNAMIC_STATE2),
+@@ -519,6 +525,8 @@
+                 barycentric,
+                 interlock,
+                 raster_order,
++                tile_image,
++                dynamic_rendering,
+                 dynamic_state,
+                 dynamic_state2,
+                 dynamic_state3,
+@@ -643,6 +651,8 @@
+         terminate.shader_terminate_invocation
+     );
+     DynamicRenderingLocalRead => on(c.local_read.dynamic_rendering_local_read);
++    DynamicRendering => v13_or!(c.dynamic_rendering,dynamic_rendering.dynamic_rendering);
++    ShaderTileImageColorReadAccess => on(c.tile_image.shader_tile_image_color_read_access);
+     RasterizationOrderColorAttachmentAccess =>
+         on(c.raster_order.rasterization_order_color_attachment_access);
+     RasterizationOrderDepthAttachmentAccess =>
+--- a/crates/metal2vulkan/src/cache/codec.rs
++++ b/crates/metal2vulkan/src/cache/codec.rs
+@@ -863,6 +863,7 @@
+ 
+ codec_enum! {
+     VkFeature {
++        ShaderTileImageColorReadAccess, DynamicRendering,
+         RobustBufferAccess, RobustBufferAccess2, RobustImageAccess, RobustImageAccess2,
+         NullDescriptor, ShaderInt8, ShaderInt16, ShaderInt64, ShaderFloat16, ShaderFloat64,
+         StorageBuffer8BitAccess, UniformAndStorageBuffer8BitAccess, StoragePushConstant8,
+@@ -929,6 +930,7 @@
+         ShaderFmaFloat16,
+     }
+     VkExtension {
++        ExtShaderTileImage,
+         ExtRobustness2, ExtImageRobustness, ExtShaderAtomicFloat, ExtShaderAtomicFloat2,
+         ExtShaderImageAtomicInt64, ExtShaderStencilExport, ExtShaderDemoteToHelperInvocation,
+         ExtShaderViewportIndexLayer, ExtFragmentShaderInterlock, ExtSubgroupSizeControl,
+@@ -1026,6 +1028,7 @@
+         StorageTexelBufferReadWithoutFormat, StorageTexelBufferWriteWithoutFormat,
+     }
+     SpirvExtension {
++        ExtShaderTileImage,
+         KhrTerminateInvocation, ExtDemoteToHelperInvocation, ExtFragmentShaderInterlock,
+         KhrFragmentShaderBarycentric, ExtShaderStencilExport, ExtShaderViewportIndexLayer,
+         ExtShaderAtomicFloatAdd, ExtShaderAtomicFloatMinMax, ExtShaderImageInt64,
+@@ -1067,6 +1070,7 @@
+     PlacedField { field, loc, size }
+     ThreadgroupArgument { stage, index, alignment }
+     StageIo {
++        tile_image_colors,
+         inputs, outputs, builtins, pulled, stage_in, multisampled, varyings_at_pixel,
+         position_depth, coverage_loop, color_writes, rounded_colors, primitive_inputs,
+         early_fragment_tests, extended_range_colors, unattached_colors, half_bit_colors,
+@@ -1297,6 +1301,7 @@
+     VertexAttribute { location, binding, format, offset }
+     PulledAttribute { attribute, buffer_index, format, offset, step_function, step_rate, stride }
+     GraphicsState {
++        tile_image_color_reads,
+         topology, color_attachments, depth_format, stencil_format, rasterization_samples,
+         alpha_to_coverage, alpha_to_one, rasterizer_discard, dynamic_states, input_attachments,
+         rasterization_order_attachment_access, max_vertex_amplification_count, declares_layer,
+--- a/crates/metal2vulkan/src/cache/mod.rs
++++ b/crates/metal2vulkan/src/cache/mod.rs
+@@ -60,7 +60,7 @@
+ /// unchanged version, and its bless records the version. Independent of the crate's version and of
+ /// [`ARTIFACT_FORMAT_VERSION`]. The commit that bumps it says what changed; this comment keeps no
+ /// history.
+-pub const SEMANTICS_VERSION: u32 = 1798;
++pub const SEMANTICS_VERSION: u32 = 1799;
+ 
+ /// The byte-layout version of encoded artifacts (`CompiledFunction::to_bytes` and the
+ /// [`PipelineArtifact`] encodings). Every encoded artifact carries it, and a decode under another
+@@ -70,7 +70,7 @@
+ /// re-typed in an encoded type, its `codec` body or its `envelope`. A variant removed while its tag
+ /// stays unused needs no bump: an entry holding it fails to decode, which is a miss. The commit that
+ /// bumps it says what changed; this comment keeps no history.
+-pub const ARTIFACT_FORMAT_VERSION: u32 = 431;
++pub const ARTIFACT_FORMAT_VERSION: u32 = 432;
+ 
+ /// The version of what this crate's runtime does with a compiled pipeline: instantiating a binding
+ /// plan (`BindingPlan::instantiate_*`: descriptor ranges, push bytes, root, argument, and handle
+@@ -93,7 +93,7 @@
+ /// changes no behaviour, and then updates that hash alone with the commit saying why, or changes
+ /// behaviour and also bumps this version. The commit that bumps it says what changed; this comment
+ /// keeps no history.
+-pub const RUNTIME_VERSION: u32 = 1496;
++pub const RUNTIME_VERSION: u32 = 1497;
+ 
+ /// The digest of the sources this build of the crate was compiled from: SHA-256, as lowercase hex,
+ /// of the manifest, the build script, and exactly the files the crate roots' module tree compiles
+--- a/crates/metal2vulkan/src/device/enables.rs
++++ b/crates/metal2vulkan/src/device/enables.rs
+@@ -274,6 +274,8 @@
+         WorkgroupMemoryExplicitLayout16BitAccess, WorkgroupMemoryExplicitLayoutScalarBlockLayout,
+     ];
+     Extension(&[E::KhrFragmentShaderBarycentric]) => [FragmentShaderBarycentric];
++    promoted(3, &[E::KhrDynamicRendering]) => [DynamicRendering];
++    Extension(&[E::ExtShaderTileImage]) => [ShaderTileImageColorReadAccess];
+     Extension(INTERLOCK) => [FragmentShaderPixelInterlock, FragmentShaderSampleInterlock];
+     Extension(RASTER_ORDER) => [
+         RasterizationOrderColorAttachmentAccess, RasterizationOrderDepthAttachmentAccess,
+@@ -332,7 +334,8 @@
+     const SYNCHRONIZATION2_BELOW_1_3: &[(VkExtension, Option<ApiVersion>)] =
+         &[(E::KhrSynchronization2, Some(v(3)))];
+     match ext {
+-        E::ExtRobustness2
++        E::ExtShaderTileImage
++        | E::ExtRobustness2
+         | E::ExtShaderImageAtomicInt64
+         | E::ExtShaderStencilExport
+         | E::ExtFragmentShaderInterlock
+--- a/crates/metal2vulkan/src/device/khronos.rs
++++ b/crates/metal2vulkan/src/device/khronos.rs
+@@ -1172,6 +1172,11 @@
+         | "VkPhysicalDeviceShaderSubgroupRotateFeaturesKHR" => {
+             Ext(&["VK_KHR_shader_subgroup_rotate"], Some(4))
+         }
++        "VkPhysicalDeviceDynamicRenderingFeatures"
++        | "VkPhysicalDeviceDynamicRenderingFeaturesKHR" => {
++            Ext(&["VK_KHR_dynamic_rendering"], Some(3))
++        }
++        "VkPhysicalDeviceShaderTileImageFeaturesEXT" => Ext(&["VK_EXT_shader_tile_image"], None),
+         "VkPhysicalDeviceDynamicRenderingLocalReadFeatures"
+         | "VkPhysicalDeviceDynamicRenderingLocalReadFeaturesKHR" => {
+             Ext(&["VK_KHR_dynamic_rendering_local_read"], Some(4))
+@@ -1397,6 +1402,11 @@
+         ),
+         ("shaderTerminateInvocation", F::ShaderTerminateInvocation),
+         ("dynamicRenderingLocalRead", F::DynamicRenderingLocalRead),
++        ("dynamicRendering", F::DynamicRendering),
++        (
++            "shaderTileImageColorReadAccess",
++            F::ShaderTileImageColorReadAccess,
++        ),
+         (
+             "rasterizationOrderColorAttachmentAccess",
+             F::RasterizationOrderColorAttachmentAccess,
+@@ -1671,6 +1681,7 @@
+         "VK_EXT_shader_atomic_float2" => E::ExtShaderAtomicFloat2,
+         "VK_EXT_shader_image_atomic_int64" => E::ExtShaderImageAtomicInt64,
+         "VK_EXT_shader_stencil_export" => E::ExtShaderStencilExport,
++        "VK_EXT_shader_tile_image" => E::ExtShaderTileImage,
+         "VK_EXT_shader_demote_to_helper_invocation" => E::ExtShaderDemoteToHelperInvocation,
+         "VK_EXT_shader_viewport_index_layer" => E::ExtShaderViewportIndexLayer,
+         "VK_EXT_fragment_shader_interlock" => E::ExtFragmentShaderInterlock,
+--- a/crates/metal2vulkan/src/device/metal.rs
++++ b/crates/metal2vulkan/src/device/metal.rs
+@@ -248,12 +248,24 @@
+         ));
+     }
+     // Ordered by rasterization-order access, or by the pixel interlock's storage form.
+-    if !f.fragment.rasterization_order_color_access && !f.fragment.pixel_interlock {
++    if !f.fragment.rasterization_order_color_access
++        && !f.fragment.pixel_interlock
++        && !(f
++            .enabled
++            .features
++            .contains(&VkFeature::ShaderTileImageColorReadAccess)
++            && f.enabled.features.contains(&VkFeature::DynamicRendering)
++            && f.api_version >= crate::device::requirements::ApiVersion::V1_3)
++    {
+         out.push(Unsupported::needs_any_of(
+             Feature::FramebufferFetch,
+             vec![
+                 vec![feature(VkFeature::RasterizationOrderColorAttachmentAccess)],
+                 vec![feature(VkFeature::FragmentShaderPixelInterlock)],
++                vec![
++                    feature(VkFeature::ShaderTileImageColorReadAccess),
++                    feature(VkFeature::DynamicRendering),
++                ],
+             ],
+         ));
+     }
+--- a/crates/metal2vulkan/src/device/requirements.rs
++++ b/crates/metal2vulkan/src/device/requirements.rs
+@@ -84,6 +84,10 @@
+     ShaderDemoteToHelperInvocation,
+     ShaderTerminateInvocation,
+     DynamicRenderingLocalRead,
++    /// Coherent framebuffer color reads through VK_EXT_shader_tile_image.
++    ShaderTileImageColorReadAccess,
++    /// Core Vulkan 1.3 dynamic rendering.
++    DynamicRendering,
+     RasterizationOrderColorAttachmentAccess,
+     RasterizationOrderDepthAttachmentAccess,
+     RasterizationOrderStencilAttachmentAccess,
+@@ -328,6 +332,8 @@
+ #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+ #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+ pub enum VkExtension {
++    /// Raster-ordered attachment reads in dynamic rendering (Vulkan 1.3).
++    ExtShaderTileImage,
+     ExtRobustness2,
+     ExtImageRobustness,
+     ExtShaderAtomicFloat,
+@@ -1053,6 +1059,8 @@
+ #[non_exhaustive]
+ #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+ pub enum SpirvExtension {
++    /// Typed tile image variables and coherent attachment reads.
++    ExtShaderTileImage,
+     KhrTerminateInvocation,
+     ExtDemoteToHelperInvocation,
+     ExtFragmentShaderInterlock,
+--- a/crates/metal2vulkan/src/lower/fragment/color.rs
++++ b/crates/metal2vulkan/src/lower/fragment/color.rs
+@@ -14,7 +14,14 @@
+ //! Vulkan orders an input-attachment read so only with rasterization-order color attachment
+ //! access. Without it, a device with `fragmentShaderPixelInterlock` reads (and writes) the
+ //! attachment as a storage image inside the ordered interlock where the pipeline's state lets
+-//! that be exact (`fetch`). Everywhere else the function is refused, naming what either ordered
++//! that be exact (`fetch`). A Vulkan 1.3 device with `shaderTileImageColorReadAccess` and
++//! `dynamicRendering` enabled can instead read float colors through descriptor-free tile images.
++//! The typed globals have `TileImageEXT` storage, `TileImageDataEXT` dimension and their color's
++//! `Location`; `OpColorAttachmentReadEXT` reads the invocation's covered sample coherently,
++//! without a `NonCoherentColorAttachmentReadEXT` mode. `StageIo::tile_image_colors` and
++//! `GraphicsState::tile_image_color_reads` state this separate dynamic-rendering contract.
++//! Integer and raw extended-range tile-image inputs are refused until their numeric/alias forms
++//! are represented exactly. Everywhere else the function is refused, naming what an ordered
+ //! form needs (`Unsupported{FramebufferFetch, ...}`; the storage form's own reason where it alone
+ //! was blocked): an unordered read could see the attachment before an earlier overlapping
+ //! fragment's write, which Metal never shows. The function states
+@@ -66,6 +73,20 @@
+ //! Refused: `bool`, 64-bit, and aggregate colors.
+ 
+ use std::collections::BTreeMap;
++
++/// Whether coherent descriptor-free color fetch is actually enabled.
++pub(crate) fn tile_image_access(profile: &crate::device::DeviceProfile) -> bool {
++    let fields = profile.fields();
++    fields.api_version >= crate::device::requirements::ApiVersion::V1_3
++        && fields
++            .enabled
++            .features
++            .contains(&VkFeature::ShaderTileImageColorReadAccess)
++        && fields
++            .enabled
++            .features
++            .contains(&VkFeature::DynamicRendering)
++}
+ 
+ use crate::air::abi::{AbiInt, OutputRole, ParamBinding, ParamRole};
+ use crate::air::intrinsics::{PackDir, PackFormat};
+@@ -180,7 +201,8 @@
+     }
+     // On a device with the pixel interlock `fetch::plan` refused a blocked attachment already;
+     // here neither ordered form exists.
+-    if !frag.rasterization_order_color_access {
++    let tile = tile_image_access(cx.profile) && !frag.rasterization_order_color_access;
++    if !frag.rasterization_order_color_access && !tile {
+         return Err(unordered(cx, color));
+     }
+     // Two reads of one attachment must agree on its numeric class (one image declaration).
+@@ -198,7 +220,18 @@
+         .get(&color)
+         .is_some_and(|ib| ib.blend.is_some());
+     if !known.iter().any(|c| c.color == color) && !blended {
+-        cx.descriptors.input_attachments = cx.descriptors.input_attachments.saturating_add(1);
++        if tile {
++            // Typed integer tile reads need the attachment numeric class during selection.
++            if !form.is_float() || extended.is_some() {
++                return Err(not_lowered());
++            }
++            let colors = &mut cx.families.stage_io.interface.tile_image_colors;
++            colors.push(color);
++            colors.sort_unstable();
++            colors.dedup();
++        } else {
++            cx.descriptors.input_attachments = cx.descriptors.input_attachments.saturating_add(1);
++        }
+         cx.facts.insert(RuntimeFact::FramebufferFetch { color });
+     }
+     // An extended-range attachment's input reads its raw texels, decoded to the tile value, a
+@@ -283,6 +316,11 @@
+                 VkFeature::RasterizationOrderColorAttachmentAccess,
+             )],
+             interlock,
++            vec![
++                Capability::Feature(VkFeature::ShaderTileImageColorReadAccess),
++                Capability::Feature(VkFeature::DynamicRendering),
++                Capability::ApiVersion(crate::device::requirements::ApiVersion::V1_3),
++            ],
+         ],
+     )
+     .into()
+@@ -351,6 +389,7 @@
+         &BTreeMap<u32, u32>,
+     ),
+     multisampled: bool,
++    tile_colors: &[u32],
+ ) -> BResult<BTreeMap<u32, GlobalId>> {
+     let mut out = BTreeMap::new();
+     for c in colors {
+@@ -363,7 +402,16 @@
+         }
+         // An extended-range attachment's image holds the raw format's `uint` texels.
+         let float = c.form.is_float() && c.extended.is_none();
+-        out.insert(c.color, input_attachment(mb, c.color, float, multisampled)?);
++        out.insert(
++            c.color,
++            input_attachment(
++                mb,
++                c.color,
++                float,
++                multisampled,
++                tile_colors.contains(&c.color),
++            )?,
++        );
+     }
+     // A storage-form attachment the function writes without reading it: an extended-range
+     // attachment whose blend the shader computes from the texel.
+@@ -378,7 +426,7 @@
+         .map(|(&c, _)| c);
+     for color in blended.chain(merges.keys().copied()) {
+         if let std::collections::btree_map::Entry::Vacant(e) = out.entry(color) {
+-            e.insert(input_attachment(mb, color, false, multisampled)?);
++            e.insert(input_attachment(mb, color, false, multisampled, false)?);
+         }
+     }
+     Ok(out)
+@@ -391,6 +439,7 @@
+     color: u32,
+     float: bool,
+     multisampled: bool,
++    tile: bool,
+ ) -> BResult<GlobalId> {
+     let sampled_type = match float {
+         true => mb.ty(SType::Float { width: 32 })?,
+@@ -401,7 +450,11 @@
+     };
+     let ty = mb.ty(SType::Image(ImageType {
+         sampled_type,
+-        dim: Dim::SubpassData,
++        dim: if tile {
++            Dim::TileImageDataEXT
++        } else {
++            Dim::SubpassData
++        },
+         depth: false,
+         arrayed: false,
+         multisampled,
+@@ -413,7 +466,11 @@
+         kind: ResourceKind::InputAttachment(color),
+         index: color,
+     };
+-    mb.resource(slot, StorageClass::UniformConstant, ty)
++    if tile {
++        mb.tile_image(color, ty)
++    } else {
++        mb.resource(slot, StorageClass::UniformConstant, ty)
++    }
+ }
+ 
+ /// The value of color input `c` in its lowered representation, read at each use (the use may
+@@ -495,5 +552,16 @@
+     let origin = fb.module().constant(Constant::Null { ty: ivec2 })?;
+     let origin = fb.module().const_value(origin)?;
+     let ops = super::fetch::operands(cx, fb)?;
+-    fb.read(img, origin, &ops, TexelMemory::PRIVATE)
+-}
++    if cx
++        .plan
++        .families
++        .stage_io
++        .interface
++        .tile_image_colors
++        .contains(&color)
++    {
++        fb.color_attachment_read(img, ops.sample)
++    } else {
++        fb.read(img, origin, &ops, TexelMemory::PRIVATE)
++    }
++}
+--- a/crates/metal2vulkan/src/lower/fragment/mod.rs
++++ b/crates/metal2vulkan/src/lower/fragment/mod.rs
+@@ -491,6 +491,7 @@
+         &fp.colors,
+         (&fp.fetch, &fp.input_blends, &fp.word_merges),
+         fp.fetch_sample.is_some(),
++        &plan.families.stage_io.interface.tile_image_colors,
+     )?;
+     for (&color, sc) in &fp.fetch {
+         if sc.shadowed {
+--- a/crates/metal2vulkan/src/lower/sampler/mod.rs
++++ b/crates/metal2vulkan/src/lower/sampler/mod.rs
+@@ -1590,7 +1590,7 @@
+ fn plane_of(dim: Dim) -> u8 {
+     match dim {
+         Dim::D1 | Dim::Buffer => 1,
+-        Dim::D2 | Dim::Cube | Dim::SubpassData => 2,
++        Dim::D2 | Dim::Cube | Dim::SubpassData | Dim::TileImageDataEXT => 2,
+         Dim::D3 => 3,
+     }
+ }
+--- a/crates/metal2vulkan/src/lower/texture/emit.rs
++++ b/crates/metal2vulkan/src/lower/texture/emit.rs
+@@ -619,7 +619,7 @@
+ pub(super) fn coord_len(decl: &ImageDecl) -> u8 {
+     let plane = match decl.dim {
+         Dim::D1 | Dim::Buffer => 1,
+-        Dim::D2 | Dim::Cube | Dim::SubpassData => 2,
++        Dim::D2 | Dim::Cube | Dim::SubpassData | Dim::TileImageDataEXT => 2,
+         Dim::D3 => 3,
+     };
+     plane + u8::from(decl.arrayed)
+--- a/crates/metal2vulkan/src/pipeline/graphics.rs
++++ b/crates/metal2vulkan/src/pipeline/graphics.rs
+@@ -49,6 +49,10 @@
+     /// Framebuffer-fetch inputs. In a pipeline of more than one sample the fragment function runs
+     /// once per covered sample and reads its own sample of each.
+     pub input_attachments: Vec<InputAttachmentUse>,
++    /// Descriptor-free coherent color fetches; the consumer uses dynamic rendering
++    /// with VK_EXT_shader_tile_image enabled and the same indexed color formats.
++    #[cfg_attr(feature = "serde", serde(default))]
++    pub tile_image_color_reads: Vec<u32>,
+     /// The pipeline and its subpass use rasterization-order attachment access: set when the
+     /// pipeline has input attachments and the device has `rasterizationOrderColorAttachmentAccess`,
+     /// so each fetch is ordered after the earlier fragments of the draw that cover its pixel, as
+@@ -388,6 +392,7 @@
+             rasterizer_discard: false,
+             dynamic_states: Vec::new(),
+             input_attachments: Vec::new(),
++            tile_image_color_reads: Vec::new(),
+             rasterization_order_attachment_access: false,
+             max_vertex_amplification_count: 1,
+             declares_layer: false,
+--- a/crates/metal2vulkan/src/pipeline/link/contract.rs
++++ b/crates/metal2vulkan/src/pipeline/link/contract.rs
+@@ -43,6 +43,7 @@
+         }
+     }
+     let mut declared = 0usize;
++    let mut tile_colors = Vec::new();
+     for g in m.globals() {
+         match &g.kind {
+             GlobalKind::Resource(slot) => {
+@@ -67,11 +68,23 @@
+                 }
+                 declared += 1;
+             }
++            GlobalKind::TileImage { color } => {
++                if g.class != StorageClass::TileImageEXT {
++                    return Err(invariant("a tile image in another storage class"));
++                }
++                tile_colors.push(*color);
++            }
+             GlobalKind::PushBlock
+             | GlobalKind::BuiltIn { .. }
+             | GlobalKind::Plain
+             | GlobalKind::FixedIo { .. } => {}
+         }
++    }
++    tile_colors.sort_unstable();
++    if tile_colors != io.tile_image_colors {
++        return Err(invariant(
++            "tile image locations differ from the stage interface",
++        ));
+     }
+     // A compute entry's listed outputs are an emulated mesh function's: it writes them to its
+     // records binding and declares no interface variable for them.
+--- a/crates/metal2vulkan/src/pipeline/link/graphics.rs
++++ b/crates/metal2vulkan/src/pipeline/link/graphics.rs
+@@ -563,13 +563,37 @@
+             });
+         }
+     }
++    let tile_image_color_reads = fs
++        .map(|f| f.io.tile_image_colors.clone())
++        .unwrap_or_default();
++    for &color in &tile_image_color_reads {
++        let attachment = r
++            .color_attachments
++            .get(color as usize)
++            .copied()
++            .flatten()
++            .ok_or(Error::InvalidDescriptor(DescriptorError::ColorAttachment {
++                index: color,
++            }))?;
++        if sampled_type(attachment.pixel_format) != Some(SampledType::Float)
++            || metal::format::rotated_channels(attachment.pixel_format)
++            || metal::format::ycbcr_renders(attachment.pixel_format)
++            || metal::format::ycbcr_pass_refused(attachment.pixel_format)
++        {
++            return Err(Unsupported::not_implemented(Feature::Format)
++                .at_attachment(Attachment::Color(color))
++                .into());
++        }
++    }
+     let rasterization_samples = samples(r.raster_sample_count)?;
+     // A fetched attachment is read (and, in the storage form, written) at the invocation's own
+     // sample by a stage compiled for a multisampled pipeline, and at the pixel by one compiled
+     // for one sample (see the module docs): a stage compiled for the other kind declares an image
+     // of the wrong sample count.
+     if let Some(fs) = fs {
+-        let fetches = !input_attachments.is_empty() || !storage.is_empty();
++        let fetches = !input_attachments.is_empty()
++            || !storage.is_empty()
++            || !tile_image_color_reads.is_empty();
+         if fetches && fs.io.multisampled != (r.raster_sample_count > 1) {
+             return Err(Error::NeedsInput(RuntimeInput::Multisampled));
+         }
+@@ -650,6 +674,7 @@
+         rasterization_order_attachment_access: !input_attachments.is_empty()
+             && p.fields().fragment.rasterization_order_color_access,
+         input_attachments,
++        tile_image_color_reads,
+         max_vertex_amplification_count,
+         declares_layer,
+         tessellation,
+--- a/crates/metal2vulkan/src/pipeline/stage_io.rs
++++ b/crates/metal2vulkan/src/pipeline/stage_io.rs
+@@ -151,6 +151,9 @@
+ #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+ #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+ pub struct StageIo {
++    /// Color attachments read coherently through descriptor-free tile images.
++    #[cfg_attr(feature = "serde", serde(default))]
++    pub tile_image_colors: Vec<u32>,
+     /// Declared user input variables (vertex attributes or fragment varyings), in parameter
+     /// order.
+     pub inputs: Vec<IoVariable>,
+--- a/crates/metal2vulkan/src/spirv/builder/module.rs
++++ b/crates/metal2vulkan/src/spirv/builder/module.rs
+@@ -542,6 +542,32 @@
+         Ok(id)
+     }
+ 
++    /// Declare a descriptor-free framebuffer image for coherent fragment color reads.
++    pub fn tile_image(&mut self, color: u32, ty: TypeId) -> BResult<GlobalId> {
++        if !matches!(
++            self.types.get(ty)?,
++            Type::Image(ImageType {
++                dim: Dim::TileImageDataEXT,
++                ..
++            })
++        ) {
++            return Err(BuildError::Global(GlobalRule::ResourceType));
++        }
++        if self
++            .globals
++            .iter()
++            .any(|global| matches!(global.kind,GlobalKind::TileImage {color:at} if at==color))
++        {
++            return Err(BuildError::Global(GlobalRule::ResourceType));
++        }
++        self.add_global(
++            StorageClass::TileImageEXT,
++            ty,
++            None,
++            GlobalKind::TileImage { color },
++        )
++    }
++
+     /// Declare the descriptor binding `sym`. `ty` is the variable's data type: a `Block` struct
+     /// (or descriptor array of them) for `StorageBuffer`/`Uniform`, an opaque type (or descriptor
+     /// array of them) for `UniformConstant`. Link assigns its set and binding.
+@@ -576,7 +602,14 @@
+                 ..
+             })
+         );
+-        let ok = ok && subpass == matches!(sym.kind, ResourceKind::InputAttachment(_));
++        let tile = matches!(
++            self.types.get(ty)?,
++            Type::Image(ImageType {
++                dim: Dim::TileImageDataEXT,
++                ..
++            })
++        );
++        let ok = ok && !tile && subpass == matches!(sym.kind, ResourceKind::InputAttachment(_));
+         // A combined image sampler is exactly one `OpTypeSampledImage`.
+         let combined = matches!(self.types.get(ty)?, Type::SampledImage { .. });
+         let ok = ok && combined == matches!(sym.kind, ResourceKind::CombinedTextureSampler(_));
+--- a/crates/metal2vulkan/src/spirv/builder/ops/atomic.rs
++++ b/crates/metal2vulkan/src/spirv/builder/ops/atomic.rs
+@@ -279,14 +279,14 @@
+                 | crate::spv::ImageFormat::R64i
+         );
+         let usage_ok = img.usage == ImageUsage::Storage;
+-        if !format_ok || !usage_ok || img.dim == Dim::SubpassData {
++        if !format_ok || !usage_ok || matches!(img.dim, Dim::SubpassData | Dim::TileImageDataEXT) {
+             return Err(err(OP, OperandRule::Image(ImageRule::ImageType)));
+         }
+         let want = match img.dim {
+             Dim::D1 => 1 + u8::from(img.arrayed),
+             Dim::D2 => 2 + u8::from(img.arrayed),
+             Dim::D3 | Dim::Cube => 3,
+-            Dim::Buffer | Dim::SubpassData => 1,
++            Dim::Buffer | Dim::SubpassData | Dim::TileImageDataEXT => 1,
+         };
+         match self.num(coord)? {
+             Some(c) if c.is_int() && c.n == want => {}
+--- a/crates/metal2vulkan/src/spirv/builder/ops/image.rs
++++ b/crates/metal2vulkan/src/spirv/builder/ops/image.rs
+@@ -115,7 +115,7 @@
+ fn plane(dim: Dim) -> u8 {
+     match dim {
+         Dim::D1 | Dim::Buffer => 1,
+-        Dim::D2 | Dim::SubpassData => 2,
++        Dim::D2 | Dim::SubpassData | Dim::TileImageDataEXT => 2,
+         Dim::D3 | Dim::Cube => 3,
+     }
+ }
+@@ -751,7 +751,10 @@
+         write: bool,
+     ) -> BResult<ImageType> {
+         let img = self.image_value(op, 0, image)?;
+-        if img.usage != ImageUsage::Storage || (write && img.dim == Dim::SubpassData) {
++        if img.usage != ImageUsage::Storage
++            || img.dim == Dim::TileImageDataEXT
++            || (write && img.dim == Dim::SubpassData)
++        {
+             return Err(rule(op, ImageRule::ImageType));
+         }
+         let n = match img.dim {
+@@ -785,6 +788,30 @@
+         Ok(img)
+     }
+ 
++    /// Read the current pixel of a typed framebuffer image in raster order.
++    pub fn color_attachment_read(&mut self, image: Value, sample: Option<Value>) -> BResult<Value> {
++        const OP: crate::spv::Op = crate::spv::Op::ColorAttachmentReadEXT;
++        let img = self.image_value(OP, 0, image)?;
++        if img.dim != Dim::TileImageDataEXT {
++            return Err(rule(OP, ImageRule::ImageType));
++        }
++        let operands = ImageOperands {
++            sample,
++            ..ImageOperands::default()
++        };
++        self.check_ops(
++            OP,
++            &img,
++            &operands,
++            Allowed {
++                sample: true,
++                ..Allowed::default()
++            },
++        )?;
++        let ty = self.texel_ty(&img)?;
++        self.emit(Inst::ColorAttachmentRead { image, sample }, ty)
++    }
++
+     /// `OpImageRead` from a storage image or subpass input, with the texel operands `mem` (a
+     /// `Made` scope is `MakeTexelVisible`). Result: `vec4`.
+     pub fn read(
+--- a/crates/metal2vulkan/src/spirv/builder/ops/mod.rs
++++ b/crates/metal2vulkan/src/spirv/builder/ops/mod.rs
+@@ -291,6 +291,7 @@
+         Inst::IsHelperInvocation => Op::IsHelperInvocationEXT,
+         Inst::BeginInterlock => Op::BeginInvocationInterlockEXT,
+         Inst::ImageRead { .. } => Op::ImageRead,
++        Inst::ColorAttachmentRead { .. } => Op::ColorAttachmentReadEXT,
+         Inst::EndInterlock => Op::EndInvocationInterlockEXT,
+         Inst::AtomicLoad { .. } => Op::AtomicLoad,
+         Inst::AtomicStore { .. } => Op::AtomicStore,
+--- a/crates/metal2vulkan/src/spirv/ir/module.rs
++++ b/crates/metal2vulkan/src/spirv/ir/module.rs
+@@ -90,6 +90,8 @@
+ #[non_exhaustive]
+ #[derive(Clone, Debug, PartialEq, Eq)]
+ pub enum GlobalKind {
++    /// A descriptor-free tile image at a framebuffer color location.
++    TileImage { color: u32 },
+     /// A descriptor binding (relocatable `DescriptorSet`/`Binding`).
+     Resource(ResourceSlot),
+     /// The function's push-constant block.
+@@ -357,6 +359,8 @@
+         sparse: bool,
+     },
+     /// `OpImageRead`, or `OpImageSparseRead` (`sparse`).
++    /// Coherent current-pixel color fetch (OpColorAttachmentReadEXT).
++    ColorAttachmentRead { image: Value, sample: Option<Value> },
+     ImageRead {
+         image: Value,
+         coord: Value,
+@@ -656,6 +660,12 @@
+                 f(*coord);
+                 ops(o, &mut f);
+             }
++            Inst::ColorAttachmentRead { image, sample } => {
++                f(*image);
++                if let Some(sample) = sample {
++                    f(*sample);
++                }
++            }
+             Inst::ImageSparseTexelsResident(code) => f(*code),
+             Inst::ImageGather {
+                 sampled_image,
+@@ -884,6 +894,12 @@
+                 f(image);
+                 f(coord);
+                 ops(o, &mut f);
++            }
++            Inst::ColorAttachmentRead { image, sample } => {
++                f(image);
++                if let Some(sample) = sample {
++                    f(sample);
++                }
+             }
+             Inst::ImageSparseTexelsResident(code) => f(code),
+             Inst::ImageGather {
+@@ -1009,6 +1025,7 @@
+             | Inst::ImageSample { .. }
+             | Inst::ImageFetch { .. }
+             | Inst::ImageDrefGather { .. }
++            | Inst::ColorAttachmentRead { .. }
+             | Inst::ImageSparseTexelsResident(_)
+             | Inst::ImageQuery { .. }
+             | Inst::ImageQueryLod { .. }
+@@ -1031,7 +1048,9 @@
+             Inst::ImageQueryLod { .. } | Inst::Derivative { .. } => {
+                 Some(ModelNeed::ImplicitDerivatives)
+             }
+-            Inst::DemoteToHelperInvocation | Inst::IsHelperInvocation => Some(ModelNeed::Fragment),
++            Inst::DemoteToHelperInvocation
++            | Inst::IsHelperInvocation
++            | Inst::ColorAttachmentRead { .. } => Some(ModelNeed::Fragment),
+             Inst::Glsl {
+                 op:
+                     GlslOp::InterpolateAtCentroid
+--- a/crates/metal2vulkan/src/spirv/ir/types.rs
++++ b/crates/metal2vulkan/src/spirv/ir/types.rs
+@@ -20,6 +20,8 @@
+ #[non_exhaustive]
+ #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+ pub enum StorageClass {
++    /// A descriptor-free framebuffer tile image in a fragment shader.
++    TileImageEXT,
+     UniformConstant,
+     Input,
+     Uniform,
+@@ -41,6 +43,7 @@
+     pub fn to_spirv(self) -> crate::spv::StorageClass {
+         match self {
+             StorageClass::UniformConstant => crate::spv::StorageClass::UniformConstant,
++            StorageClass::TileImageEXT => crate::spv::StorageClass::TileImageEXT,
+             StorageClass::Input => crate::spv::StorageClass::Input,
+             StorageClass::Uniform => crate::spv::StorageClass::Uniform,
+             StorageClass::Output => crate::spv::StorageClass::Output,
+@@ -128,6 +131,8 @@
+     Cube,
+     Buffer,
+     SubpassData,
++    /// The current framebuffer attachment at the invocation pixel.
++    TileImageDataEXT,
+ }
+ 
+ /// Whether an image is sampled (`Sampled = 1`) or a storage image (`Sampled = 2`).
+@@ -786,10 +791,18 @@
+             StorageClass::PhysicalStorageBuffer => {
+                 matches!(f.shape, Shape::Plain | Shape::Explicit) && f.layoutable
+             }
+-            StorageClass::UniformConstant => matches!(
+-                f.shape,
+-                Shape::Opaque | Shape::DescriptorArray { opaque: true }
+-            ),
++            StorageClass::UniformConstant => {
++                matches!(
++                    f.shape,
++                    Shape::Opaque | Shape::DescriptorArray { opaque: true }
++                ) && !matches!(
++                    t,
++                    Type::Image(ImageType {
++                        dim: Dim::TileImageDataEXT,
++                        ..
++                    })
++                )
++            }
+             StorageClass::Function | StorageClass::Private => {
+                 matches!(f.shape, Shape::Plain | Shape::Implicit | Shape::RayQuery)
+             }
+@@ -807,6 +820,13 @@
+                 }
+             }
+             StorageClass::Image => matches!(t, Type::Int { .. } | Type::Float { .. }),
++            StorageClass::TileImageEXT => matches!(
++                t,
++                Type::Image(ImageType {
++                    dim: Dim::TileImageDataEXT,
++                    ..
++                })
++            ),
+             // An object function's payload is implicitly laid out data.
+             StorageClass::TaskPayloadWorkgroupEXT => {
+                 matches!(f.shape, Shape::Plain | Shape::Implicit) && !f.runtime_sized
+@@ -826,7 +846,7 @@
+         );
+         let dim_ok = match img.dim {
+             Dim::Buffer => !img.arrayed && !img.multisampled,
+-            Dim::SubpassData => {
++            Dim::TileImageDataEXT | Dim::SubpassData => {
+                 img.usage == ImageUsage::Storage
+                     && img.format == crate::spv::ImageFormat::Unknown
+                     && !img.arrayed
+--- a/crates/metal2vulkan/src/spirv/requirements/mod.rs
++++ b/crates/metal2vulkan/src/spirv/requirements/mod.rs
+@@ -636,9 +636,25 @@
+                 self.feat(VkFeature::ImageCubeArray);
+             }
+             Dim::SubpassData => self.cap(Cap::InputAttachment),
++            Dim::TileImageDataEXT => {
++                self.cap(Cap::TileImageColorReadAccessEXT);
++                self.ext(SpirvExtension::ExtShaderTileImage);
++                self.feat(VkFeature::ShaderTileImageColorReadAccess);
++                self.feat(VkFeature::DynamicRendering);
++                self.r.extensions.insert(VkExtension::ExtShaderTileImage);
++                let version = crate::device::requirements::ApiVersion::V1_3;
++                self.r.api_version = Some(
++                    self.r
++                        .api_version
++                        .map_or(version, |prior| prior.max(version)),
++                );
++            }
+             Dim::D2 | Dim::D3 | Dim::Cube => {}
+         }
+-        if storage && img.multisampled && img.dim != Dim::SubpassData {
++        if storage
++            && img.multisampled
++            && !matches!(img.dim, Dim::SubpassData | Dim::TileImageDataEXT)
++        {
+             self.cap(Cap::StorageImageMultisample);
+             self.feat(VkFeature::ShaderStorageImageMultisample);
+             if img.arrayed {
+@@ -1499,6 +1515,7 @@
+     SpirvExtension::ExtFragmentShaderInterlock,
+     SpirvExtension::KhrFragmentShaderBarycentric,
+     SpirvExtension::ExtShaderStencilExport,
++    SpirvExtension::ExtShaderTileImage,
+     SpirvExtension::ExtShaderViewportIndexLayer,
+     SpirvExtension::ExtShaderAtomicFloatAdd,
+     SpirvExtension::ExtShaderAtomicFloatMinMax,
+@@ -1528,6 +1545,7 @@
+         SpirvExtension::ExtFragmentShaderInterlock => "SPV_EXT_fragment_shader_interlock",
+         SpirvExtension::KhrFragmentShaderBarycentric => "SPV_KHR_fragment_shader_barycentric",
+         SpirvExtension::ExtShaderStencilExport => "SPV_EXT_shader_stencil_export",
++        SpirvExtension::ExtShaderTileImage => "SPV_EXT_shader_tile_image",
+         SpirvExtension::ExtShaderViewportIndexLayer => "SPV_EXT_shader_viewport_index_layer",
+         SpirvExtension::ExtShaderAtomicFloatAdd => "SPV_EXT_shader_atomic_float_add",
+         SpirvExtension::ExtShaderAtomicFloatMinMax => "SPV_EXT_shader_atomic_float_min_max",
+--- a/crates/metal2vulkan/src/spirv/serialize/mod.rs
++++ b/crates/metal2vulkan/src/spirv/serialize/mod.rs
+@@ -1605,6 +1605,9 @@
+                                 self.decorate(w, id, Decoration::Patch, &[])?;
+                             }
+                         }
++                        GlobalKind::TileImage { color } => {
++                            self.decorate(w, id, Decoration::Location, &[*color])?;
++                        }
+                         GlobalKind::PushBlock | GlobalKind::Plain => {}
+                     }
+                     if self.holds_psb_pointer(gv.pointee)? {
+@@ -1820,6 +1823,7 @@
+                     Dim::Cube => crate::spv::Dim::Cube,
+                     Dim::Buffer => crate::spv::Dim::Buffer,
+                     Dim::SubpassData => crate::spv::Dim::SubpassData,
++                    Dim::TileImageDataEXT => crate::spv::Dim::TileImageDataEXT,
+                 };
+                 let sampled = match img.usage {
+                     ImageUsage::Sampled => 1,
+@@ -2453,6 +2457,13 @@
+                 };
+                 w.inst(op, &o)
+             }
++            Inst::ColorAttachmentRead { image, sample } => {
++                let mut operands = with(head()?, &[v(*image)?]);
++                if let Some(sample) = sample {
++                    operands.push(v(*sample)?);
++                }
++                w.inst(Op::ColorAttachmentReadEXT, &operands)
++            }
+             Inst::ImageRead {
+                 image,
+                 coord,
+--- a/crates/metal2vulkan/src/spirv/serialize/non_writable.rs
++++ b/crates/metal2vulkan/src/spirv/serialize/non_writable.rs
+@@ -198,6 +198,7 @@
+         | Inst::IsHelperInvocation
+         | Inst::SetMeshOutputs { .. }
+         | Inst::EmitVertex
++        | Inst::ColorAttachmentRead { .. }
+         | Inst::EndPrimitive => None,
+     }
+ }
+--- a/crates/metal2vulkan/src/spirv/verify/mod.rs
++++ b/crates/metal2vulkan/src/spirv/verify/mod.rs
+@@ -160,6 +160,8 @@
+     BuiltInForModel(GlobalId),
+     /// A `TaskPayloadWorkgroupEXT` variable outside a task or mesh entry.
+     PayloadForModel(GlobalId),
++    /// A tile image outside a fragment entry point.
++    TileImageForModel(GlobalId),
+     // ---- Derived facts ----
+     /// The recorded entry interface differs from the re-derived one.
+     InterfaceStale,
+--- a/crates/metal2vulkan/src/spirv/verify/rules.rs
++++ b/crates/metal2vulkan/src/spirv/verify/rules.rs
+@@ -189,6 +189,9 @@
+     let mesh_entry = matches!(m.entry.model, ExecModel::TaskEXT | ExecModel::MeshEXT);
+     for (gi, g) in m.globals.iter().enumerate() {
+         let id = GlobalId::new(gi as u32);
++        if g.class == StorageClass::TileImageEXT && m.entry.model != ExecModel::Fragment {
++            return Err(Violation::TileImageForModel(id).into());
++        }
+         if g.class == StorageClass::TaskPayloadWorkgroupEXT && !mesh_entry {
+             return Err(Violation::PayloadForModel(id).into());
+         }
+--- a/crates/metal2vulkan/src/spv.rs
++++ b/crates/metal2vulkan/src/spv.rs
+@@ -526,7 +526,6 @@
+     PtrNotEqual = 402,
+     #[cfg(test)]
+     PtrDiff = 403,
+-    #[cfg(test)]
+     ColorAttachmentReadEXT = 4160,
+     #[cfg(test)]
+     DepthAttachmentReadEXT = 4161,
+@@ -2018,7 +2017,6 @@
+             Self::PtrNotEqual => "PtrNotEqual",
+             #[cfg(test)]
+             Self::PtrDiff => "PtrDiff",
+-            #[cfg(test)]
+             Self::ColorAttachmentReadEXT => "ColorAttachmentReadEXT",
+             #[cfg(test)]
+             Self::DepthAttachmentReadEXT => "DepthAttachmentReadEXT",
+@@ -3712,7 +3710,6 @@
+             402 => Self::PtrNotEqual,
+             #[cfg(test)]
+             403 => Self::PtrDiff,
+-            #[cfg(test)]
+             4160 => Self::ColorAttachmentReadEXT,
+             #[cfg(test)]
+             4161 => Self::DepthAttachmentReadEXT,
+@@ -5759,6 +5756,7 @@
+     PushConstant = 9,
+     Image = 11,
+     StorageBuffer = 12,
++    TileImageEXT = 4172,
+     PhysicalStorageBuffer = 5349,
+     TaskPayloadWorkgroupEXT = 5402,
+ }
+@@ -5773,6 +5771,7 @@
+     Cube = 3,
+     Buffer = 5,
+     SubpassData = 6,
++    TileImageDataEXT = 4173,
+ }
+ 
+ impl std::fmt::Debug for Dim {
+@@ -5784,6 +5783,7 @@
+             Self::Cube => "Cube",
+             Self::Buffer => "Buffer",
+             Self::SubpassData => "SubpassData",
++            Self::TileImageDataEXT => "TileImageDataEXT",
+         })
+     }
+ }
+--- a/docs/API.md
++++ b/docs/API.md
+@@ -386,7 +386,15 @@
+ - A fragment function that reads a color attachment (framebuffer fetch) reads it in an ordered
+   form wherever the device has one, and is refused (`Unsupported{FramebufferFetch}`) where it has
+   none: an unordered read could see a pixel before an earlier fragment's write, which Metal never
+-  shows. The ordered forms are rasterization-order attachment access, or the interlocked
++  shows. Float color inputs can also use coherent `VK_EXT_shader_tile_image` reads on Vulkan 1.3
++  with `shaderTileImageColorReadAccess` and `dynamicRendering` enabled. Such a stage declares
++  `TileImageEXT` images at its color locations and uses `OpColorAttachmentReadEXT`; it declares no
++  descriptor for these reads. `GraphicsState::tile_image_color_reads` lists the locations. The
++  consumer uses dynamic rendering with those indexed color formats, and under multisampling
++  preserves the function's per-sample invocation and own-sample reads. The shader emits no
++  noncoherent mode: draw-boundary barriers or snapshots cannot replace its within-draw order.
++  Integer and raw extended-range tile reads remain refused. Other ordered forms are
++  rasterization-order attachment access, or the interlocked
+   storage form, which binds the attachment as a storage image viewed in
+   `StorageAttachmentUse::view_format()`: its own format, an 8-bit sRGB format's unsigned-integer
+   view, or, where the device declares a BGRA-order format neither typed nor without a format, its
+--- a/docs/REFUSALS.md
++++ b/docs/REFUSALS.md
+@@ -14,7 +14,7 @@
+   - `none`: no public API path: malformed or non-Metal input, Apple-private calls, or a cap no valid program of ordinary size meets;
+   - `?`: not assessed yet.
+ 
+-Generated at `a46fde1ab`.
++Generated at `unknown`.
+ 
+ ## Totals
+ 
+@@ -68,7 +68,7 @@
+ | `BufferRange` | A buffer window beyond the descriptor range limits | devices without a capability the site computes (`needs`); devices without buffer device addresses (`addressed_needs`); every device (no Vulkan mechanism) | 7: `crates/metal2vulkan-runtime/src/function_table.rs:569`, `crates/metal2vulkan/src/bind/graphics.rs:3530` (+5) | `app`: a buffer window past a device's descriptor range |
+ | `Int64Arithmetic` | 64-bit integer arithmetic | devices without VkFeature::ShaderInt64 | 2: `crates/metal2vulkan/src/lower/arith/legal.rs:582`, `crates/metal2vulkan/src/lower/select.rs:1121` | `rare`: 64-bit integers on a device without shaderInt64 |
+ | `Float64Arithmetic` | 64-bit float arithmetic | devices without VkFeature::ShaderFloat64 | 2: `crates/metal2vulkan/src/device/metal.rs:230`, `crates/metal2vulkan/src/lower/arith/legal.rs:587` | `rare`: doubles (MSL has none outside Apple's own code) |
+-| `Format` | A pixel format not supported for the required use | devices without VkFeature::ShaderStorageImageExtendedFormats; devices without a capability the site computes; devices without a capability the site computes (`alternatives`); devices without a capability the site computes (`c`); devices without a capability the site computes (`missing`); devices without a capability the site computes (`routes`); devices without a format's usage; every device (no Vulkan mechanism); every device (not implemented) | 121: `crates/metal2vulkan-runtime/src/binding_view.rs:146`, `crates/metal2vulkan-runtime/src/blit_plan.rs:462` (+119) | `system`: pixel formats a device lacks for a use (CoreVideo's 4:2:x and 10-bit formats among them) |
++| `Format` | A pixel format not supported for the required use | devices without VkFeature::ShaderStorageImageExtendedFormats; devices without a capability the site computes; devices without a capability the site computes (`alternatives`); devices without a capability the site computes (`c`); devices without a capability the site computes (`missing`); devices without a capability the site computes (`routes`); devices without a format's usage; every device (no Vulkan mechanism); every device (not implemented) | 122: `crates/metal2vulkan-runtime/src/binding_view.rs:146`, `crates/metal2vulkan-runtime/src/blit_plan.rs:462` (+120) | `system`: pixel formats a device lacks for a use (CoreVideo's 4:2:x and 10-bit formats among them) |
+ | `DivergentImplicitLod` | Divergent implicit-LOD sampling or LOD query through a multi-candidate handle | every device (not implemented) | 1: `crates/metal2vulkan/src/lower/sampler/select.rs:352` | `app`: implicit-LOD sampling through a dynamically chosen texture |
+ | `ImplicitLodOutsideFragment` | Implicit-LOD sampling outside fragment | every device (not implemented) | 3: `crates/metal2vulkan/src/lower/sampler/constexpr.rs:136`, `crates/metal2vulkan/src/lower/sampler/select.rs:229` (+1) | `rare`: implicit-LOD sampling outside fragment functions |
+ | `MinLodClamp` | `min_lod_clamp` without `shaderResourceMinLod` | devices without VkFeature::ShaderResourceMinLod; every device (not implemented) | 2: `crates/metal2vulkan/src/lower/sampler/select.rs:1572`, `crates/metal2vulkan/src/lower/sampler/select.rs:973` | `rare`: min_lod_clamp on a device without shaderResourceMinLod |
+@@ -84,17 +84,17 @@
+ | `PixelSamplerCompare` | A constexpr sampler with pixel coordinates and a compare function, which Apple's compiler rejects ("invalid values combination in sampler... | every device (no Vulkan mechanism) | 1: `crates/metal2vulkan/src/lower/sampler/constexpr.rs:115` | `none`: Apple's compiler rejects it |
+ | `TexelBuffer` | Texture buffers beyond the device's texel-buffer limits | devices without a format's usage; every device (no Vulkan mechanism) | 3: `crates/metal2vulkan/src/bind/instantiate.rs:853`, `crates/metal2vulkan/src/bind/instantiate.rs:859` (+1) | `app`: texture buffers past a device's texel-buffer limits |
+ | `RasterOrderGroups` | Raster order groups without fragment shader interlock | devices without VkFeature::FragmentShaderPixelInterlock; devices without VkFeature::FragmentShaderSampleInterlock; devices without a capability the site computes (`alternatives`); every device (not implemented) | 4: `crates/metal2vulkan/src/device/metal.rs:242`, `crates/metal2vulkan/src/lower/fragment/rog.rs:151` (+2) | `rare`: raster order groups |
+-| `FramebufferFetch` | Framebuffer fetch without an ordered form on the device (rasterization-order attachment access, or the pixel interlock's storage form where the... | devices short of a Vulkan property the site names; devices without VkFeature::FragmentShaderPixelInterlock; devices without VkFeature::RasterizationOrderColorAttachmentAccess; devices without VkFeature::SampleRateShading; devices without a capability the site computes; devices without a capability the site computes (`alternatives`); devices without a capability the site computes (`c`); devices without a capability the site computes (`capability`); devices without a capability the site computes (`missing`); devices without a format's usage; drivers with a defect; every device (not implemented) | 26: `crates/metal2vulkan-runtime/src/families/features.rs:1007`, `crates/metal2vulkan-runtime/src/render.rs:5528` (+24) | `system`: programmable blending (framebuffer fetch); macOS 26.6.2's login reaches it (two WindowServer and RenderBox pipelines fetch RGB10A8_2P_XR10 attachments, the consumer's boots) |
++| `FramebufferFetch` | Framebuffer fetch without an ordered form on the device (rasterization-order attachment access, or the pixel interlock's storage form where the... | devices short of a Vulkan property the site names; devices without ApiVersion::V1_3; devices without VkFeature::DynamicRendering; devices without VkFeature::FragmentShaderPixelInterlock; devices without VkFeature::RasterizationOrderColorAttachmentAccess; devices without VkFeature::SampleRateShading; devices without VkFeature::ShaderTileImageColorReadAccess; devices without a capability the site computes; devices without a capability the site computes (`alternatives`); devices without a capability the site computes (`c`); devices without a capability the site computes (`capability`); devices without a capability the site computes (`missing`); devices without a format's usage; drivers with a defect; every device (not implemented) | 26: `crates/metal2vulkan-runtime/src/families/features.rs:1007`, `crates/metal2vulkan-runtime/src/render.rs:5494` (+24) | `system`: programmable blending (framebuffer fetch); macOS 26.6.2's login reaches it (two WindowServer and RenderBox pipelines fetch RGB10A8_2P_XR10 attachments, the consumer's boots) |
+ | `PrimitiveId` | `[[primitive_id]]` in a fragment function | devices without a capability the site computes; every device (not implemented) | 3: `crates/metal2vulkan-runtime/src/families/features.rs:1115`, `crates/metal2vulkan/src/lower/stage_io/plan.rs:3008` (+1) | `rare`: primitive_id on a device without geometry or tessellation shaders, in an indexed draw or behind a mesh function |
+ | `VertexAmplification` | Vertex amplification | devices without VkFeature::Multiview; devices without VkFeature::MultiviewTessellationShader; devices without VkLimit::MaxMultiviewInstanceIndex; devices without a capability the site computes (`needs`); every device (not implemented) | 5: `crates/metal2vulkan/src/bind/graphics.rs:3871`, `crates/metal2vulkan/src/lower/stage_io/plan.rs:1258` (+3) | `rare`: vertex amplification |
+ | `LayeredRendering` | Layered rendering (`render_target_array_index`, `viewport_array_index`) | devices without VkFeature::ImageView2DOn3DImage; devices without VkFeature::MultiViewport; devices without VkFeature::ShaderOutputLayer; devices without VkFeature::ShaderOutputViewportIndex; devices without a capability the site computes (`needs`); every device (not implemented) | 7: `crates/metal2vulkan-runtime/src/render_pass.rs:1578`, `crates/metal2vulkan-runtime/src/render_state.rs:1078` (+5) | `rare`: layered rendering on a device without its features |
+ | `ClipDistance` | Clip or cull distances | devices without VkFeature::ShaderClipDistance; devices without VkLimit::MaxClipDistances | 2: `crates/metal2vulkan/src/lower/mesh/mod.rs:934`, `crates/metal2vulkan/src/lower/mesh/mod.rs:942` | `rare`: clip distances on a device without them |
+ | `DualSourceBlending` | Dual-source blending | devices without VkFeature::DualSrcBlend; devices without VkLimit::MaxFragmentDualSrcAttachments | 5: `crates/metal2vulkan-runtime/src/families/formats.rs:386`, `crates/metal2vulkan/src/metal/state.rs:37` (+3) | `rare`: dual-source blending on a device without it |
+-| `Barycentrics` | Barycentric coordinates | devices without VkFeature::FragmentShaderBarycentric; devices without VkFeature::GeometryShader; devices without a capability the site computes (`needs`); drivers with a defect; every device (not implemented) | 5: `crates/metal2vulkan/src/device/metal.rs:263`, `crates/metal2vulkan/src/lower/stage_io/plan.rs:1853` (+3) | `rare`: barycentric coordinates |
++| `Barycentrics` | Barycentric coordinates | devices without VkFeature::FragmentShaderBarycentric; devices without VkFeature::GeometryShader; devices without a capability the site computes (`needs`); drivers with a defect; every device (not implemented) | 5: `crates/metal2vulkan/src/device/metal.rs:275`, `crates/metal2vulkan/src/lower/stage_io/plan.rs:1853` (+3) | `rare`: barycentric coordinates |
+ | `StencilExport` | Stencil export | devices without VkExtension::ExtShaderStencilExport; every device (not implemented) | 6: `crates/metal2vulkan-runtime/src/families/features.rs:1102`, `crates/metal2vulkan/src/bind/graphics.rs:2580` (+4) | `rare`: stencil from the shader |
+-| `SampleRateShading` | Per-sample shading | devices without VkFeature::SampleRateShading; devices without a capability the site computes (`needs`); every device (not implemented) | 3: `crates/metal2vulkan/src/pipeline/link/graphics.rs:815`, `crates/metal2vulkan/src/pipeline/link/graphics.rs:817` (+1) | `rare`: per-sample shading |
++| `SampleRateShading` | Per-sample shading | devices without VkFeature::SampleRateShading; devices without a capability the site computes (`needs`); every device (not implemented) | 3: `crates/metal2vulkan/src/pipeline/link/graphics.rs:857`, `crates/metal2vulkan/src/pipeline/link/graphics.rs:859` (+1) | `rare`: per-sample shading |
+ | `PixelCoverageAtSampleRate` | The pixel's coverage (`[[sample_mask]]` read) in a fragment function that runs once per sample | drivers with a defect; every device (no Vulkan mechanism); every device (not implemented) | 3: `crates/metal2vulkan/src/lower/fragment/coverage.rs:291`, `crates/metal2vulkan/src/lower/simd/mod.rs:739` (+1) | `rare`: coverage read at sample rate |
+-| `InterfaceComponents` | Too many interface components or locations | devices short of a device limit the site names; devices without VkLimit::MaxColorAttachments; devices without VkLimit::MaxVertexInputAttributes | 4: `crates/metal2vulkan/src/pipeline/compile/color_group.rs:202`, `crates/metal2vulkan/src/pipeline/link/graphics.rs:294` (+2) | `rare`: too many varyings or attachments for a device |
++| `InterfaceComponents` | Too many interface components or locations | devices short of a device limit the site names; devices without VkLimit::MaxColorAttachments; devices without VkLimit::MaxVertexInputAttributes | 4: `crates/metal2vulkan/src/pipeline/compile/color_group.rs:202`, `crates/metal2vulkan/src/pipeline/link/graphics.rs:301` (+2) | `rare`: too many varyings or attachments for a device |
+ | `UnmatchedVarying` | A fragment input without a vertex producer (a Metal link error) | every device (no Vulkan mechanism) | 3: `crates/metal2vulkan/src/pipeline/link/varyings.rs:318`, `crates/metal2vulkan/src/pipeline/link/varyings.rs:537` (+1) | `none`: a Metal link error |
+ | `KernelStageIn` | Kernel `[[stage_in]]` | every device (not implemented) | 3: `crates/metal2vulkan-runtime/src/indirect_execute.rs:336`, `crates/metal2vulkan/src/bind/dispatch.rs:877` (+1) | `rare`: kernel stage-in combinations Metal leaves unestablished |
+ | `Tessellation` | Tessellation | devices without VkLimit::MaxPushConstantsSize; devices without VkLimit::MaxStorageBufferRange; devices without VkLimit::MaxTessellationGenerationLevel; every device (not implemented) | 13: `crates/metal2vulkan-air/src/canon/mod.rs:1243`, `crates/metal2vulkan-air/src/canon/mod.rs:1334` (+11) | `rare`: tessellation |
+@@ -103,9 +103,9 @@
+ | `Imageblocks` | An imageblock outside the single-sample forms implemented | devices without a capability the site computes (`missing`); every device (not implemented) | 7: `crates/metal2vulkan/src/lower/access/imageblock.rs:98`, `crates/metal2vulkan/src/lower/access/mod.rs:904` (+5) | `rare`: imageblocks (Apple GPU families) |
+ | `RayTracing` |  | devices without a capability the site computes (`missing`); every device (no Vulkan mechanism); every device (not implemented) | 12: `crates/metal2vulkan/src/bind/acceleration.rs:202`, `crates/metal2vulkan/src/bind/acceleration.rs:216` (+10) | `rare`: ray tracing (out of scope by ruling) |
+ | `Tensors` |  | every device (not implemented) | 2: `crates/metal2vulkan-air/src/canon/matmul2d/synth.rs:32`, `crates/metal2vulkan/src/lower/select.rs:891` | `rare`: shader tensors |
+-| `RasterizationRateMap` |  | every device (not implemented) | 1: `crates/metal2vulkan/src/lower/fragment/mod.rs:925` | `rare`: rasterization rate maps |
++| `RasterizationRateMap` |  | every device (not implemented) | 1: `crates/metal2vulkan/src/lower/fragment/mod.rs:926` | `rare`: rasterization rate maps |
+ | `GpuEncodedIndirectCommands` |  | devices short of a Vulkan feature the site names; devices without buffer device addresses (`addressed_needs`); every device (no Vulkan mechanism); every device (not implemented) | 11: `crates/metal2vulkan/src/bind/replay.rs:530`, `crates/metal2vulkan/src/bind/replay.rs:772` (+9) | `rare`: indirect command buffers encoded by a kernel |
+-| `VulkanVersion` | The device's Vulkan version is below the 1.2 floor | devices without ApiVersion::V1_2 | 2: `crates/metal2vulkan/src/ash_interop/query.rs:915`, `crates/metal2vulkan/src/device/derive.rs:105` | `none`: a device below Vulkan 1.2 |
++| `VulkanVersion` | The device's Vulkan version is below the 1.2 floor | devices without ApiVersion::V1_2 | 2: `crates/metal2vulkan/src/ash_interop/query.rs:925`, `crates/metal2vulkan/src/device/derive.rs:105` | `none`: a device below Vulkan 1.2 |
+ | `Constant` | A bitcode constant record outside the typed model (block address, inline asm, `select` and other constant expressions the IR has no form for) | - | via a helper: 3: `crates/metal2vulkan-air/src/bitcode/constants.rs:210`, `crates/metal2vulkan-air/src/bitcode/constants.rs:268` (+1) | `none`: LLVM constant forms AIR does not emit |
+ | `Attribute` | An LLVM attribute kind that changes the calling ABI and that AIR does not use (`inalloca`, `preallocated`, `byref`, `nest`, the `swift*` kinds) | - | via a helper: 2: `crates/metal2vulkan-air/src/bitcode/attrs.rs:493`, `crates/metal2vulkan/src/error/mod.rs:256` | `none`: LLVM ABI attributes AIR does not use |
+ | `BitcodeRecord` | A bitcode record LLVM defines in `block` that the typed model does not cover and that has no more specific variant (legacy spellings predating... | - | via a helper: 7: `crates/metal2vulkan-air/src/bitcode/attrs.rs:337`, `crates/metal2vulkan-air/src/bitcode/function.rs:572` (+5) | `none`: bitcode records AIR does not emit |
+@@ -115,14 +115,14 @@
+ | `WideSwitchLiteral` | A switch case literal wider than 32 bits | every device (not implemented) | 1: `crates/metal2vulkan/src/structurize/emit.rs:207` | `rare`: 64-bit switch literals |
+ | `Lowering` | An instruction, intrinsic, or interface element of a lowering family whose lowering has not landed yet (each family narrows its refusals as it lands) | devices short of a device limit the site names; devices without VkFeature::ShaderDemoteToHelperInvocation; every device (not implemented) | 35: `crates/metal2vulkan/src/bind/plan/resources.rs:762`, `crates/metal2vulkan/src/lower/access/handle.rs:1062` (+33) | `system`: the catch-all of lowering families not landed: any shader can meet one |
+ | `SamplerAddressMode` | A sampler address mode the device lacks (`MirrorClampToEdge`) | devices without VkFeature::SamplerMirrorClampToEdge; every device (not implemented) | 2: `crates/metal2vulkan/src/lower/sampler/constexpr.rs:176`, `crates/metal2vulkan/src/metal/sampler.rs:251` | `app`: mirror-clamp-to-edge on a device without it |
+-| `AlphaToOne` | `alphaToOneEnabled` | every device (not implemented) | 1: `crates/metal2vulkan/src/pipeline/link/graphics.rs:275` | `rare`: alphaToOneEnabled |
++| `AlphaToOne` | `alphaToOneEnabled` | every device (not implemented) | 1: `crates/metal2vulkan/src/pipeline/link/graphics.rs:282` | `rare`: alphaToOneEnabled |
+ | `StageStoresAndAtomics` | Buffer or image stores or atomics in a vertex or fragment function without the stage's store feature (`vertexPipelineStoresAndAtomics`,... | devices without VkFeature::FragmentStoresAndAtomics | 1: `crates/metal2vulkan/src/lower/access/tile_memory.rs:72` | `app`: stores or atomics in vertex or fragment functions on a device without the feature |
+ | `FunctionConstantArgument` | An observed read of a pointer entry argument that a function-constant predicate removes, other than an absent buffer (which reads as null) or an... | devices short of a Vulkan feature the site names; every device (not implemented) | 2: `crates/metal2vulkan-air/src/canon/interface.rs:899`, `crates/metal2vulkan/src/lower/access/absent.rs:100` | `rare`: a function-constant-removed argument read |
+ | `SamplerBicubicFilter` | A use of Metal's bicubic filter that no Metal reading establishes | every device (not implemented) | 5: `crates/metal2vulkan/src/bind/heap.rs:997`, `crates/metal2vulkan/src/bind/plan/resources.rs:1876` (+3) | `system`: bicubic filtering forms Metal does not establish; macOS 26.6.2 makes a runtime sampler with MTLSamplerMinMagFilterCubic (the consumer's boots), whose mip-filtered form is refused |
+ | `GroupCount` | A dispatch whose threadgroup count on `axis` exceeds `maxComputeWorkGroupCount` by more than the binder splits into regions (`None` | every device (no Vulkan mechanism) | 5: `crates/metal2vulkan/src/bind/dispatch.rs:379`, `crates/metal2vulkan/src/bind/dispatch.rs:461` (+3) | `rare`: more threadgroups than a device dispatches, past the binder's split |
+ | `IntersectionFunctionTable` | A ray intersection through intersection functions | every device (no Vulkan mechanism); every device (not implemented) | 9: `crates/metal2vulkan/src/bind/acceleration.rs:177`, `crates/metal2vulkan/src/bind/acceleration.rs:183` (+7) | `rare`: ray tracing (out of scope by ruling) |
+-| `IndependentBlending` | Color attachments whose write masks or blend states differ, as Metal sets them per attachment, on a device without `independentBlend`, where no... | devices without VkFeature::IndependentBlend | 2: `crates/metal2vulkan-runtime/src/render.rs:6700`, `crates/metal2vulkan/src/pipeline/link/graphics.rs:993` | `rare`: per-attachment blending on a device without independentBlend |
+-| `RasterSampleCount` | A `rasterSampleCount` outside the device's framebuffer sample counts for the pipeline's attachments (`framebuffer*SampleCounts`), and, for a color... | devices short of a Vulkan property the site names; devices without a capability the site computes | 2: `crates/metal2vulkan-runtime/src/families/limits.rs:1059`, `crates/metal2vulkan/src/pipeline/graphics.rs:545` | `app`: a sample count a device lacks for the attachments |
++| `IndependentBlending` | Color attachments whose write masks or blend states differ, as Metal sets them per attachment, on a device without `independentBlend`, where no... | devices without VkFeature::IndependentBlend | 2: `crates/metal2vulkan-runtime/src/render.rs:6666`, `crates/metal2vulkan/src/pipeline/link/graphics.rs:1030` | `rare`: per-attachment blending on a device without independentBlend |
++| `RasterSampleCount` | A `rasterSampleCount` outside the device's framebuffer sample counts for the pipeline's attachments (`framebuffer*SampleCounts`), and, for a color... | devices short of a Vulkan property the site names; devices without a capability the site computes | 2: `crates/metal2vulkan-runtime/src/families/limits.rs:1059`, `crates/metal2vulkan/src/pipeline/graphics.rs:550` | `app`: a sample count a device lacks for the attachments |
+ | `TriangleFillLines` | The render encoder's `MTLTriangleFillModeLines` (`polygonMode` `LINE`) on a device without `fillModeNonSolid` | - | via a helper: 1: `crates/metal2vulkan/src/metal/state.rs:347` | `app`: wireframe on a device without fillModeNonSolid |
+ | `DepthClipClamp` | The render encoder's `MTLDepthClipModeClamp` (`depthClampEnable`) on a device without `depthClamp` | - | via a helper: 1: `crates/metal2vulkan/src/metal/state.rs:363` | `app`: depth clamp on a device without depthClamp |
+ | `DepthBiasClamp` | The render encoder's depth bias clamp, nonzero with a nonzero bias, on a device without `depthBiasClamp` | - | via a helper: 1: `crates/metal2vulkan/src/metal/state.rs:463` | `app`: depth bias clamp on a device without depthBiasClamp |
+@@ -138,12 +138,12 @@
+ | `CountingVisibility` | A `Counting` visibility result (`MTLVisibilityResultModeCounting`) on a device without `occlusionQueryPrecise` | devices without VkFeature::OcclusionQueryPrecise | 1: `crates/metal2vulkan-runtime/src/visibility.rs:452` | `rare`: counting occlusion queries on a device without precise queries |
+ | `ViewFormatReinterpretation` | A texture view whose format has other components, or components of other widths, than its texture's (`RGBA8Unorm` as `R32Uint`), on a device whose... | every device (no Vulkan mechanism) | 1: `crates/metal2vulkan-runtime/src/view_plan.rs:568` | `app`: a view of another component layout on a portability subset (MoltenVK) |
+ | `SeparateMultisampledDepthStencil` | A render pass whose depth and stencil attachments are separate multisampled textures that it loads or may store, on a device without maintenance8,... | - | via a helper: 7: `crates/metal2vulkan-runtime/src/depth_stencil_scratch.rs:188`, `crates/metal2vulkan-runtime/src/depth_stencil_scratch.rs:294` (+5) | `rare`: separate multisampled depth and stencil textures |
+-| `PixelCoverage` | The fragment's coverage (`[[sample_mask]]` read) in a fragment function of a pipeline of more than one sample that runs once per pixel | drivers with a defect | 1: `crates/metal2vulkan/src/pipeline/link/graphics.rs:760` | `rare`: coverage reads at pixel rate in a multisampled pipeline |
+-| `CentroidVarying` | A centroid varying (`[[centroid_perspective]]`, `[[centroid_no_perspective]]`) in a fragment function of a pipeline of more than one sample | drivers with a defect | 1: `crates/metal2vulkan/src/pipeline/link/graphics.rs:775` | `rare`: centroid varyings in a multisampled pipeline |
++| `PixelCoverage` | The fragment's coverage (`[[sample_mask]]` read) in a fragment function of a pipeline of more than one sample that runs once per pixel | drivers with a defect | 1: `crates/metal2vulkan/src/pipeline/link/graphics.rs:796` | `rare`: coverage reads at pixel rate in a multisampled pipeline |
++| `CentroidVarying` | A centroid varying (`[[centroid_perspective]]`, `[[centroid_no_perspective]]`) in a fragment function of a pipeline of more than one sample | drivers with a defect | 1: `crates/metal2vulkan/src/pipeline/link/graphics.rs:814` | `rare`: centroid varyings in a multisampled pipeline |
+ | `PrivateMemory` | A stage whose private memory (its `thread` variables and arrays, and the constants it holds per thread) takes more Function storage a thread than... | - | via a helper: 1: `crates/metal2vulkan/src/lower/select.rs:1159` | `rare`: very large per-thread arrays |
+ | `SparseTextures` | A sparse heap (`MTLHeapTypeSparse`), or a texture made from one, on a device without what a sparse resident image of it needs, which `missing` names | every device (no Vulkan mechanism) | 1: `crates/metal2vulkan-runtime/src/sparse/texture.rs:32` | `rare`: sparse heaps on a device without sparse images |
+ | `SparseMapping` | A sparse texture's mapping update (`updateTextureMapping:` and its array form, or a move of mappings) that covers part of one of the device's... | every device (no Vulkan mechanism) | 1: `crates/metal2vulkan-runtime/src/sparse/encoder.rs:464` | `rare`: sparse mappings off the device's blocks |
+-| `TimelineSemaphores` | Command buffers and events, which the runtime completes and signals through timeline semaphores (core in Vulkan 1.2), on a device whose... | every device (no Vulkan mechanism) | 1: `crates/metal2vulkan-runtime/src/device/create.rs:1034` | `none`: a device below the runtime's floor |
++| `TimelineSemaphores` | Command buffers and events, which the runtime completes and signals through timeline semaphores (core in Vulkan 1.2), on a device whose... | every device (no Vulkan mechanism) | 1: `crates/metal2vulkan-runtime/src/device/create.rs:1040` | `none`: a device below the runtime's floor |
+ | `Reflection` | Reflection of an argument whose answer Metal's has not been measured for (`reflection`) | every device (not implemented) | 9: `crates/metal2vulkan/src/bind/argument_buffer.rs:626`, `crates/metal2vulkan/src/reflection/derive.rs:178` (+7) | `rare`: reflection of argument kinds Metal's answer is unmeasured for |
+ | `HeapTextureTiling` | A texture of a heap whose memory the device's optimal images do not take (a `Shared` heap on a device whose optimal images take no host-visible... | every device (no Vulkan mechanism) | 1: `crates/metal2vulkan-runtime/src/texture/heap.rs:565` | `app`: textures in Shared heaps on a device whose optimal images take no host memory |
+ | `ViewportDepthRange` | A viewport depth range past `[0, 1]` (`setViewport:`), which Metal takes and the runtime draws natively (`VK_EXT_depth_range_unrestricted`) or... | drivers with a defect | 1: `crates/metal2vulkan-runtime/src/render_state.rs:1186` | `rare`: viewport depth outside [0, 1] |
+@@ -171,7 +171,7 @@
+ | `HeapTextureMemory` | A heap texture whose image the heap's memory type does not take | every device (runtime piece not built) | 5: `crates/metal2vulkan-runtime/src/texture/heap.rs:1313`, `crates/metal2vulkan-runtime/src/texture/heap.rs:1320` (+3) | `app`: a heap texture the heap's memory type does not take |
+ | `FunctionTablePastMaxBufferLength` | A visible-function table of more entries than one buffer of the device's `max_buffer_length` holds words for, or than its size word holds | every device (runtime piece not built) | 1: `crates/metal2vulkan-runtime/src/function_table.rs:622` | `none`: a function table past one buffer |
+ | `IndirectCommandBufferPastMaxBufferLength` | An indirect command buffer of more commands than one buffer of the device's `max_buffer_length` holds the records of | every device (runtime piece not built) | 1: `crates/metal2vulkan-runtime/src/indirect_command_buffer.rs:514` | `none`: an ICB past one buffer |
+-| `IndirectRenderCommands` | What indirect command buffers lack of their render commands | every device (runtime piece not built) | 17: `crates/metal2vulkan-runtime/src/compute.rs:1033`, `crates/metal2vulkan-runtime/src/compute.rs:1082` (+15) | `rare`: indirect render commands' remaining pieces |
++| `IndirectRenderCommands` | What indirect command buffers lack of their render commands | every device (runtime piece not built) | 17: `crates/metal2vulkan-runtime/src/compute.rs:1034`, `crates/metal2vulkan-runtime/src/compute.rs:1083` (+15) | `rare`: indirect render commands' remaining pieces |
+ | `IndirectImageblockSize` | An indirect compute command's imageblock side past 65535, which Metal keeps | every device (runtime piece not built) | 1: `crates/metal2vulkan-runtime/src/indirect_command_buffer.rs:2634` | `none`: an imageblock side past 65535 |
+ | `CommandReplay` | The device replay of indirect command buffers | every device (runtime piece not built) | 2: `crates/metal2vulkan-runtime/src/binding.rs:642`, `crates/metal2vulkan-runtime/src/binding.rs:645` | `rare`: the device replay of indirect command buffers |
+ | `RenderAttachments` | Render attachments and their binding forms | every device (runtime piece not built) | 1: `crates/metal2vulkan-runtime/src/binding.rs:1543` | `rare`: render attachment forms not built |
+@@ -183,15 +183,15 @@
+ | `OverlappingSurfaceRows` | A texture of an IOSurface plane (`Buffer::new_texture_with_iosurface_plane`, the stand-in for `newTextureWithDescriptor:iosurface:plane:`) whose... | every device (runtime piece not built) | 1: `crates/metal2vulkan-runtime/src/buffer_texture.rs:262` | `rare`: an IOSurface plane whose rows overlap |
+ | `SamplePositionsAtBegin` | A render pass whose custom sample positions Vulkan takes only through what the runtime does not build | every device (runtime piece not built) | 3: `crates/metal2vulkan-runtime/src/depth_stencil_scratch.rs:145`, `crates/metal2vulkan-runtime/src/render_pass.rs:1770` (+1) | `rare`: custom sample positions Vulkan takes only at begin |
+ | `SharedEventAcrossDevices` | A shared event handle opened on a device other than its event's | every device (runtime piece not built) | 1: `crates/metal2vulkan-runtime/src/event.rs:376` | `rare`: a shared event opened on another device |
+-| `ViewportDepthRange` | A viewport depth range past `[0, 1]`, which Metal takes, on a device without the features to take it natively or by the vertex stage's... | every device (runtime piece not built) | 7: `crates/metal2vulkan-runtime/src/render.rs:9362`, `crates/metal2vulkan-runtime/src/render_state.rs:1010` (+5) | `rare`: viewport depth outside [0, 1] without the device features |
++| `ViewportDepthRange` | A viewport depth range past `[0, 1]`, which Metal takes, on a device without the features to take it natively or by the vertex stage's... | every device (runtime piece not built) | 7: `crates/metal2vulkan-runtime/src/render.rs:9315`, `crates/metal2vulkan-runtime/src/render_state.rs:1010` (+5) | `rare`: viewport depth outside [0, 1] without the device features |
+ | `NonFiniteDepthBias` | NaN or infinite depth bias factors whose effect differs between flat and sloped triangles, or a draw whose bias adds a clamp that moves a... | every device (runtime piece not built) | 5: `crates/metal2vulkan-runtime/src/render_state.rs:1573`, `crates/metal2vulkan-runtime/src/render_state.rs:1576` (+3) | `rare`: NaN or infinite depth bias |
+ | `DepthNeverWithoutAttachment` | A draw under a depth compare of `Never` in a pass without a depth attachment, which fails every fragment, whose fragment function writes color... | every device (runtime piece not built) | 1: `crates/metal2vulkan-runtime/src/depth_stencil.rs:147` | `rare`: depth compare Never with no depth attachment |
+-| `HiddenDepthStencil` | A draw whose depth/stencil state uses depth or the stencil that the pass lacks, which plain Metal tests against a hidden `float` depth of 1.0 and... | every device (runtime piece not built) | 2: `crates/metal2vulkan-runtime/src/attachment_stand_in.rs:563`, `crates/metal2vulkan-runtime/src/render.rs:6254` | `app`: a depth-stencil state using depth or stencil the pass lacks |
+-| `IndirectDrawArguments` | An indirect draw whose arguments the binding plan asks to read on the CPU (`DrawCommands::indirect_needs_arguments`) | every device (runtime piece not built) | 5: `crates/metal2vulkan-runtime/src/index_bounds.rs:90`, `crates/metal2vulkan-runtime/src/render.rs:2901` (+3) | `rare`: indirect draws whose arguments the CPU must read |
++| `HiddenDepthStencil` | A draw whose depth/stencil state uses depth or the stencil that the pass lacks, which plain Metal tests against a hidden `float` depth of 1.0 and... | every device (runtime piece not built) | 2: `crates/metal2vulkan-runtime/src/attachment_stand_in.rs:563`, `crates/metal2vulkan-runtime/src/render.rs:6220` | `app`: a depth-stencil state using depth or stencil the pass lacks |
++| `IndirectDrawArguments` | An indirect draw whose arguments the binding plan asks to read on the CPU (`DrawCommands::indirect_needs_arguments`) | every device (runtime piece not built) | 5: `crates/metal2vulkan-runtime/src/index_bounds.rs:90`, `crates/metal2vulkan-runtime/src/render.rs:2904` (+3) | `rare`: indirect draws whose arguments the CPU must read |
+ | `DepthStencilResolve` | A depth/stencil resolve no Vulkan resolve mode of the device states | every device (runtime piece not built) | 7: `crates/metal2vulkan-runtime/src/depth_stencil_resolve.rs:441`, `crates/metal2vulkan-runtime/src/resolve.rs:1247` (+5) | `rare`: depth/stencil resolve modes a device lacks |
+ | `TileAtSampleCount` | The tile memory of a render pass of a sample count Apple's GPUs lack (theirs are 1, 2 and 4), which a Vulkan device may have | every device (runtime piece not built) | 2: `crates/metal2vulkan-runtime/src/render/tile_dispatch.rs:599`, `crates/metal2vulkan-runtime/src/render_pass.rs:1520` | `none`: tile memory at a sample count Apple's GPUs lack |
+-| `ImageblockMasters` | A draw or tile dispatch whose imageblock is of another size than the pass's, or a draw whose fragment function's layouts are of another alignment... | every device (runtime piece not built) | 2: `crates/metal2vulkan-runtime/src/render.rs:7446`, `crates/metal2vulkan-runtime/src/render/tile_dispatch.rs:967` | `rare`: imageblocks of mixed sizes in one pass |
+-| `TileAndFragmentImageblocks` | A render pass that reaches its imageblock storage, from a draw whose fragment function declares an explicit imageblock or a tile dispatch whose... | every device (runtime piece not built) | 3: `crates/metal2vulkan-runtime/src/render.rs:7438`, `crates/metal2vulkan-runtime/src/render/tile_dispatch.rs:834` (+1) | `rare`: explicit imageblocks shared by tile and fragment functions |
++| `ImageblockMasters` | A draw or tile dispatch whose imageblock is of another size than the pass's, or a draw whose fragment function's layouts are of another alignment... | every device (runtime piece not built) | 2: `crates/metal2vulkan-runtime/src/render.rs:7399`, `crates/metal2vulkan-runtime/src/render/tile_dispatch.rs:967` | `rare`: imageblocks of mixed sizes in one pass |
++| `TileAndFragmentImageblocks` | A render pass that reaches its imageblock storage, from a draw whose fragment function declares an explicit imageblock or a tile dispatch whose... | every device (runtime piece not built) | 3: `crates/metal2vulkan-runtime/src/render.rs:7391`, `crates/metal2vulkan-runtime/src/render/tile_dispatch.rs:834` (+1) | `rare`: explicit imageblocks shared by tile and fragment functions |
+ | `Metal4Api` | Metal 4's API (`MTL4CommandQueue`, `MTL4CommandBuffer`, `MTL4ArgumentTable`, `MTL4Compiler` and the rest), with the features only its programming... (not scheduled) | every device (runtime piece not built) | family audit only: 3: `crates/metal2vulkan-runtime/src/families/features.rs:1460`, `crates/metal2vulkan-runtime/src/families/limits.rs:1022` (+1) | `app`: Metal 4 (the API is missing: METAL-COVERAGE.md) |
+ | `CounterSampleBuffers` | Counter sample buffers (`MTLCounterSampleBuffer`) and the commands that sample into them (not scheduled) | every device (runtime piece not built) | family audit only: 1: `crates/metal2vulkan-runtime/src/families/limits.rs:1013` | `app`: GPU counters and timestamps by sample buffer (missing API) |
+ | `ResidencySets` | Residency sets (`MTLResidencySet`) (not scheduled) | every device (runtime piece not built) | family audit only: 2: `crates/metal2vulkan-runtime/src/families/features.rs:1442`, `crates/metal2vulkan-runtime/src/families/limits.rs:1015` | `app`: residency sets (missing API) |
+@@ -214,8 +214,8 @@
+ | `StageInFetchPast4GiB` | A dispatch (`dispatchThreads:threadsPerThreadgroup:` and its forms, or an indirect command buffer's command) whose kernel may read a... | every device (runtime piece not built) | 1: `crates/metal2vulkan-runtime/src/fetch_reach.rs:126` | `rare`: stage-in fetch past 4 GiB of a bind offset |
+ | `MappedTextureSampling` | A command that would sample a texture of an address-mode map (`TextureDescriptor::address_mode_map`) where the runtime cannot map it at bind... | every device (runtime piece not built) | 1: `crates/metal2vulkan-runtime/src/address_map.rs:158` | `none`: a runtime extension's texture (address_mode_map) sampled where the runtime cannot map it; no Metal API path |
+ | `LibrarySource` | A library compiled from Metal Shading Language source | every device (runtime piece not built) | 1: `crates/metal2vulkan-runtime/src/library.rs:107` | `app`: a library compiled from Metal source (newLibraryWithSource:); the runtime takes metallibs and AIR |
+-| `RestartedStrip` | An indexed strip after `set_primitive_restart_enabled` with an index Vulkan does not restart at, which the runtime draws as a list an index... | every device (runtime piece not built) | 2: `crates/metal2vulkan-runtime/src/index_rewrite.rs:110`, `crates/metal2vulkan-runtime/src/render.rs:7542` | `none`: a strip after the Apple-private setPrimitiveRestartEnabled:index: whose rewrite pass cannot run as Metal draws |
+-| `PrimitiveIdIndices` | An indexed draw (`drawIndexedPrimitives:`) of a pipeline whose fragment function reads `[[primitive_id]]` on a device whose fragment stage cannot... | every device (runtime piece not built) | 1: `crates/metal2vulkan-runtime/src/render.rs:7916` | `rare`: an indexed draw of a primitive_id pipeline, on a device without geometry or tessellation shaders, whose indices the encoder wrote since its last barrier |
++| `RestartedStrip` | An indexed strip after `set_primitive_restart_enabled` with an index Vulkan does not restart at, which the runtime draws as a list an index... | every device (runtime piece not built) | 2: `crates/metal2vulkan-runtime/src/index_rewrite.rs:110`, `crates/metal2vulkan-runtime/src/render.rs:7495` | `none`: a strip after the Apple-private setPrimitiveRestartEnabled:index: whose rewrite pass cannot run as Metal draws |
++| `PrimitiveIdIndices` | An indexed draw (`drawIndexedPrimitives:`) of a pipeline whose fragment function reads `[[primitive_id]]` on a device whose fragment stage cannot... | every device (runtime piece not built) | 1: `crates/metal2vulkan-runtime/src/render.rs:7869` | `rare`: an indexed draw of a primitive_id pipeline, on a device without geometry or tessellation shaders, whose indices the encoder wrote since its last barrier |
+ | `RotatedTexture` | A rotated texture (`TextureDescriptor::rotation`) where the runtime does not build what Metal does | every device (runtime piece not built) | 9: `crates/metal2vulkan-runtime/src/blit_texture.rs:1555`, `crates/metal2vulkan-runtime/src/buffer_texture.rs:714` (+7) | `rare`: a rotated drawable's views, blits with images over overlapping rows, rows past its buffer |
+ | `DetachTextures` | A texture over a no-copy buffer's or heap's bytes (a heap's texture, or a texture over the buffer or over one of the heap's buffers) that no... | every device (runtime piece not built) | 8: `crates/metal2vulkan-runtime/src/buffer_descriptor.rs:598`, `crates/metal2vulkan-runtime/src/buffer_texture.rs:621` (+6) | `none`: a runtime extension's detach with a texture no stand-in presents exactly |
+ | `TextureBufferLevels` | A texture buffer of more than one level (`TextureDescriptor::mipmap_level_count`, up to its width's full chain) from the device's, a heap's or the... | every device (runtime piece not built) | 1: `crates/metal2vulkan-runtime/src/texture_descriptor.rs:540` | `rare`: a texture buffer of more than one level (public, unusual) |
+@@ -334,7 +334,7 @@
+ - `feature::BufferRange`: `crates/metal2vulkan-runtime/src/function_table.rs:569 (past_storage_buffer_range)`; `crates/metal2vulkan/src/bind/graphics.rs:3530 (patch_binding)`; `crates/metal2vulkan/src/bind/graphics.rs:3574 (patch_binding)`; `crates/metal2vulkan/src/bind/graphics.rs:3612 (patch_binding)`; `crates/metal2vulkan/src/bind/instantiate.rs:632 (bind_buffers)`; `crates/metal2vulkan/src/lower/access/function_table.rs:226 (select)`; `crates/metal2vulkan/src/lower/access/mod.rs:1180 (place_slots)`
+ - `feature::Int64Arithmetic`: `crates/metal2vulkan/src/lower/arith/legal.rs:582 (check_scalar)`; `crates/metal2vulkan/src/lower/select.rs:1121 (selector_form)`
+ - `feature::Float64Arithmetic`: `crates/metal2vulkan/src/device/metal.rs:230 (unsupported_features)`; `crates/metal2vulkan/src/lower/arith/legal.rs:587 (check_scalar)`
+-- `feature::Format`: `crates/metal2vulkan-runtime/src/binding_view.rs:146 (binding_view)`; `crates/metal2vulkan-runtime/src/blit_plan.rs:462 (check_formats)`; `crates/metal2vulkan-runtime/src/blit_plan.rs:469 (check_formats)`; `crates/metal2vulkan-runtime/src/blit_plan.rs:484 (check_formats)`; `crates/metal2vulkan-runtime/src/blit_plan.rs:541 (pair_unit)`; `crates/metal2vulkan-runtime/src/blit_plan.rs:633 (plan_levels_copy)`; `crates/metal2vulkan-runtime/src/blit_texture.rs:2071 (through_buffer)`; `crates/metal2vulkan-runtime/src/buffer_texture.rs:518 (make_texture_over)`; `crates/metal2vulkan-runtime/src/buffer_texture.rs:581 (make_texture_over)`; `crates/metal2vulkan-runtime/src/buffer_texture.rs:613 (make_texture_over)`; `crates/metal2vulkan-runtime/src/buffer_texture.rs:850 (texture_buffer_texel)`; `crates/metal2vulkan-runtime/src/copy_plan.rs:269 (colour_unit)`; `crates/metal2vulkan-runtime/src/copy_plan.rs:297 (copy_unit)`; `crates/metal2vulkan-runtime/src/copy_plan.rs:343 (copy_unit)`; `crates/metal2vulkan-runtime/src/depth_stencil_scratch.rs:346 (scratch)`; `crates/metal2vulkan-runtime/src/depth_stencil_scratch.rs:526 (usable_twin)`; `crates/metal2vulkan-runtime/src/families/features.rs:1598 (read_write_tier)`; `crates/metal2vulkan-runtime/src/families/formats.rs:1628 (sparse_missing)`; `crates/metal2vulkan-runtime/src/families/formats.rs:227 (none)`; `crates/metal2vulkan-runtime/src/families/formats.rs:271 (answers)`; `crates/metal2vulkan-runtime/src/families/formats.rs:291 (answers)`; `crates/metal2vulkan-runtime/src/families/formats.rs:306 (answers)`; `crates/metal2vulkan-runtime/src/families/formats.rs:353 (answers)`; `crates/metal2vulkan-runtime/src/families/formats.rs:392 (answers)`; `crates/metal2vulkan-runtime/src/families/formats.rs:474 (atomic_gap)`; `crates/metal2vulkan-runtime/src/families/formats.rs:508 (lacking)`; `crates/metal2vulkan-runtime/src/families/formats.rs:522 (unsupported)`; `crates/metal2vulkan-runtime/src/image_plan.rs:539 (check_own_memory)`; `crates/metal2vulkan-runtime/src/image_plan.rs:665 (plan_held)`; `crates/metal2vulkan-runtime/src/image_plan.rs:782 (plan_held)`; `crates/metal2vulkan-runtime/src/image_plan.rs:902 (plan_held)`; `crates/metal2vulkan-runtime/src/render.rs:6819 (viewing)`; `crates/metal2vulkan-runtime/src/render_pass.rs:1282 (layout)`; `crates/metal2vulkan-runtime/src/render_pass.rs:1618 (target)`; `crates/metal2vulkan-runtime/src/render_pass.rs:1711 (attachment_format)`; `crates/metal2vulkan-runtime/src/render_pass.rs:944 (check_target)`; `crates/metal2vulkan-runtime/src/resolve.rs:392 (unmodelled_resolve)`; `crates/metal2vulkan-runtime/src/resolve.rs:482 (color)`; `crates/metal2vulkan-runtime/src/sample_copy.rs:177 (checked_twin)`; `crates/metal2vulkan-runtime/src/sample_copy.rs:205 (plan)`; `crates/metal2vulkan-runtime/src/sample_interleave.rs:296 (interleave_merge)`; `crates/metal2vulkan-runtime/src/shadow.rs:598 (unmerged)`; `crates/metal2vulkan-runtime/src/shadow.rs:605 (unmerged)`; `crates/metal2vulkan-runtime/src/texture.rs:1926 (texture_as)`; `crates/metal2vulkan-runtime/src/texture.rs:3393 (two_planes_refused)`; `crates/metal2vulkan-runtime/src/texture/decoded_twin.rs:498 (astc_texels)`; `crates/metal2vulkan-runtime/src/texture/decoded_twin.rs:534 (etc_texels)`; `crates/metal2vulkan-runtime/src/texture/heap.rs:1676 (new_heap_texture)`; `crates/metal2vulkan-runtime/src/texture/surface_two_planes.rs:80 (refused)`; `crates/metal2vulkan-runtime/src/texture/ycbcr_image.rs:115 (converted_storage)`; `crates/metal2vulkan-runtime/src/texture/ycbcr_image.rs:278 (ycbcr_write_shadow)`; `crates/metal2vulkan-runtime/src/texture/ycbcr_image.rs:384 (new_render_shadow)`; `crates/metal2vulkan-runtime/src/two_planes.rs:114 (unmeasured)`; `crates/metal2vulkan-runtime/src/view_plan.rs:380 (check_format)`; `crates/metal2vulkan-runtime/src/view_plan.rs:393 (check_format)`; `crates/metal2vulkan-runtime/src/view_plan.rs:400 (check_format)`; `crates/metal2vulkan-runtime/src/view_plan.rs:410 (check_format)`; `crates/metal2vulkan-runtime/src/view_plan.rs:420 (check_format)`; `crates/metal2vulkan-runtime/src/ycbcr.rs:264 (refused)`; `crates/metal2vulkan/src/bind/extended_shadow.rs:184 (extended_shadow_module)`; `crates/metal2vulkan/src/bind/plan/resources.rs:1134 (plain_texture)`; `crates/metal2vulkan/src/bind/plan/resources.rs:1814 (extended_sampler)`; `crates/metal2vulkan/src/bind/plan/resources.rs:193 (require_filter_features)`; `crates/metal2vulkan/src/bind/plan/resources.rs:959 (plain_texture)`; `crates/metal2vulkan/src/bind/sample_interleave.rs:304 (finish)`; `crates/metal2vulkan/src/bind/sample_interleave.rs:328 (interleave_split_module)`; `crates/metal2vulkan/src/bind/shadow_copy_in.rs:259 (shadow_copy_in_module)`; `crates/metal2vulkan/src/bind/unused_bits.rs:657 (unused_bits_module)`; `crates/metal2vulkan/src/lower/access/tile.rs:1029 (storage_format)`; `crates/metal2vulkan/src/lower/fragment/color.rs:160 (select_param)`; `crates/metal2vulkan/src/lower/fragment/color.rs:166 (select_param)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1138 (extended_range_blend)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1159 (extended_range_blend)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1165 (extended_range_blend)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1171 (extended_range_blend)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1196 (extended_range_blend)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1371 (plan)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1762 (select_read)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1870 (select_output)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1897 (select_output)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1916 (select_output)`; `crates/metal2vulkan/src/lower/sampler/select.rs:1093 (select_extended)`; `crates/metal2vulkan/src/lower/sampler/select.rs:691 (texel_in)`; `crates/metal2vulkan/src/lower/stage_io/extended_color.rs:77 (plan)`; `crates/metal2vulkan/src/lower/stage_io/plan.rs:2262 (entry)`; `crates/metal2vulkan/src/lower/stage_io/plan.rs:842 (zeroed_output)`; `crates/metal2vulkan/src/lower/stage_io/word_color.rs:83 (plan)`; `crates/metal2vulkan/src/lower/texture/mod.rs:2326 (select)`; `crates/metal2vulkan/src/lower/texture/mod.rs:2968 (cross_class)`; `crates/metal2vulkan/src/lower/texture/mod.rs:3140 (select_image)`; `crates/metal2vulkan/src/lower/texture/mod.rs:3310 (select_read_as)`; `crates/metal2vulkan/src/lower/texture/mod.rs:3347 (select_read_as)`; `crates/metal2vulkan/src/lower/texture/mod.rs:3680 (select_write)`; `crates/metal2vulkan/src/lower/texture/slot.rs:1035 (declare_slot)`; `crates/metal2vulkan/src/lower/texture/slot.rs:1048 (declare_slot)`; `crates/metal2vulkan/src/lower/texture/slot.rs:1054 (declare_slot)`; `crates/metal2vulkan/src/lower/texture/slot.rs:739 (storage_format)`; `crates/metal2vulkan/src/lower/texture/slot.rs:742 (storage_format)`; `crates/metal2vulkan/src/lower/texture/slot.rs:753 (storage_format)`; `crates/metal2vulkan/src/lower/texture/slot.rs:771 (storage_format)`; `crates/metal2vulkan/src/lower/texture/slot.rs:791 (storage_format)`; `crates/metal2vulkan/src/lower/texture/slot.rs:815 (ulong_format)`; `crates/metal2vulkan/src/lower/texture/slot.rs:826 (ulong_format)`; `crates/metal2vulkan/src/lower/texture/slot.rs:873 (ulong_format)`; `crates/metal2vulkan/src/lower/texture/slot.rs:908 (atomic_format)`; `crates/metal2vulkan/src/lower/texture/slot.rs:917 (atomic_format)`; `crates/metal2vulkan/src/metal/format/mod.rs:1657 (vk_format)`; `crates/metal2vulkan/src/metal/format/mod.rs:1659 (vk_format)`; `crates/metal2vulkan/src/metal/format/mod.rs:1789 (candidates)`; `crates/metal2vulkan/src/metal/format/mod.rs:2745 (storage_choice_viewed)`; `crates/metal2vulkan/src/metal/format/mod.rs:2763 (held_storage_choice)`; `crates/metal2vulkan/src/metal/format/mod.rs:2771 (held_storage_choice)`; `crates/metal2vulkan/src/metal/format/mod.rs:2868 (held_storage_choice)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:1075 (extended_write_mask)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:421 (graphics_state)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:467 (graphics_state)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:539 (graphics_state)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:945 (reads_alpha_to_coverage)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:966 (reads_alpha_to_coverage)`; `crates/metal2vulkan/src/pipeline/rotated_blend.rs:449 (rotated_blend)`; `crates/metal2vulkan/src/pipeline/rotated_blend.rs:593 (alpha_in_red_blend)`
++- `feature::Format`: `crates/metal2vulkan-runtime/src/binding_view.rs:146 (binding_view)`; `crates/metal2vulkan-runtime/src/blit_plan.rs:462 (check_formats)`; `crates/metal2vulkan-runtime/src/blit_plan.rs:469 (check_formats)`; `crates/metal2vulkan-runtime/src/blit_plan.rs:484 (check_formats)`; `crates/metal2vulkan-runtime/src/blit_plan.rs:541 (pair_unit)`; `crates/metal2vulkan-runtime/src/blit_plan.rs:633 (plan_levels_copy)`; `crates/metal2vulkan-runtime/src/blit_texture.rs:2071 (through_buffer)`; `crates/metal2vulkan-runtime/src/buffer_texture.rs:518 (make_texture_over)`; `crates/metal2vulkan-runtime/src/buffer_texture.rs:581 (make_texture_over)`; `crates/metal2vulkan-runtime/src/buffer_texture.rs:613 (make_texture_over)`; `crates/metal2vulkan-runtime/src/buffer_texture.rs:850 (texture_buffer_texel)`; `crates/metal2vulkan-runtime/src/copy_plan.rs:269 (colour_unit)`; `crates/metal2vulkan-runtime/src/copy_plan.rs:297 (copy_unit)`; `crates/metal2vulkan-runtime/src/copy_plan.rs:343 (copy_unit)`; `crates/metal2vulkan-runtime/src/depth_stencil_scratch.rs:346 (scratch)`; `crates/metal2vulkan-runtime/src/depth_stencil_scratch.rs:526 (usable_twin)`; `crates/metal2vulkan-runtime/src/families/features.rs:1598 (read_write_tier)`; `crates/metal2vulkan-runtime/src/families/formats.rs:1628 (sparse_missing)`; `crates/metal2vulkan-runtime/src/families/formats.rs:227 (none)`; `crates/metal2vulkan-runtime/src/families/formats.rs:271 (answers)`; `crates/metal2vulkan-runtime/src/families/formats.rs:291 (answers)`; `crates/metal2vulkan-runtime/src/families/formats.rs:306 (answers)`; `crates/metal2vulkan-runtime/src/families/formats.rs:353 (answers)`; `crates/metal2vulkan-runtime/src/families/formats.rs:392 (answers)`; `crates/metal2vulkan-runtime/src/families/formats.rs:474 (atomic_gap)`; `crates/metal2vulkan-runtime/src/families/formats.rs:508 (lacking)`; `crates/metal2vulkan-runtime/src/families/formats.rs:522 (unsupported)`; `crates/metal2vulkan-runtime/src/image_plan.rs:539 (check_own_memory)`; `crates/metal2vulkan-runtime/src/image_plan.rs:665 (plan_held)`; `crates/metal2vulkan-runtime/src/image_plan.rs:782 (plan_held)`; `crates/metal2vulkan-runtime/src/image_plan.rs:902 (plan_held)`; `crates/metal2vulkan-runtime/src/render.rs:6785 (viewing)`; `crates/metal2vulkan-runtime/src/render_pass.rs:1282 (layout)`; `crates/metal2vulkan-runtime/src/render_pass.rs:1618 (target)`; `crates/metal2vulkan-runtime/src/render_pass.rs:1711 (attachment_format)`; `crates/metal2vulkan-runtime/src/render_pass.rs:944 (check_target)`; `crates/metal2vulkan-runtime/src/resolve.rs:392 (unmodelled_resolve)`; `crates/metal2vulkan-runtime/src/resolve.rs:482 (color)`; `crates/metal2vulkan-runtime/src/sample_copy.rs:177 (checked_twin)`; `crates/metal2vulkan-runtime/src/sample_copy.rs:205 (plan)`; `crates/metal2vulkan-runtime/src/sample_interleave.rs:296 (interleave_merge)`; `crates/metal2vulkan-runtime/src/shadow.rs:598 (unmerged)`; `crates/metal2vulkan-runtime/src/shadow.rs:605 (unmerged)`; `crates/metal2vulkan-runtime/src/texture.rs:1926 (texture_as)`; `crates/metal2vulkan-runtime/src/texture.rs:3393 (two_planes_refused)`; `crates/metal2vulkan-runtime/src/texture/decoded_twin.rs:498 (astc_texels)`; `crates/metal2vulkan-runtime/src/texture/decoded_twin.rs:534 (etc_texels)`; `crates/metal2vulkan-runtime/src/texture/heap.rs:1676 (new_heap_texture)`; `crates/metal2vulkan-runtime/src/texture/surface_two_planes.rs:80 (refused)`; `crates/metal2vulkan-runtime/src/texture/ycbcr_image.rs:115 (converted_storage)`; `crates/metal2vulkan-runtime/src/texture/ycbcr_image.rs:278 (ycbcr_write_shadow)`; `crates/metal2vulkan-runtime/src/texture/ycbcr_image.rs:384 (new_render_shadow)`; `crates/metal2vulkan-runtime/src/two_planes.rs:114 (unmeasured)`; `crates/metal2vulkan-runtime/src/view_plan.rs:380 (check_format)`; `crates/metal2vulkan-runtime/src/view_plan.rs:393 (check_format)`; `crates/metal2vulkan-runtime/src/view_plan.rs:400 (check_format)`; `crates/metal2vulkan-runtime/src/view_plan.rs:410 (check_format)`; `crates/metal2vulkan-runtime/src/view_plan.rs:420 (check_format)`; `crates/metal2vulkan-runtime/src/ycbcr.rs:264 (refused)`; `crates/metal2vulkan/src/bind/extended_shadow.rs:184 (extended_shadow_module)`; `crates/metal2vulkan/src/bind/plan/resources.rs:1134 (plain_texture)`; `crates/metal2vulkan/src/bind/plan/resources.rs:1814 (extended_sampler)`; `crates/metal2vulkan/src/bind/plan/resources.rs:193 (require_filter_features)`; `crates/metal2vulkan/src/bind/plan/resources.rs:959 (plain_texture)`; `crates/metal2vulkan/src/bind/sample_interleave.rs:304 (finish)`; `crates/metal2vulkan/src/bind/sample_interleave.rs:328 (interleave_split_module)`; `crates/metal2vulkan/src/bind/shadow_copy_in.rs:259 (shadow_copy_in_module)`; `crates/metal2vulkan/src/bind/unused_bits.rs:657 (unused_bits_module)`; `crates/metal2vulkan/src/lower/access/tile.rs:1029 (storage_format)`; `crates/metal2vulkan/src/lower/fragment/color.rs:181 (select_param)`; `crates/metal2vulkan/src/lower/fragment/color.rs:187 (select_param)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1138 (extended_range_blend)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1159 (extended_range_blend)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1165 (extended_range_blend)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1171 (extended_range_blend)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1196 (extended_range_blend)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1371 (plan)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1762 (select_read)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1870 (select_output)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1897 (select_output)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1916 (select_output)`; `crates/metal2vulkan/src/lower/sampler/select.rs:1093 (select_extended)`; `crates/metal2vulkan/src/lower/sampler/select.rs:691 (texel_in)`; `crates/metal2vulkan/src/lower/stage_io/extended_color.rs:77 (plan)`; `crates/metal2vulkan/src/lower/stage_io/plan.rs:2262 (entry)`; `crates/metal2vulkan/src/lower/stage_io/plan.rs:842 (zeroed_output)`; `crates/metal2vulkan/src/lower/stage_io/word_color.rs:83 (plan)`; `crates/metal2vulkan/src/lower/texture/mod.rs:2326 (select)`; `crates/metal2vulkan/src/lower/texture/mod.rs:2968 (cross_class)`; `crates/metal2vulkan/src/lower/texture/mod.rs:3140 (select_image)`; `crates/metal2vulkan/src/lower/texture/mod.rs:3310 (select_read_as)`; `crates/metal2vulkan/src/lower/texture/mod.rs:3347 (select_read_as)`; `crates/metal2vulkan/src/lower/texture/mod.rs:3680 (select_write)`; `crates/metal2vulkan/src/lower/texture/slot.rs:1035 (declare_slot)`; `crates/metal2vulkan/src/lower/texture/slot.rs:1048 (declare_slot)`; `crates/metal2vulkan/src/lower/texture/slot.rs:1054 (declare_slot)`; `crates/metal2vulkan/src/lower/texture/slot.rs:739 (storage_format)`; `crates/metal2vulkan/src/lower/texture/slot.rs:742 (storage_format)`; `crates/metal2vulkan/src/lower/texture/slot.rs:753 (storage_format)`; `crates/metal2vulkan/src/lower/texture/slot.rs:771 (storage_format)`; `crates/metal2vulkan/src/lower/texture/slot.rs:791 (storage_format)`; `crates/metal2vulkan/src/lower/texture/slot.rs:815 (ulong_format)`; `crates/metal2vulkan/src/lower/texture/slot.rs:826 (ulong_format)`; `crates/metal2vulkan/src/lower/texture/slot.rs:873 (ulong_format)`; `crates/metal2vulkan/src/lower/texture/slot.rs:908 (atomic_format)`; `crates/metal2vulkan/src/lower/texture/slot.rs:917 (atomic_format)`; `crates/metal2vulkan/src/metal/format/mod.rs:1657 (vk_format)`; `crates/metal2vulkan/src/metal/format/mod.rs:1659 (vk_format)`; `crates/metal2vulkan/src/metal/format/mod.rs:1789 (candidates)`; `crates/metal2vulkan/src/metal/format/mod.rs:2745 (storage_choice_viewed)`; `crates/metal2vulkan/src/metal/format/mod.rs:2763 (held_storage_choice)`; `crates/metal2vulkan/src/metal/format/mod.rs:2771 (held_storage_choice)`; `crates/metal2vulkan/src/metal/format/mod.rs:2868 (held_storage_choice)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:1003 (reads_alpha_to_coverage)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:1112 (extended_write_mask)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:428 (graphics_state)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:474 (graphics_state)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:546 (graphics_state)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:583 (graphics_state)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:982 (reads_alpha_to_coverage)`; `crates/metal2vulkan/src/pipeline/rotated_blend.rs:449 (rotated_blend)`; `crates/metal2vulkan/src/pipeline/rotated_blend.rs:593 (alpha_in_red_blend)`
+ - `feature::DivergentImplicitLod`: `crates/metal2vulkan/src/lower/sampler/select.rs:352 (select_sampling)`
+ - `feature::ImplicitLodOutsideFragment`: `crates/metal2vulkan/src/lower/sampler/constexpr.rs:136 (query_min_level)`; `crates/metal2vulkan/src/lower/sampler/select.rs:229 (query_level_measured)`; `crates/metal2vulkan/src/lower/sampler/select.rs:255 (query_min_level)`
+ - `feature::MinLodClamp`: `crates/metal2vulkan/src/lower/sampler/select.rs:1572 (select_one)`; `crates/metal2vulkan/src/lower/sampler/select.rs:973 (min_lod)`
+@@ -350,28 +350,28 @@
+ - `feature::PixelSamplerCompare`: `crates/metal2vulkan/src/lower/sampler/constexpr.rs:115 (lowered)`
+ - `feature::TexelBuffer`: `crates/metal2vulkan/src/bind/instantiate.rs:853 (texel_ranges)`; `crates/metal2vulkan/src/bind/instantiate.rs:859 (texel_ranges)`; `crates/metal2vulkan/src/bind/plan/resources.rs:1147 (plain_texture)`
+ - `feature::RasterOrderGroups`: `crates/metal2vulkan/src/device/metal.rs:242 (unsupported_features)`; `crates/metal2vulkan/src/lower/fragment/rog.rs:151 (mode)`; `crates/metal2vulkan/src/lower/fragment/rog.rs:172 (mode)`; `crates/metal2vulkan/src/lower/fragment/snapshot.rs:158 (finish)`
+-- `feature::FramebufferFetch`: `crates/metal2vulkan-runtime/src/families/features.rs:1007 (state)`; `crates/metal2vulkan-runtime/src/render.rs:5528 (next_instance)`; `crates/metal2vulkan-runtime/src/sample_planes.rs:116 (lacks)`; `crates/metal2vulkan-runtime/src/sample_planes.rs:143 (new)`; `crates/metal2vulkan-runtime/src/sample_planes.rs:514 (planes_merge)`; `crates/metal2vulkan/src/bind/extended_shadow.rs:190 (extended_shadow_module)`; `crates/metal2vulkan/src/bind/graphics.rs:1453 (plan)`; `crates/metal2vulkan/src/bind/graphics.rs:1490 (plan)`; `crates/metal2vulkan/src/bind/graphics.rs:1509 (plan)`; `crates/metal2vulkan/src/bind/sample_planes.rs:477 (finish)`; `crates/metal2vulkan/src/device/metal.rs:252 (unsupported_features)`; `crates/metal2vulkan/src/lower/arith/extended_range/blend.rs:1177 (unorm8)`; `crates/metal2vulkan/src/lower/arith/extended_range/blend.rs:1195 (unorm8)`; `crates/metal2vulkan/src/lower/arith/extended_range/blend.rs:1209 (unorm8)`; `crates/metal2vulkan/src/lower/arith/extended_range/blend.rs:1252 (packed16)`; `crates/metal2vulkan/src/lower/fragment/color.rs:215 (select_param)`; `crates/metal2vulkan/src/lower/fragment/color.rs:279 (unordered)`; `crates/metal2vulkan/src/lower/fragment/depth_test.rs:195 (not_implemented)`; `crates/metal2vulkan/src/lower/fragment/depth_test.rs:272 (depth_test_form)`; `crates/metal2vulkan/src/lower/fragment/depth_test.rs:318 (stencil_test_form)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1024 (storage_form)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1114 (storage_form)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1151 (extended_range_blend)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1716 (plan_sample)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:749 (not_implemented)`; `crates/metal2vulkan/src/pipeline/link/fetch.rs:164 (storage_attachments)`
++- `feature::FramebufferFetch`: `crates/metal2vulkan-runtime/src/families/features.rs:1007 (state)`; `crates/metal2vulkan-runtime/src/render.rs:5494 (next_instance)`; `crates/metal2vulkan-runtime/src/sample_planes.rs:116 (lacks)`; `crates/metal2vulkan-runtime/src/sample_planes.rs:143 (new)`; `crates/metal2vulkan-runtime/src/sample_planes.rs:514 (planes_merge)`; `crates/metal2vulkan/src/bind/extended_shadow.rs:190 (extended_shadow_module)`; `crates/metal2vulkan/src/bind/graphics.rs:1453 (plan)`; `crates/metal2vulkan/src/bind/graphics.rs:1490 (plan)`; `crates/metal2vulkan/src/bind/graphics.rs:1509 (plan)`; `crates/metal2vulkan/src/bind/sample_planes.rs:477 (finish)`; `crates/metal2vulkan/src/device/metal.rs:260 (unsupported_features)`; `crates/metal2vulkan/src/lower/arith/extended_range/blend.rs:1177 (unorm8)`; `crates/metal2vulkan/src/lower/arith/extended_range/blend.rs:1195 (unorm8)`; `crates/metal2vulkan/src/lower/arith/extended_range/blend.rs:1209 (unorm8)`; `crates/metal2vulkan/src/lower/arith/extended_range/blend.rs:1252 (packed16)`; `crates/metal2vulkan/src/lower/fragment/color.rs:248 (select_param)`; `crates/metal2vulkan/src/lower/fragment/color.rs:312 (unordered)`; `crates/metal2vulkan/src/lower/fragment/depth_test.rs:195 (not_implemented)`; `crates/metal2vulkan/src/lower/fragment/depth_test.rs:272 (depth_test_form)`; `crates/metal2vulkan/src/lower/fragment/depth_test.rs:318 (stencil_test_form)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1024 (storage_form)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1114 (storage_form)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1151 (extended_range_blend)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:1716 (plan_sample)`; `crates/metal2vulkan/src/lower/fragment/fetch.rs:749 (not_implemented)`; `crates/metal2vulkan/src/pipeline/link/fetch.rs:164 (storage_attachments)`
+ - `feature::PrimitiveId`: `crates/metal2vulkan-runtime/src/families/features.rs:1115 (state)`; `crates/metal2vulkan/src/lower/stage_io/plan.rs:3008 (finish)`; `crates/metal2vulkan/src/pipeline/link/varyings.rs:240 (check_primitive_id)`
+-- `feature::VertexAmplification`: `crates/metal2vulkan/src/bind/graphics.rs:3871 (multiview_instances)`; `crates/metal2vulkan/src/lower/stage_io/plan.rs:1258 (own_index_store)`; `crates/metal2vulkan/src/lower/tessellation/mod.rs:718 (select_param)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:251 (vertex_amplification)`; `crates/metal2vulkan/src/pipeline/link/tessellation/mod.rs:228 (control_plan)`
++- `feature::VertexAmplification`: `crates/metal2vulkan/src/bind/graphics.rs:3871 (multiview_instances)`; `crates/metal2vulkan/src/lower/stage_io/plan.rs:1258 (own_index_store)`; `crates/metal2vulkan/src/lower/tessellation/mod.rs:718 (select_param)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:258 (vertex_amplification)`; `crates/metal2vulkan/src/pipeline/link/tessellation/mod.rs:228 (control_plan)`
+ - `feature::LayeredRendering`: `crates/metal2vulkan-runtime/src/render_pass.rs:1578 (target)`; `crates/metal2vulkan-runtime/src/render_state.rs:1078 (needs_viewports)`; `crates/metal2vulkan/src/lower/mesh/mod.rs:778 (target_index)`; `crates/metal2vulkan/src/lower/mesh/mod.rs:797 (target_index)`; `crates/metal2vulkan/src/lower/stage_io/plan.rs:1259 (own_index_store)`; `crates/metal2vulkan/src/pipeline/link/geometry.rs:150 (not_implemented)`; `crates/metal2vulkan/src/pipeline/link/geometry.rs:172 (refused)`
+ - `feature::ClipDistance`: `crates/metal2vulkan/src/lower/mesh/mod.rs:934 (select)`; `crates/metal2vulkan/src/lower/mesh/mod.rs:942 (select)`
+-- `feature::DualSourceBlending`: `crates/metal2vulkan-runtime/src/families/formats.rs:386 (answers)`; `crates/metal2vulkan/src/metal/state.rs:37 (blend_factor)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:1132 (check_outputs)`; `crates/metal2vulkan/src/pipeline/rotated_blend.rs:463 (rotated_blend)`; `crates/metal2vulkan/src/pipeline/rotated_blend.rs:538 (rotated_blend)`
+-- `feature::Barycentrics`: `crates/metal2vulkan/src/device/metal.rs:263 (unsupported_features)`; `crates/metal2vulkan/src/lower/stage_io/plan.rs:1853 (input_builtin)`; `crates/metal2vulkan/src/lower/stage_io/plan.rs:719 (param)`; `crates/metal2vulkan/src/pipeline/link/geometry.rs:148 (not_implemented)`; `crates/metal2vulkan/src/pipeline/link/geometry.rs:170 (refused)`
++- `feature::DualSourceBlending`: `crates/metal2vulkan-runtime/src/families/formats.rs:386 (answers)`; `crates/metal2vulkan/src/metal/state.rs:37 (blend_factor)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:1169 (check_outputs)`; `crates/metal2vulkan/src/pipeline/rotated_blend.rs:463 (rotated_blend)`; `crates/metal2vulkan/src/pipeline/rotated_blend.rs:538 (rotated_blend)`
++- `feature::Barycentrics`: `crates/metal2vulkan/src/device/metal.rs:275 (unsupported_features)`; `crates/metal2vulkan/src/lower/stage_io/plan.rs:1853 (input_builtin)`; `crates/metal2vulkan/src/lower/stage_io/plan.rs:719 (param)`; `crates/metal2vulkan/src/pipeline/link/geometry.rs:148 (not_implemented)`; `crates/metal2vulkan/src/pipeline/link/geometry.rs:170 (refused)`
+ - `feature::StencilExport`: `crates/metal2vulkan-runtime/src/families/features.rs:1102 (state)`; `crates/metal2vulkan/src/bind/graphics.rs:2580 (shadow_stencil_words)`; `crates/metal2vulkan/src/lower/fragment/stencil.rs:157 (device_form)`; `crates/metal2vulkan/src/lower/fragment/stencil.rs:168 (not_implemented)`; `crates/metal2vulkan/src/pipeline/link/stencil.rs:55 (shadow_stencil)`; `crates/metal2vulkan/src/pipeline/link/stencil.rs:73 (shadow_stencil)`
+-- `feature::SampleRateShading`: `crates/metal2vulkan/src/pipeline/link/graphics.rs:815 (sample_invocations)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:817 (sample_invocations)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:904 (sample_invocations)`
+-- `feature::PixelCoverageAtSampleRate`: `crates/metal2vulkan/src/lower/fragment/coverage.rs:291 (finish)`; `crates/metal2vulkan/src/lower/simd/mod.rs:739 (select_param)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:850 (sample_invocations)`
+-- `feature::InterfaceComponents`: `crates/metal2vulkan/src/pipeline/compile/color_group.rs:202 (refusal)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:294 (graphics_state)`; `crates/metal2vulkan/src/pipeline/link/varyings.rs:409 (assign)`; `crates/metal2vulkan/src/pipeline/link/varyings.rs:90 (limit_error)`
++- `feature::SampleRateShading`: `crates/metal2vulkan/src/pipeline/link/graphics.rs:857 (sample_invocations)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:859 (sample_invocations)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:941 (sample_invocations)`
++- `feature::PixelCoverageAtSampleRate`: `crates/metal2vulkan/src/lower/fragment/coverage.rs:291 (finish)`; `crates/metal2vulkan/src/lower/simd/mod.rs:739 (select_param)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:892 (sample_invocations)`
++- `feature::InterfaceComponents`: `crates/metal2vulkan/src/pipeline/compile/color_group.rs:202 (refusal)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:301 (graphics_state)`; `crates/metal2vulkan/src/pipeline/link/varyings.rs:409 (assign)`; `crates/metal2vulkan/src/pipeline/link/varyings.rs:90 (limit_error)`
+ - `feature::UnmatchedVarying`: `crates/metal2vulkan/src/pipeline/link/varyings.rs:318 (mesh_fragment)`; `crates/metal2vulkan/src/pipeline/link/varyings.rs:537 (varyings)`; `crates/metal2vulkan/src/pipeline/link/varyings.rs:548 (varyings)`
+ - `feature::KernelStageIn`: `crates/metal2vulkan-runtime/src/indirect_execute.rs:336 (record)`; `crates/metal2vulkan/src/bind/dispatch.rs:877 (instantiate)`; `crates/metal2vulkan/src/lower/stage_io/stage_in.rs:133 (select)`
+ - `feature::Tessellation`: `crates/metal2vulkan-air/src/canon/mod.rs:1243 (post_check)`; `crates/metal2vulkan-air/src/canon/mod.rs:1334 (post_check)`; `crates/metal2vulkan/src/bind/graphics.rs:3728 (tessellation_dispatch)`; `crates/metal2vulkan/src/lower/stage_io/fetch.rs:519 (select)`; `crates/metal2vulkan/src/lower/stage_io/plan.rs:1434 (primitive_id_output)`; `crates/metal2vulkan/src/lower/stage_io/plan.rs:1727 (input_builtin)`; `crates/metal2vulkan/src/lower/stage_io/plan.rs:776 (param)`; `crates/metal2vulkan/src/lower/tessellation/mod.rs:150 (not_implemented)`; `crates/metal2vulkan/src/lower/tessellation/mod.rs:489 (plan_entry)`; `crates/metal2vulkan/src/metal/vertex.rs:219 (fetch_as)`; `crates/metal2vulkan/src/pipeline/link/tessellation/mod.rs:212 (control_plan)`; `crates/metal2vulkan/src/pipeline/link/tessellation/mod.rs:292 (check_fragment)`; `crates/metal2vulkan/src/pipeline/link/tessellation/mod.rs:316 (push_offset)`
+ - `feature::MeshShading`: `crates/metal2vulkan/src/bind/graphics.rs:1536 (plan)`; `crates/metal2vulkan/src/bind/graphics.rs:2940 (mesh_limit)`; `crates/metal2vulkan/src/lower/mesh/mod.rs:499 (check_payload)`; `crates/metal2vulkan/src/lower/mesh/mod.rs:538 (plan_entry)`; `crates/metal2vulkan/src/lower/mesh/mod.rs:572 (plan_entry)`; `crates/metal2vulkan/src/memory/plan.rs:1849 (reprs)`; `crates/metal2vulkan/src/pipeline/link/mesh.rs:95 (records)`
+-- `feature::TileShading`: `crates/metal2vulkan-runtime/src/render/tile_dispatch.rs:518 (scratch)`; `crates/metal2vulkan/src/bind/plan/compute.rs:237 (tile_memory)`; `crates/metal2vulkan/src/lower/access/tile.rs:151 (not_implemented)`; `crates/metal2vulkan/src/lower/sync/barrier.rs:275 (tile_shading)`; `crates/metal2vulkan/src/pipeline/compile/api.rs:734 (tile_pipeline)`
++- `feature::TileShading`: `crates/metal2vulkan-runtime/src/render/tile_dispatch.rs:518 (scratch)`; `crates/metal2vulkan/src/bind/plan/compute.rs:237 (tile_memory)`; `crates/metal2vulkan/src/lower/access/tile.rs:151 (not_implemented)`; `crates/metal2vulkan/src/lower/sync/barrier.rs:275 (tile_shading)`; `crates/metal2vulkan/src/pipeline/compile/api.rs:687 (tile_pipeline)`
+ - `feature::Imageblocks`: `crates/metal2vulkan/src/lower/access/imageblock.rs:98 (imageblocks)`; `crates/metal2vulkan/src/lower/access/mod.rs:904 (select_param)`; `crates/metal2vulkan/src/lower/fragment/imageblock.rs:103 (require)`; `crates/metal2vulkan/src/lower/fragment/imageblock.rs:85 (not_implemented)`; `crates/metal2vulkan/src/lower/texture/mod.rs:2336 (select)`; `crates/metal2vulkan/src/lower/texture/slice.rs:127 (imageblocks)`; `crates/metal2vulkan/src/pipeline/link/imageblock.rs:46 (fragment_imageblock)`
+ - `feature::RayTracing`: `crates/metal2vulkan/src/bind/acceleration.rs:202 (instance_record)`; `crates/metal2vulkan/src/bind/acceleration.rs:216 (instance_record)`; `crates/metal2vulkan/src/lower/raytracing/mod.rs:1087 (primitive_data_read)`; `crates/metal2vulkan/src/lower/raytracing/mod.rs:1202 (instance_count)`; `crates/metal2vulkan/src/lower/raytracing/mod.rs:1245 (intersect)`; `crates/metal2vulkan/src/lower/raytracing/mod.rs:1257 (intersect)`; `crates/metal2vulkan/src/lower/raytracing/mod.rs:1282 (intersect)`; `crates/metal2vulkan/src/lower/raytracing/mod.rs:1297 (intersect)`; `crates/metal2vulkan/src/lower/raytracing/mod.rs:1312 (intersect)`; `crates/metal2vulkan/src/lower/raytracing/mod.rs:344 (slot_of)`; `crates/metal2vulkan/src/lower/raytracing/mod.rs:385 (select_param)`; `crates/metal2vulkan/src/lower/select.rs:887 (route_air)`
+ - `feature::Tensors`: `crates/metal2vulkan-air/src/canon/matmul2d/synth.rs:32 (refuse)`; `crates/metal2vulkan/src/lower/select.rs:891 (route_air)`
+-- `feature::RasterizationRateMap`: `crates/metal2vulkan/src/lower/fragment/mod.rs:925 (select)`
+-- `feature::GpuEncodedIndirectCommands`: `crates/metal2vulkan/src/bind/replay.rs:530 (preprocess)`; `crates/metal2vulkan/src/bind/replay.rs:772 (replay_preprocess_module)`; `crates/metal2vulkan/src/bind/replay/flat.rs:247 (flat_dispatch_module)`; `crates/metal2vulkan/src/lower/access/encode.rs:393 (needs)`; `crates/metal2vulkan/src/lower/access/encode.rs:409 (needs)`; `crates/metal2vulkan/src/lower/access/encode.rs:526 (select_command)`; `crates/metal2vulkan/src/lower/access/mod.rs:1534 (plan_replay)`; `crates/metal2vulkan/src/lower/access/mod.rs:1547 (plan_replay)`; `crates/metal2vulkan/src/lower/access/mod.rs:1550 (plan_replay)`; `crates/metal2vulkan/src/pipeline/compile.rs:2109 (plan_one)`; `crates/metal2vulkan/src/pipeline/compile.rs:2114 (plan_one)`
+-- `feature::VulkanVersion`: `crates/metal2vulkan/src/ash_interop/query.rs:915 (query)`; `crates/metal2vulkan/src/device/derive.rs:105 (with_deviations)`
++- `feature::RasterizationRateMap`: `crates/metal2vulkan/src/lower/fragment/mod.rs:926 (select)`
++- `feature::GpuEncodedIndirectCommands`: `crates/metal2vulkan/src/bind/replay.rs:530 (preprocess)`; `crates/metal2vulkan/src/bind/replay.rs:772 (replay_preprocess_module)`; `crates/metal2vulkan/src/bind/replay/flat.rs:247 (flat_dispatch_module)`; `crates/metal2vulkan/src/lower/access/encode.rs:393 (needs)`; `crates/metal2vulkan/src/lower/access/encode.rs:409 (needs)`; `crates/metal2vulkan/src/lower/access/encode.rs:526 (select_command)`; `crates/metal2vulkan/src/lower/access/mod.rs:1534 (plan_replay)`; `crates/metal2vulkan/src/lower/access/mod.rs:1547 (plan_replay)`; `crates/metal2vulkan/src/lower/access/mod.rs:1550 (plan_replay)`; `crates/metal2vulkan/src/pipeline/compile.rs:2110 (plan_one)`; `crates/metal2vulkan/src/pipeline/compile.rs:2115 (plan_one)`
++- `feature::VulkanVersion`: `crates/metal2vulkan/src/ash_interop/query.rs:925 (query)`; `crates/metal2vulkan/src/device/derive.rs:105 (with_deviations)`
+ - `feature::Constant`: `crates/metal2vulkan-air/src/bitcode/constants.rs:210 (record)`; `crates/metal2vulkan-air/src/bitcode/constants.rs:268 (record)`; `crates/metal2vulkan/src/error/mod.rs:255 (from)`
+ - `feature::Attribute`: `crates/metal2vulkan-air/src/bitcode/attrs.rs:493 (known)`; `crates/metal2vulkan/src/error/mod.rs:256 (from)`
+ - `feature::BitcodeRecord`: `crates/metal2vulkan-air/src/bitcode/attrs.rs:337 (decode_lists)`; `crates/metal2vulkan-air/src/bitcode/function.rs:572 (symtab)`; `crates/metal2vulkan-air/src/bitcode/metadata.rs:130 (decode)`; `crates/metal2vulkan-air/src/bitcode/metadata.rs:157 (decode)`; `crates/metal2vulkan-air/src/bitcode/module.rs:727 (check_bodies)`; `crates/metal2vulkan-air/src/bitcode/module.rs:872 (symtab)`; `crates/metal2vulkan/src/error/mod.rs:257 (from)`
+@@ -379,16 +379,16 @@
+ - `feature::SubgroupOperations`: `crates/metal2vulkan-runtime/src/families/features.rs:1686 (simd)`; `crates/metal2vulkan/src/lower/simd/mod.rs:402 (finish)`; `crates/metal2vulkan/src/lower/simd/mod.rs:448 (full_quads)`; `crates/metal2vulkan/src/lower/simd/mod.rs:975 (select_group)`
+ - `feature::DirectCall`: `crates/metal2vulkan-air/src/canon/mod.rs:1306 (post_check)`
+ - `feature::WideSwitchLiteral`: `crates/metal2vulkan/src/structurize/emit.rs:207 (check_tree)`
+-- `feature::Lowering`: `crates/metal2vulkan/src/bind/plan/resources.rs:762 (level_views)`; `crates/metal2vulkan/src/lower/access/handle.rs:1062 (texture_target)`; `crates/metal2vulkan/src/lower/access/handle.rs:1073 (sampler_target)`; `crates/metal2vulkan/src/lower/access/handle.rs:318 (domain_kind)`; `crates/metal2vulkan/src/lower/access/imageblock.rs:175 (operand)`; `crates/metal2vulkan/src/lower/access/mod.rs:571 (not_lowered)`; `crates/metal2vulkan/src/lower/access/pulled.rs:76 (share)`; `crates/metal2vulkan/src/lower/arith/legal.rs:53 (not_lowered)`; `crates/metal2vulkan/src/lower/dispatch.rs:113 (not_lowered)`; `crates/metal2vulkan/src/lower/fragment/discard.rs:144 (not_lowered)`; `crates/metal2vulkan/src/lower/fragment/discard.rs:653 (plan)`; `crates/metal2vulkan/src/lower/fragment/mod.rs:123 (not_lowered)`; `crates/metal2vulkan/src/lower/fragment/snapshot.rs:168 (finish)`; `crates/metal2vulkan/src/lower/mesh/mod.rs:147 (not_lowered)`; `crates/metal2vulkan/src/lower/raytracing/mod.rs:126 (not_lowered)`; `crates/metal2vulkan/src/lower/sampler/mod.rs:212 (refuse)`; `crates/metal2vulkan/src/lower/sampler/select.rs:30 (refuse)`; `crates/metal2vulkan/src/lower/select.rs:817 (not_lowered)`; `crates/metal2vulkan/src/lower/select.rs:906 (route_air)`; `crates/metal2vulkan/src/lower/simd/mod.rs:136 (not_lowered)`; `crates/metal2vulkan/src/lower/simd/mod.rs:732 (select_param)`; `crates/metal2vulkan/src/lower/simd/workgroup.rs:353 (check)`; `crates/metal2vulkan/src/lower/stage_io/fetch.rs:96 (not_lowered)`; `crates/metal2vulkan/src/lower/stage_io/mod.rs:174 (not_lowered)`; `crates/metal2vulkan/src/lower/sync/barrier.rs:72 (not_lowered)`; `crates/metal2vulkan/src/lower/sync/memory_model.rs:269 (not_implemented)`; `crates/metal2vulkan/src/lower/sync/memory_model.rs:310 (select)`; `crates/metal2vulkan/src/lower/tessellation/mod.rs:146 (not_lowered)`; `crates/metal2vulkan/src/lower/texture/mod.rs:179 (refuse)`; `crates/metal2vulkan/src/lower/texture/mod.rs:3649 (select_write)`; `crates/metal2vulkan/src/memory/alloca.rs:46 (not_lowered)`; `crates/metal2vulkan/src/memory/leaf.rs:183 (not_lowered)`; `crates/metal2vulkan/src/memory/plan.rs:453 (not_lowered)`; `crates/metal2vulkan/src/memory/provenance.rs:662 (not_lowered)`; `crates/metal2vulkan/src/pipeline/link/tessellation/mod.rs:96 (patch_fetch_projection)`
++- `feature::Lowering`: `crates/metal2vulkan/src/bind/plan/resources.rs:762 (level_views)`; `crates/metal2vulkan/src/lower/access/handle.rs:1062 (texture_target)`; `crates/metal2vulkan/src/lower/access/handle.rs:1073 (sampler_target)`; `crates/metal2vulkan/src/lower/access/handle.rs:318 (domain_kind)`; `crates/metal2vulkan/src/lower/access/imageblock.rs:175 (operand)`; `crates/metal2vulkan/src/lower/access/mod.rs:571 (not_lowered)`; `crates/metal2vulkan/src/lower/access/pulled.rs:76 (share)`; `crates/metal2vulkan/src/lower/arith/legal.rs:53 (not_lowered)`; `crates/metal2vulkan/src/lower/dispatch.rs:113 (not_lowered)`; `crates/metal2vulkan/src/lower/fragment/discard.rs:144 (not_lowered)`; `crates/metal2vulkan/src/lower/fragment/discard.rs:653 (plan)`; `crates/metal2vulkan/src/lower/fragment/mod.rs:123 (not_lowered)`; `crates/metal2vulkan/src/lower/fragment/snapshot.rs:168 (finish)`; `crates/metal2vulkan/src/lower/mesh/mod.rs:147 (not_lowered)`; `crates/metal2vulkan/src/lower/raytracing/mod.rs:126 (not_lowered)`; `crates/metal2vulkan/src/lower/sampler/mod.rs:212 (refuse)`; `crates/metal2vulkan/src/lower/sampler/select.rs:30 (refuse)`; `crates/metal2vulkan/src/lower/select.rs:817 (not_lowered)`; `crates/metal2vulkan/src/lower/select.rs:906 (route_air)`; `crates/metal2vulkan/src/lower/simd/mod.rs:136 (not_lowered)`; `crates/metal2vulkan/src/lower/simd/mod.rs:732 (select_param)`; `crates/metal2vulkan/src/lower/simd/workgroup.rs:353 (check)`; `crates/metal2vulkan/src/lower/stage_io/fetch.rs:96 (not_lowered)`; `crates/metal2vulkan/src/lower/stage_io/mod.rs:176 (not_lowered)`; `crates/metal2vulkan/src/lower/sync/barrier.rs:72 (not_lowered)`; `crates/metal2vulkan/src/lower/sync/memory_model.rs:269 (not_implemented)`; `crates/metal2vulkan/src/lower/sync/memory_model.rs:310 (select)`; `crates/metal2vulkan/src/lower/tessellation/mod.rs:146 (not_lowered)`; `crates/metal2vulkan/src/lower/texture/mod.rs:179 (refuse)`; `crates/metal2vulkan/src/lower/texture/mod.rs:3649 (select_write)`; `crates/metal2vulkan/src/memory/alloca.rs:46 (not_lowered)`; `crates/metal2vulkan/src/memory/leaf.rs:183 (not_lowered)`; `crates/metal2vulkan/src/memory/plan.rs:453 (not_lowered)`; `crates/metal2vulkan/src/memory/provenance.rs:662 (not_lowered)`; `crates/metal2vulkan/src/pipeline/link/tessellation/mod.rs:96 (patch_fetch_projection)`
+ - `feature::SamplerAddressMode`: `crates/metal2vulkan/src/lower/sampler/constexpr.rs:176`; `crates/metal2vulkan/src/metal/sampler.rs:251 (check_sampler)`
+-- `feature::AlphaToOne`: `crates/metal2vulkan/src/pipeline/link/graphics.rs:275 (graphics_state)`
++- `feature::AlphaToOne`: `crates/metal2vulkan/src/pipeline/link/graphics.rs:282 (graphics_state)`
+ - `feature::StageStoresAndAtomics`: `crates/metal2vulkan/src/lower/access/tile_memory.rs:72 (written)`
+ - `feature::FunctionConstantArgument`: `crates/metal2vulkan-air/src/canon/interface.rs:899 (absent_values)`; `crates/metal2vulkan/src/lower/access/absent.rs:100 (require)`
+ - `feature::SamplerBicubicFilter`: `crates/metal2vulkan/src/bind/heap.rs:997 (new)`; `crates/metal2vulkan/src/bind/plan/resources.rs:1876 (bicubic_texels)`; `crates/metal2vulkan/src/bind/plan/slots.rs:502 (cubic_variant)`; `crates/metal2vulkan/src/lower/sampler/bicubic.rs:120 (refuse)`; `crates/metal2vulkan/src/lower/sampler/select.rs:35 (bicubic_refused)`
+ - `feature::GroupCount`: `crates/metal2vulkan/src/bind/dispatch.rs:379 (product)`; `crates/metal2vulkan/src/bind/dispatch.rs:461`; `crates/metal2vulkan/src/bind/dispatch.rs:959 (instantiate)`; `crates/metal2vulkan/src/bind/graphics.rs:3144 (mesh_draw)`; `crates/metal2vulkan/src/bind/graphics.rs:3195 (emulated_draw)`
+ - `feature::IntersectionFunctionTable`: `crates/metal2vulkan/src/bind/acceleration.rs:177 (geometry_table_offset)`; `crates/metal2vulkan/src/bind/acceleration.rs:183 (geometry_table_offset)`; `crates/metal2vulkan/src/bind/acceleration.rs:188 (geometry_table_offset)`; `crates/metal2vulkan/src/lower/raytracing/mod.rs:1222 (null_table)`; `crates/metal2vulkan/src/lower/raytracing/mod.rs:1251 (intersect)`; `crates/metal2vulkan/src/lower/raytracing/mod.rs:1272 (intersect)`; `crates/metal2vulkan/src/lower/raytracing/mod.rs:406 (table_of)`; `crates/metal2vulkan/src/lower/raytracing/mod.rs:422 (select_table)`; `crates/metal2vulkan/src/lower/select.rs:873 (route_air)`
+-- `feature::IndependentBlending`: `crates/metal2vulkan-runtime/src/render.rs:6700 (check_pipeline)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:993 (uniform_blend)`
+-- `feature::RasterSampleCount`: `crates/metal2vulkan-runtime/src/families/limits.rs:1059 (sample_count)`; `crates/metal2vulkan/src/pipeline/graphics.rs:545 (sample_count_properties)`
++- `feature::IndependentBlending`: `crates/metal2vulkan-runtime/src/render.rs:6666 (check_pipeline)`; `crates/metal2vulkan/src/pipeline/link/graphics.rs:1030 (uniform_blend)`
++- `feature::RasterSampleCount`: `crates/metal2vulkan-runtime/src/families/limits.rs:1059 (sample_count)`; `crates/metal2vulkan/src/pipeline/graphics.rs:550 (sample_count_properties)`
+ - `feature::TriangleFillLines`: `crates/metal2vulkan/src/metal/state.rs:347 (polygon_mode)`
+ - `feature::DepthClipClamp`: `crates/metal2vulkan/src/metal/state.rs:363 (depth_clamp_enable)`
+ - `feature::DepthBiasClamp`: `crates/metal2vulkan/src/metal/state.rs:463 (depth_bias)`
+@@ -404,12 +404,12 @@
+ - `feature::CountingVisibility`: `crates/metal2vulkan-runtime/src/visibility.rs:452 (check_mode)`
+ - `feature::ViewFormatReinterpretation`: `crates/metal2vulkan-runtime/src/view_plan.rs:568 (reinterpretation_refused)`
+ - `feature::SeparateMultisampledDepthStencil`: `crates/metal2vulkan-runtime/src/depth_stencil_scratch.rs:188 (sampled_candidate)`; `crates/metal2vulkan-runtime/src/depth_stencil_scratch.rs:294 (by_draws)`; `crates/metal2vulkan-runtime/src/depth_stencil_scratch.rs:336 (scratch)`; `crates/metal2vulkan-runtime/src/depth_stencil_scratch.rs:376 (scratch)`; `crates/metal2vulkan-runtime/src/depth_stencil_scratch.rs:777 (plan)`; `crates/metal2vulkan-runtime/src/nan_clear.rs:651 (nan_write)`; `crates/metal2vulkan-runtime/src/texture/signed_depth.rs:191 (sample_strip)`
+-- `feature::PixelCoverage`: `crates/metal2vulkan/src/pipeline/link/graphics.rs:760 (split_pixel_fragments)`
+-- `feature::CentroidVarying`: `crates/metal2vulkan/src/pipeline/link/graphics.rs:775 (split_pixel_fragments)`
++- `feature::PixelCoverage`: `crates/metal2vulkan/src/pipeline/link/graphics.rs:796 (split_pixel_fragments)`
++- `feature::CentroidVarying`: `crates/metal2vulkan/src/pipeline/link/graphics.rs:814 (split_pixel_fragments)`
+ - `feature::PrivateMemory`: `crates/metal2vulkan/src/lower/select.rs:1159 (function_storage)`
+ - `feature::SparseTextures`: `crates/metal2vulkan-runtime/src/sparse/texture.rs:32 (sparse_refusal)`
+ - `feature::SparseMapping`: `crates/metal2vulkan-runtime/src/sparse/encoder.rs:464 (splits_a_unit)`
+-- `feature::TimelineSemaphores`: `crates/metal2vulkan-runtime/src/device/create.rs:1034 (timeline_difference)`
++- `feature::TimelineSemaphores`: `crates/metal2vulkan-runtime/src/device/create.rs:1040 (timeline_difference)`
+ - `feature::Reflection`: `crates/metal2vulkan/src/bind/argument_buffer.rs:626 (unmeasured)`; `crates/metal2vulkan/src/reflection/derive.rs:178 (specialized_reads)`; `crates/metal2vulkan/src/reflection/derive.rs:212 (read_attributes)`; `crates/metal2vulkan/src/reflection/derive.rs:239 (gap_at)`; `crates/metal2vulkan/src/reflection/function.rs:172 (unmeasured)`; `crates/metal2vulkan/src/reflection/function.rs:366 (attribute)`; `crates/metal2vulkan/src/reflection/function.rs:437 (module_constants)`; `crates/metal2vulkan/src/reflection/linked.rs:125 (function)`; `crates/metal2vulkan/src/reflection/mod.rs:249 (stage)`
+ - `feature::HeapTextureTiling`: `crates/metal2vulkan-runtime/src/texture/heap.rs:565 (tiling_refusal)`
+ - `feature::ViewportDepthRange`: `crates/metal2vulkan-runtime/src/render_state.rs:1186 (depth_ranges_refused)`
+@@ -423,7 +423,7 @@
+ - `feature::CommandPredication`: `crates/metal2vulkan/src/bind/replay/predication.rs:414 (predication_step_module)`
+ - `feature::ProgramScopeBinding`: `crates/metal2vulkan-air/src/abi/module.rs:77 (decode)`; `crates/metal2vulkan/src/error/mod.rs:267 (from)`
+ - `feature::SeqCstFence`: `crates/metal2vulkan/src/lower/sync/barrier.rs:443 (require_seq_cst)`
+-- `gap::Textures`: `crates/metal2vulkan-runtime/src/blit_texture.rs:162 (check_depth_view)`; `crates/metal2vulkan-runtime/src/buffer_texture.rs:1550 (view_usage)`; `crates/metal2vulkan-runtime/src/pipeline/mod.rs:1422 (compile_error)`; `crates/metal2vulkan-runtime/src/texture.rs:1371 (image_error)`; `crates/metal2vulkan-runtime/src/texture.rs:2091 (storage_over_buffer)`; `crates/metal2vulkan-runtime/src/texture.rs:2845 (new_image_starting)`; `crates/metal2vulkan-runtime/src/texture.rs:3882 (image)`; `crates/metal2vulkan-runtime/src/texture.rs:5350 (host_copy)`; `crates/metal2vulkan-runtime/src/texture/surface_two_planes.rs:207 (new_surface_planes_texture)`
++- `gap::Textures`: `crates/metal2vulkan-runtime/src/blit_texture.rs:162 (check_depth_view)`; `crates/metal2vulkan-runtime/src/buffer_texture.rs:1550 (view_usage)`; `crates/metal2vulkan-runtime/src/pipeline/mod.rs:1448 (compile_error)`; `crates/metal2vulkan-runtime/src/texture.rs:1371 (image_error)`; `crates/metal2vulkan-runtime/src/texture.rs:2091 (storage_over_buffer)`; `crates/metal2vulkan-runtime/src/texture.rs:2845 (new_image_starting)`; `crates/metal2vulkan-runtime/src/texture.rs:3882 (image)`; `crates/metal2vulkan-runtime/src/texture.rs:5350 (host_copy)`; `crates/metal2vulkan-runtime/src/texture/surface_two_planes.rs:207 (new_surface_planes_texture)`
+ - `gap::ResourceHeap`: `crates/metal2vulkan-runtime/src/binding.rs:1720 (descriptor)`
+ - `gap::SparseHeaps`: `crates/metal2vulkan-runtime/src/sparse/encoder.rs:456 (first_slice)`; `crates/metal2vulkan-runtime/src/texture.rs:1555 (plan_sparse_texture)`; `crates/metal2vulkan-runtime/src/texture.rs:4574 (make_aliasable)`
+ - `gap::SparseTileMaps`: `crates/metal2vulkan-runtime/src/binding.rs:501 (slot_tile_map)`; `crates/metal2vulkan-runtime/src/sparse/texture.rs:30 (sparse_refusal)`; `crates/metal2vulkan-runtime/src/texture.rs:1588 (plan_sparse_texture)`
+@@ -432,27 +432,27 @@
+ - `gap::HeapTextureMemory`: `crates/metal2vulkan-runtime/src/texture/heap.rs:1313 (heap_plan)`; `crates/metal2vulkan-runtime/src/texture/heap.rs:1320 (heap_plan)`; `crates/metal2vulkan-runtime/src/texture/heap.rs:1779 (host_heap_plan)`; `crates/metal2vulkan-runtime/src/texture/heap.rs:1992 (memory_shadow)`; `crates/metal2vulkan-runtime/src/texture/heap.rs:489 (memory_refusal)`
+ - `gap::FunctionTablePastMaxBufferLength`: `crates/metal2vulkan-runtime/src/function_table.rs:622 (past_limit)`
+ - `gap::IndirectCommandBufferPastMaxBufferLength`: `crates/metal2vulkan-runtime/src/indirect_command_buffer.rs:514 (new_indirect_command_buffer)`
+-- `gap::IndirectRenderCommands`: `crates/metal2vulkan-runtime/src/compute.rs:1033 (execute_commands_in_buffer)`; `crates/metal2vulkan-runtime/src/compute.rs:1082 (execute_commands_in_buffer_indirect)`; `crates/metal2vulkan-runtime/src/depth_stencil.rs:85 (gpu_resource_id)`; `crates/metal2vulkan-runtime/src/indirect_command_buffer.rs:3466 (render_state)`; `crates/metal2vulkan-runtime/src/indirect_command_buffer.rs:509 (new_indirect_command_buffer)`; `crates/metal2vulkan-runtime/src/pipeline/mod.rs:1429 (compile_error)`; `crates/metal2vulkan-runtime/src/render.rs:7312 (draw_resident)`; `crates/metal2vulkan-runtime/src/render.rs:7665 (draw_resident)`; `crates/metal2vulkan-runtime/src/render.rs:8067 (draw_resident)`; `crates/metal2vulkan-runtime/src/render.rs:8504 (draw_resident)`; `crates/metal2vulkan-runtime/src/render/executions.rs:1807 (record)`; `crates/metal2vulkan-runtime/src/render/executions.rs:1850 (record)`; `crates/metal2vulkan-runtime/src/render/executions.rs:2530 (record)`; `crates/metal2vulkan-runtime/src/render/executions.rs:359 (execute_commands_in_buffer)`; `crates/metal2vulkan-runtime/src/render/executions.rs:417 (execute_commands_in_buffer_indirect)`; `crates/metal2vulkan-runtime/src/render/executions.rs:432 (execute_commands_in_buffer_indirect)`; `crates/metal2vulkan-runtime/src/render/executions.rs:914 (back_memoryless)`
++- `gap::IndirectRenderCommands`: `crates/metal2vulkan-runtime/src/compute.rs:1034 (execute_commands_in_buffer)`; `crates/metal2vulkan-runtime/src/compute.rs:1083 (execute_commands_in_buffer_indirect)`; `crates/metal2vulkan-runtime/src/depth_stencil.rs:85 (gpu_resource_id)`; `crates/metal2vulkan-runtime/src/indirect_command_buffer.rs:3466 (render_state)`; `crates/metal2vulkan-runtime/src/indirect_command_buffer.rs:509 (new_indirect_command_buffer)`; `crates/metal2vulkan-runtime/src/pipeline/mod.rs:1455 (compile_error)`; `crates/metal2vulkan-runtime/src/render.rs:7265 (draw_resident)`; `crates/metal2vulkan-runtime/src/render.rs:7618 (draw_resident)`; `crates/metal2vulkan-runtime/src/render.rs:8020 (draw_resident)`; `crates/metal2vulkan-runtime/src/render.rs:8457 (draw_resident)`; `crates/metal2vulkan-runtime/src/render/executions.rs:1807 (record)`; `crates/metal2vulkan-runtime/src/render/executions.rs:1850 (record)`; `crates/metal2vulkan-runtime/src/render/executions.rs:2530 (record)`; `crates/metal2vulkan-runtime/src/render/executions.rs:359 (execute_commands_in_buffer)`; `crates/metal2vulkan-runtime/src/render/executions.rs:417 (execute_commands_in_buffer_indirect)`; `crates/metal2vulkan-runtime/src/render/executions.rs:432 (execute_commands_in_buffer_indirect)`; `crates/metal2vulkan-runtime/src/render/executions.rs:914 (back_memoryless)`
+ - `gap::IndirectImageblockSize`: `crates/metal2vulkan-runtime/src/indirect_command_buffer.rs:2634 (set_imageblock_size)`
+ - `gap::CommandReplay`: `crates/metal2vulkan-runtime/src/binding.rs:642 (bind)`; `crates/metal2vulkan-runtime/src/binding.rs:645 (bind)`
+ - `gap::RenderAttachments`: `crates/metal2vulkan-runtime/src/binding.rs:1543 (unexpected)`
+ - `gap::AccelerationStructures`: `crates/metal2vulkan-runtime/src/binding.rs:1546 (unexpected)`
+ - `gap::FeatureEnable`: `crates/metal2vulkan-runtime/src/enables.rs:1155 (of)`
+ - `gap::ExtensionEnable`: `crates/metal2vulkan-runtime/src/enables.rs:1146 (of)`
+-- `gap::Render`: `crates/metal2vulkan-runtime/src/attachment_stand_in.rs:404 (stand_in_as)`; `crates/metal2vulkan-runtime/src/attachment_stand_in.rs:460 (stand_in_as)`; `crates/metal2vulkan-runtime/src/attachment_stand_in.rs:684 (check_copies)`; `crates/metal2vulkan-runtime/src/buffer_texture.rs:795 (attachment_twin)`; `crates/metal2vulkan-runtime/src/depth_stencil_scratch.rs:283 (check_sizes)`; `crates/metal2vulkan-runtime/src/kept_bytes.rs:138 (settle)`; `crates/metal2vulkan-runtime/src/linear_attachment.rs:293 (settle)`; `crates/metal2vulkan-runtime/src/nan_clear.rs:197 (plan)`; `crates/metal2vulkan-runtime/src/pipeline/render.rs:1119 (imageblock_sample_length)`; `crates/metal2vulkan-runtime/src/render.rs:5574 (next_instance)`; `crates/metal2vulkan-runtime/src/render.rs:6750 (check_pipeline)`; `crates/metal2vulkan-runtime/src/render.rs:7759 (draw_resident)`; `crates/metal2vulkan-runtime/src/render/tile_dispatch.rs:514 (scratch)`; `crates/metal2vulkan-runtime/src/render_pass.rs:1226 (layout)`; `crates/metal2vulkan-runtime/src/render_pass.rs:1585 (target)`; `crates/metal2vulkan-runtime/src/render_pass.rs:1639 (target)`; `crates/metal2vulkan-runtime/src/render_pass.rs:1700 (attachment_format)`; `crates/metal2vulkan-runtime/src/render_pass.rs:1933 (depth_stencil)`; `crates/metal2vulkan-runtime/src/resolve.rs:1010 (destination)`; `crates/metal2vulkan-runtime/src/resolve.rs:1027 (destination)`; `crates/metal2vulkan-runtime/src/resolve.rs:1091 (destination)`; `crates/metal2vulkan-runtime/src/resolve.rs:901 (attach)`; `crates/metal2vulkan-runtime/src/resolve.rs:969 (color_copy)`
++- `gap::Render`: `crates/metal2vulkan-runtime/src/attachment_stand_in.rs:404 (stand_in_as)`; `crates/metal2vulkan-runtime/src/attachment_stand_in.rs:460 (stand_in_as)`; `crates/metal2vulkan-runtime/src/attachment_stand_in.rs:684 (check_copies)`; `crates/metal2vulkan-runtime/src/buffer_texture.rs:795 (attachment_twin)`; `crates/metal2vulkan-runtime/src/depth_stencil_scratch.rs:283 (check_sizes)`; `crates/metal2vulkan-runtime/src/kept_bytes.rs:138 (settle)`; `crates/metal2vulkan-runtime/src/linear_attachment.rs:293 (settle)`; `crates/metal2vulkan-runtime/src/nan_clear.rs:197 (plan)`; `crates/metal2vulkan-runtime/src/pipeline/render.rs:1114 (imageblock_sample_length)`; `crates/metal2vulkan-runtime/src/render.rs:5540 (next_instance)`; `crates/metal2vulkan-runtime/src/render.rs:6716 (check_pipeline)`; `crates/metal2vulkan-runtime/src/render.rs:7712 (draw_resident)`; `crates/metal2vulkan-runtime/src/render/tile_dispatch.rs:514 (scratch)`; `crates/metal2vulkan-runtime/src/render_pass.rs:1226 (layout)`; `crates/metal2vulkan-runtime/src/render_pass.rs:1585 (target)`; `crates/metal2vulkan-runtime/src/render_pass.rs:1639 (target)`; `crates/metal2vulkan-runtime/src/render_pass.rs:1700 (attachment_format)`; `crates/metal2vulkan-runtime/src/render_pass.rs:1933 (depth_stencil)`; `crates/metal2vulkan-runtime/src/resolve.rs:1010 (destination)`; `crates/metal2vulkan-runtime/src/resolve.rs:1027 (destination)`; `crates/metal2vulkan-runtime/src/resolve.rs:1091 (destination)`; `crates/metal2vulkan-runtime/src/resolve.rs:901 (attach)`; `crates/metal2vulkan-runtime/src/resolve.rs:969 (color_copy)`
+ - `gap::TexelsPastBufferLength`: `crates/metal2vulkan-runtime/src/buffer_texture.rs:260 (refusal_error)`; `crates/metal2vulkan-runtime/src/texture/surface_depth.rs:105 (surface_depth_twin)`
+ - `gap::OverlappingSurfaceRows`: `crates/metal2vulkan-runtime/src/buffer_texture.rs:262 (refusal_error)`
+ - `gap::SamplePositionsAtBegin`: `crates/metal2vulkan-runtime/src/depth_stencil_scratch.rs:145 (stencil_scratch)`; `crates/metal2vulkan-runtime/src/render_pass.rs:1770 (positioned_stand_in)`; `crates/metal2vulkan-runtime/src/sample_positions.rs:185 (grid)`
+ - `gap::SharedEventAcrossDevices`: `crates/metal2vulkan-runtime/src/event.rs:376 (new_shared_event_with_handle)`
+-- `gap::ViewportDepthRange`: `crates/metal2vulkan-runtime/src/render.rs:9362 (draw_settings)`; `crates/metal2vulkan-runtime/src/render_state.rs:1010`; `crates/metal2vulkan-runtime/src/render_state.rs:1178 (depth_ranges_refused)`; `crates/metal2vulkan-runtime/src/render_state.rs:1545 (bias_holds)`; `crates/metal2vulkan-runtime/src/render_state.rs:1564 (collapses)`; `crates/metal2vulkan-runtime/src/render_state.rs:503 (depth_range)`; `crates/metal2vulkan-runtime/src/render_state.rs:731 (compensation)`
++- `gap::ViewportDepthRange`: `crates/metal2vulkan-runtime/src/render.rs:9315 (draw_settings)`; `crates/metal2vulkan-runtime/src/render_state.rs:1010`; `crates/metal2vulkan-runtime/src/render_state.rs:1178 (depth_ranges_refused)`; `crates/metal2vulkan-runtime/src/render_state.rs:1545 (bias_holds)`; `crates/metal2vulkan-runtime/src/render_state.rs:1564 (collapses)`; `crates/metal2vulkan-runtime/src/render_state.rs:503 (depth_range)`; `crates/metal2vulkan-runtime/src/render_state.rs:731 (compensation)`
+ - `gap::NonFiniteDepthBias`: `crates/metal2vulkan-runtime/src/render_state.rs:1573 (collapses)`; `crates/metal2vulkan-runtime/src/render_state.rs:1576 (collapses)`; `crates/metal2vulkan-runtime/src/render_state.rs:347 (set_depth_bias)`; `crates/metal2vulkan-runtime/src/render_state.rs:439 (draw_viewports)`; `crates/metal2vulkan-runtime/src/render_state.rs:581 (compensation)`
+ - `gap::DepthNeverWithoutAttachment`: `crates/metal2vulkan-runtime/src/depth_stencil.rs:147 (failing_draw)`
+-- `gap::HiddenDepthStencil`: `crates/metal2vulkan-runtime/src/attachment_stand_in.rs:563 (hidden)`; `crates/metal2vulkan-runtime/src/render.rs:6254 (hidden_depth_stencil)`
+-- `gap::IndirectDrawArguments`: `crates/metal2vulkan-runtime/src/index_bounds.rs:90 (new)`; `crates/metal2vulkan-runtime/src/render.rs:2901 (draw_indexed_primitives_indirect)`; `crates/metal2vulkan-runtime/src/render.rs:7515 (draw_resident)`; `crates/metal2vulkan-runtime/src/render.rs:7569 (draw_resident)`; `crates/metal2vulkan-runtime/src/render.rs:7600 (draw_resident)`
++- `gap::HiddenDepthStencil`: `crates/metal2vulkan-runtime/src/attachment_stand_in.rs:563 (hidden)`; `crates/metal2vulkan-runtime/src/render.rs:6220 (hidden_depth_stencil)`
++- `gap::IndirectDrawArguments`: `crates/metal2vulkan-runtime/src/index_bounds.rs:90 (new)`; `crates/metal2vulkan-runtime/src/render.rs:2904 (draw_indexed_primitives_indirect)`; `crates/metal2vulkan-runtime/src/render.rs:7468 (draw_resident)`; `crates/metal2vulkan-runtime/src/render.rs:7522 (draw_resident)`; `crates/metal2vulkan-runtime/src/render.rs:7553 (draw_resident)`
+ - `gap::DepthStencilResolve`: `crates/metal2vulkan-runtime/src/depth_stencil_resolve.rs:441 (draws_run)`; `crates/metal2vulkan-runtime/src/resolve.rs:1247 (plan)`; `crates/metal2vulkan-runtime/src/resolve.rs:653 (depth_stencil)`; `crates/metal2vulkan-runtime/src/resolve.rs:751 (steps)`; `crates/metal2vulkan-runtime/src/resolve.rs:771 (steps)`; `crates/metal2vulkan-runtime/src/resolve.rs:812 (split_steps)`; `crates/metal2vulkan-runtime/src/resolve.rs:824 (split_steps)`
+ - `gap::TileAtSampleCount`: `crates/metal2vulkan-runtime/src/render/tile_dispatch.rs:599`; `crates/metal2vulkan-runtime/src/render_pass.rs:1520 (layout)`
+-- `gap::ImageblockMasters`: `crates/metal2vulkan-runtime/src/render.rs:7446 (draw_resident)`; `crates/metal2vulkan-runtime/src/render/tile_dispatch.rs:967 (dispatch_tiles_resident)`
+-- `gap::TileAndFragmentImageblocks`: `crates/metal2vulkan-runtime/src/render.rs:7438 (draw_resident)`; `crates/metal2vulkan-runtime/src/render/tile_dispatch.rs:834 (dispatch_tiles_resident)`; `crates/metal2vulkan-runtime/src/render/tile_dispatch.rs:959 (dispatch_tiles_resident)`
++- `gap::ImageblockMasters`: `crates/metal2vulkan-runtime/src/render.rs:7399 (draw_resident)`; `crates/metal2vulkan-runtime/src/render/tile_dispatch.rs:967 (dispatch_tiles_resident)`
++- `gap::TileAndFragmentImageblocks`: `crates/metal2vulkan-runtime/src/render.rs:7391 (draw_resident)`; `crates/metal2vulkan-runtime/src/render/tile_dispatch.rs:834 (dispatch_tiles_resident)`; `crates/metal2vulkan-runtime/src/render/tile_dispatch.rs:959 (dispatch_tiles_resident)`
+ - `gap::Metal4Api`: `crates/metal2vulkan-runtime/src/families/features.rs:1460 (state)`; `crates/metal2vulkan-runtime/src/families/limits.rs:1022 (state)`; `crates/metal2vulkan-runtime/src/families/mod.rs:362 (audit)`
+ - `gap::CounterSampleBuffers`: `crates/metal2vulkan-runtime/src/families/limits.rs:1013 (state)`
+ - `gap::ResidencySets`: `crates/metal2vulkan-runtime/src/families/features.rs:1442 (state)`; `crates/metal2vulkan-runtime/src/families/limits.rs:1015 (state)`
+@@ -475,8 +475,8 @@
+ - `gap::StageInFetchPast4GiB`: `crates/metal2vulkan-runtime/src/fetch_reach.rs:126 (check_stage_in_reach)`
+ - `gap::MappedTextureSampling`: `crates/metal2vulkan-runtime/src/address_map.rs:158 (resolve)`
+ - `gap::LibrarySource`: `crates/metal2vulkan-runtime/src/library.rs:107 (new_library_with_source)`
+-- `gap::RestartedStrip`: `crates/metal2vulkan-runtime/src/index_rewrite.rs:110 (new)`; `crates/metal2vulkan-runtime/src/render.rs:7542 (draw_resident)`
+-- `gap::PrimitiveIdIndices`: `crates/metal2vulkan-runtime/src/render.rs:7916 (draw_resident)`
++- `gap::RestartedStrip`: `crates/metal2vulkan-runtime/src/index_rewrite.rs:110 (new)`; `crates/metal2vulkan-runtime/src/render.rs:7495 (draw_resident)`
++- `gap::PrimitiveIdIndices`: `crates/metal2vulkan-runtime/src/render.rs:7869 (draw_resident)`
+ - `gap::RotatedTexture`: `crates/metal2vulkan-runtime/src/blit_texture.rs:1555 (texel_copies)`; `crates/metal2vulkan-runtime/src/buffer_texture.rs:714 (turned_plane)`; `crates/metal2vulkan-runtime/src/rotated.rs:185 (new)`; `crates/metal2vulkan-runtime/src/rotated.rs:201 (new)`; `crates/metal2vulkan-runtime/src/shadow.rs:592 (unmerged)`; `crates/metal2vulkan-runtime/src/texture.rs:4837 (view)`; `crates/metal2vulkan-runtime/src/texture/rotation.rs:100 (check_rotated_reach)`; `crates/metal2vulkan-runtime/src/texture/rotation.rs:322 (copied_image)`; `crates/metal2vulkan-runtime/src/texture/usage_shadow.rs:238 (new_usage_shadow)`
+ - `gap::DetachTextures`: `crates/metal2vulkan-runtime/src/buffer_descriptor.rs:598 (rebind_host_pages)`; `crates/metal2vulkan-runtime/src/buffer_texture.rs:621 (make_texture_over)`; `crates/metal2vulkan-runtime/src/detach.rs:149 (detach_host_pages)`; `crates/metal2vulkan-runtime/src/texture/heap.rs:2499 (heap_texture_at)`; `crates/metal2vulkan-runtime/src/texture/stand_in.rs:143 (new_stand_in)`; `crates/metal2vulkan-runtime/src/texture/stand_in.rs:248 (stand_in_while_detached)`; `crates/metal2vulkan-runtime/src/texture/stand_in.rs:298 (stand_ins)`; `crates/metal2vulkan-runtime/src/texture/stand_in.rs:304 (stand_ins)`
+ - `gap::TextureBufferLevels`: `crates/metal2vulkan-runtime/src/texture_descriptor.rs:540 (check_made)`
+@@ -514,7 +514,7 @@
+ - `limit::IrreducibleDepth`: `crates/metal2vulkan-air/src/graph/loops.rs:176 (compute_in)`; `crates/metal2vulkan/src/structurize/structurizer_properties/mod.rs:226 (check_within_depth)`; `crates/metal2vulkan/src/structurize/structurizer_properties/mod.rs:381 (irreducible_nesting_beyond_the_cap_is_refused)`; `crates/metal2vulkan/src/structurize/structurizer_properties/mod.rs:386 (irreducible_nesting_beyond_the_cap_is_refused)`
+ - `limit::SpirvWords`: `crates/metal2vulkan/src/lower/estimate.rs:46 (check)`; `crates/metal2vulkan/src/lower/estimate.rs:57 (check_emitted)`
+ - `limit::WorkUnits`: `crates/metal2vulkan-air/src/budget/mod.rs:264 (tick)`
+-- `limit::LedgerBytes`: `crates/metal2vulkan-air/src/bitstream/mod.rs:557 (count)`; `crates/metal2vulkan-air/src/budget/mod.rs:288 (charge)`; `crates/metal2vulkan-air/src/budget/mod.rs:305 (reserve)`; `crates/metal2vulkan-air/src/budget/mod.rs:324 (reserve_exact)`; `crates/metal2vulkan-air/src/budget/mod.rs:330 (reserve_exact)`; `crates/metal2vulkan-air/src/budget/mod.rs:355 (grow)`; `crates/metal2vulkan-air/src/budget/mod.rs:362 (grow)`; `crates/metal2vulkan-air/src/graph/mod.rs:175 (grow)`; `crates/metal2vulkan/src/spirv/verify/mod.rs:328 (with_capacity)`
++- `limit::LedgerBytes`: `crates/metal2vulkan-air/src/bitstream/mod.rs:557 (count)`; `crates/metal2vulkan-air/src/budget/mod.rs:288 (charge)`; `crates/metal2vulkan-air/src/budget/mod.rs:305 (reserve)`; `crates/metal2vulkan-air/src/budget/mod.rs:324 (reserve_exact)`; `crates/metal2vulkan-air/src/budget/mod.rs:330 (reserve_exact)`; `crates/metal2vulkan-air/src/budget/mod.rs:355 (grow)`; `crates/metal2vulkan-air/src/budget/mod.rs:362 (grow)`; `crates/metal2vulkan-air/src/graph/mod.rs:175 (grow)`; `crates/metal2vulkan/src/spirv/verify/mod.rs:330 (with_capacity)`
+ - `limit::TypeCount`: `crates/metal2vulkan-air/src/bitcode/types.rs:159 (decode)`; `crates/metal2vulkan-air/src/ir/types.rs:239 (intern)`
+ - `limit::MetadataNodes`: `crates/metal2vulkan-air/src/bitcode/function.rs:334 (metadata)`; `crates/metal2vulkan-air/src/bitcode/metadata.rs:192 (push)`; `crates/metal2vulkan-air/src/bitcode/metadata.rs:221 (strings)`
+ - `limit::BitstreamNesting`: `crates/metal2vulkan-air/src/bitstream/mod.rs:267 (enter_block)`
+--- a/scripts/regen-spirv-grammar/items.txt
++++ b/scripts/regen-spirv-grammar/items.txt
+@@ -17,6 +17,7 @@
+ const MAGIC_NUMBER
+ 
+ enum Op
++values ColorAttachmentReadEXT
+ from_u32 test
+ values Nop Undef Extension ExtInstImport ExtInst MemoryModel EntryPoint ExecutionMode Capability
+ values TypeVoid TypeBool TypeInt TypeFloat TypeVector TypeMatrix TypeImage TypeSampler
+@@ -93,10 +94,10 @@
+ 
+ enum StorageClass
+ values UniformConstant Input Uniform Output Workgroup Private Function PushConstant Image
+-values StorageBuffer PhysicalStorageBuffer TaskPayloadWorkgroupEXT
++values StorageBuffer PhysicalStorageBuffer TaskPayloadWorkgroupEXT TileImageEXT
+ 
+ enum Dim
+-values D1 D2 D3 Cube Buffer SubpassData
++values D1 D2 D3 Cube Buffer SubpassData TileImageDataEXT
+ 
+ enum ImageFormat
+ values *

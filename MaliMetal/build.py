@@ -23,13 +23,24 @@ from Vulkan.prepare_mesa import MESA_COMMIT, PANVK_COMMIT
 HERE = Path(__file__).resolve().parent
 SOURCES = (
     'MaliMetalDevice.m',
+    'MaliMetalResources.m',
+    'MaliMetalGraphics.m',
+    'MaliMetalRender.m',
+    'MaliMetalAPIExtensions.m',
+    'MaliMetalMSL.m',
     'MaliMetalCommandQueue.m',
+    'MaliMetalSynchronization.m',
+    'MaliMetalPresentation.m',
+    'Vulkan/MaliVulkanSynchronization.c',
     'MaliMetalVulkan.c',
     'Shader/MaliMetalShader.c',
     'Shader/MaliMetalShaderVulkan.c',
+    'Shader/MaliMetalRenderVulkan.c',
     'Shader/MaliMetalCompute.c',
     'Shader/MaliMetalComputeVulkan.c',
     'Vulkan/MaliVulkanBackend.c',
+    'Vulkan/MaliVulkanResources.c',
+    'Vulkan/MaliVulkanGraphics.c',
     'Vulkan/MaliKmodDarwin.c',
     'Vulkan/MaliVulkanProfile.c',
 )
@@ -116,10 +127,17 @@ def air_provider(directory):
     manifest = json.loads((directory / 'build.json').read_text(encoding='utf-8'))
     if manifest['target'] != 'aarch64-apple-ios':
         raise ValueError('AIR provider was not built for arm64 iOS')
-    if manifest.get('compiler_abi') != 3:
-        raise ValueError('AIR provider must implement render compiler ABI 3')
+    if manifest.get('compiler_abi') != 4 or manifest.get('compute_abi') != 2:
+        raise ValueError('AIR provider must implement render compiler ABI 4 and compute ABI 2')
     if manifest['compiler_revision'] != AIR_COMPILER_REVISION:
         raise ValueError('AIR provider compiler revision differs from the pinned source')
+    patches = manifest.get('compiler_patches', [])
+    if not manifest.get('compiler_effective_tree') or (
+            not patches and manifest['compiler_effective_tree'] != manifest['compiler_tree']):
+        raise ValueError('AIR provider effective compiler tree is missing or undeclared')
+    for patch in patches:
+        if sha256(Path(patch['path']).resolve(strict=True)) != patch['sha256']:
+            raise ValueError('AIR compiler patch changed since the provider build')
     shader = HERE / 'Shader'
     sources = {path.relative_to(shader).as_posix(): sha256(path)
                for path in sorted((shader / 'air-compiler/src').rglob('*.rs'))}

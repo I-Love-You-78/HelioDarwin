@@ -8,6 +8,11 @@ Mali-G57 MC2, using a Vulkan backend and an XNU Job Manager transport.
 The source builds for arm64 iOS. End-to-end GPU rendering with this driver has
 not been validated on the phone, and Metal or Vulkan conformance is not claimed.
 
+The integrated render/compiler interface is ABI 4; compute dispatch is ABI 2.
+The current bundle passed strict arm64 iOS linking, source/component checks and
+independent static review. Runtime GPU, shared-event and source-compiler checks
+remain separate acceptance gates.
+
 - **Kernel transport:** versioned IOKit calls for pinned buffers, GPU address
   spaces, cache maintenance, Job Manager submission, completion and fault
   recovery. Register definitions and product errata were checked against the
@@ -74,8 +79,18 @@ The MRT candidate passed the earlier attachment-count guard on the phone, then
 the AIR compiler rejected the native Vulkan profile's format-property structure.
 The serializer now nests queried flags under `VkFormatProperties`, matching the
 compiler's Khronos reader. Queried flags and sample counts are preserved. The
-schema correction passes an isolated offline reproduction; its phone check is
-pending.
+schema correction passed the next phone attempt. That attempt exposed the
+static binding adapter's refusal of Whole/signed buffer windows. The current
+render path uses the compiler's canonical per-draw planner instead: logical
+buffer lengths, offsets, views and sampler facts determine descriptor ranges,
+push data, specialization and native pipeline variants.
+
+Both observed pipeline requests compile and instantiate structural draws on
+the captured enabled phone profile. The decoded corpus contains 1079 static
+names and 1304 conditional requests; not every request is supported or relevant
+to the same device configuration. Exact fetch shaders also pass SPIR-V checks
+with an explicitly derived tile-enabled profile. That is not a runtime capture
+of the new feature selection.
 
 ## Dependencies and build
 
@@ -99,11 +114,13 @@ For native AIR compilation, build the pinned external compiler using
 toolchain and artifact hashes. Its output preserves the compiler and dependency
 license notices; the compiler retains its own license.
 
-The current render compiler interface is ABI 3. Rebuild the AIR provider and
-frontend together; the bundle builder rejects a provider with an older ABI.
+Rebuild the ABI 4 provider and ABI 2 compute consumer together. Prepare the pinned
+compiler checkout with only the declared patches, in the order below; the helper
+verifies that exact source state using a temporary Git index. It records the
+baseline, effective tree and patch hashes, and rejects undeclared changes.
 
 ```powershell
-python MaliMetal/Shader/build_air.py --compiler-source PINNED_COMPILER_CHECKOUT --out AIR_BUILD
+python MaliMetal/Shader/build_air.py --compiler-source PINNED_COMPILER_CHECKOUT --compiler-patch MaliMetal/Shader/compiler-patches/0001-coherent-tile-image-color-fetch.patch --compiler-patch MaliMetal/Shader/compiler-patches/0002-static-init-boolean-fc-absorption.patch --shader-tile-image --out AIR_BUILD
 python MaliMetal/build.py --sysroot IOS_SYSROOT --vulkan-headers MESA_INCLUDE --air-provider AIR_BUILD --vulkan-icd PATH_TO_IOS_ICD --wsl --linker /usr/bin/ld64.lld-18
 ```
 
@@ -121,14 +138,20 @@ validation. The bundle includes dependency provenance and license notices.
 
 ## Coverage limits
 
-The implemented render path uses single-sample 2D textures, supported triangle
-draws and up to eight RGBA8/BGRA8 color slots, bounded by the native device.
-Supported fixed-function blending and per-attachment write masks pass through
-the compiler's effective state. Constant-blend-color and dual-source modes,
-framebuffer fetch, depth/stencil and broader texture or resource variants remain
-unsupported. Runtime MSL source compilation is absent.
-Compute translation supports verified direct-buffer and sampled-image forms;
-other resource forms and unsupported shader variants return explicit errors.
+| Path | Implemented source and current boundary |
+| --- | --- |
+| Render binding | Canonical direct/indexed draw planning, Whole/signed windows, actual view/sampler facts and specialized native pipeline caching. The basic frontend still has pipeline/input restrictions; native helper coverage alone does not remove them. |
+| Graphics | Indexed MRT, effective blend/masks, native topology/raster/depth/stencil/MSAA/resolve helpers and dynamic rendering. Color tile fetch requires the patched compiler, actual advertised extension, enabled feature and selected API 1.3. Broader facade paths and runtime behavior remain unvalidated. |
+| Resources | Queried buffers, heaps/aliasing, texture views, mip/array/cube/3D staging, conditional BDA and typed registry identities. Logical samplers are resolved per use. Shared/no-copy imports, compressed/multiplanar variants and managed storage remain limited or unavailable. |
+| XR | Distinct logical formats, raw representations and CPU/IOSurface plane transfers. Canonical XR rendering, ordered shadows, plane copies and decoded mip filtering remain gated. |
+| Compute | Canonical dispatch variants, writable descriptors, exact nonuniform regions, indirect clamp/dispatch and barriers. Actual-profile AIR/structural SPIR-V checks do not establish GPU results. |
+| Events | Ordinary native timelines/fences and a shared-event bridge. Shared factories require the live IOSurface kernel readiness/right/mapping probe. Unknown retirement retains submitted owners while reporting the real logical error. |
+| API | Async methods, specialized reflection and argument encoders. Resource argument consumers remain disabled until canonical root/resident table consumption is connected. |
+| MSL source | A linked adapter to the genuine system Metal frontend, without an Apple GPU identity/plugin. Native loading, source output and service lifetime still require device validation; unsupported controls return errors. |
+
+No complete Apple GPU family is advertised. Device limits and selected Vulkan
+features are checked separately from API/helper presence. Explicit unavailable
+paths are not considered working features.
 
 IOSurface interoperability currently uses CPU staging and readback with ownership
 and stride checks, not zero-copy imported GPU memory. The kernel serializes GPU

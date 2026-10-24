@@ -71,6 +71,17 @@ pub struct BackendPlan {
     pub vertex_attributes: [VertexAttribute; 31],
     pub color_attachment_count: u32,
     pub colors: [Color; 8],
+    pub color_outputs: u32,
+    pub raster_samples: u32,
+    pub depth_format: u32,
+    pub stencil_format: u32,
+    pub alpha_to_coverage: u32,
+    pub alpha_to_one: u32,
+    pub rasterizer_discard: u32,
+    pub sample_shading: u32,
+    pub tile_image_color_reads: u32,
+    pub has_sample_mask: u32,
+    pub sample_mask: u32,
 }
 type Result<T> = std::result::Result<T, String>;
 fn refuse(name: &str) -> String {
@@ -119,9 +130,6 @@ pub fn build(
 ) -> Result<Box<BackendPlan>> {
     // All plan fields are plain integers and fixed arrays of integer structs.
     let mut plan: Box<BackendPlan> = Box::new(unsafe { std::mem::zeroed() });
-    if meta["variant_bits"] != 0 {
-        return Err(refuse("pipeline variants"));
-    }
     let interface = &meta["interface"];
     for name in [
         "needs_pointer_translation",
@@ -150,10 +158,6 @@ pub fn build(
     }
     let graphics = &meta["graphics"];
     for name in [
-        "alpha_to_coverage",
-        "alpha_to_one",
-        "rasterizer_discard",
-        "sample_shading",
         "rasterization_order_attachment_access",
         "vertex_writes_memory",
         "fragment_writes_memory",
@@ -163,16 +167,12 @@ pub fn build(
         "reads_barycentric_coord",
         "reads_position_depth",
         "snapshot_reads",
-        "early_fragment_tests",
-        "writes_depth",
     ] {
         if graphics[name] != false {
             return Err(refuse(name));
         }
     }
     for name in [
-        "depth_format",
-        "stencil_format",
         "tessellation",
         "fragment_imageblock",
         "shadow_stencil",
@@ -180,7 +180,6 @@ pub fn build(
         "emulated_tessellation",
         "shader_tests",
         "color_group",
-        "sample_mask",
     ] {
         if !graphics[name].is_null() {
             return Err(refuse(name));
@@ -188,17 +187,38 @@ pub fn build(
     }
     empty(&graphics["input_attachments"], "framebuffer fetch")?;
     empty(&graphics["storage_attachments"], "storage attachments")?;
-    if graphics["rasterization_samples"] != 1
-        || graphics["max_vertex_amplification_count"] != 1
-        || graphics["clip_distances"] != 0
-    {
-        return Err(refuse(
-            "multisampling, amplification or clip distances",
-        ));
+    if graphics["max_vertex_amplification_count"] != 1 || graphics["clip_distances"] != 0 {
+        return Err(refuse("amplification or clip distances"));
     }
     plan.topology = number(&graphics["topology"])?;
-    if plan.topology != 3 {
-        return Err(refuse("non-triangle topology"));
+    plan.color_outputs = number(&graphics["color_outputs"])?;
+    plan.raster_samples = number(&graphics["rasterization_samples"])?;
+    plan.depth_format = if graphics["depth_format"].is_null() {
+        0
+    } else {
+        number(&graphics["depth_format"])?
+    };
+    plan.stencil_format = if graphics["stencil_format"].is_null() {
+        0
+    } else {
+        number(&graphics["stencil_format"])?
+    };
+    plan.alpha_to_coverage = u32::from(graphics["alpha_to_coverage"] == true);
+    plan.alpha_to_one = u32::from(graphics["alpha_to_one"] == true);
+    plan.rasterizer_discard = u32::from(graphics["rasterizer_discard"] == true);
+    plan.sample_shading = u32::from(graphics["sample_shading"] == true);
+    if !graphics["sample_mask"].is_null() {
+        plan.has_sample_mask = 1;
+        plan.sample_mask = number(&graphics["sample_mask"])?;
+    }
+    if let Some(reads) = graphics.get("tile_image_color_reads") {
+        for color in array(reads)? {
+            let color = number(color)?;
+            if color >= 8 {
+                return Err(refuse("tile-image color index"));
+            }
+            plan.tile_image_color_reads |= 1 << color;
+        }
     }
     let colors = array(&graphics["color_attachments"])?;
     if colors.is_empty() || colors.len() > 8 || number(&graphics["color_outputs"])? & !0xff != 0 {
@@ -206,11 +226,13 @@ pub fn build(
     }
     plan.color_attachment_count = colors.len() as u32;
     for (index, value) in colors.iter().enumerate() {
-        if value.is_null() { continue; }
+        if value.is_null() {
+            continue;
+        }
         let color = &mut plan.colors[index];
         color.format = number(&value["format"])?;
         color.write_mask = number(&value["write_mask"])?;
-        if ![37, 43, 44, 50].contains(&color.format) || color.write_mask & !15 != 0 {
+        if color.format == 0 || color.write_mask & !15 != 0 {
             return Err(refuse("this color format or write mask"));
         }
         let blend = &value["blend"];
@@ -269,11 +291,7 @@ pub fn build(
         }
         for binding in array(&set["bindings"])? {
             let index = plan.binding_count as usize;
-            if index >= 64
-                || binding["count"] != 1
-                || binding["flags"] != 0
-                || !binding["immutable_sampler"].is_null()
-            {
+            if index >= 64 || binding["count"] != 1 || binding["flags"] != 0 {
                 return Err(refuse(
                     "descriptor arrays, flags, immutable samplers or too many bindings",
                 ));
@@ -312,29 +330,19 @@ pub fn build(
                 let source = &combined["texture"];
                 let (metal_stage, _, metal_index) = resource_slot(source, "Texture", 128)?;
                 let sampler = &combined["sampler"];
-                for flag in ["compare", "integer", "cube_gradient", "raw"] {
-                    if sampler[flag] != false {
-                        return Err(refuse("this combined sampler use"));
-                    }
-                }
-                let sampler_index = number(&sampler["sampler"]["Slot"])?;
-                if sampler_index >= 16 {
+                let sampler_index = if binding["immutable_sampler"].is_null() {
+                    number(&sampler["sampler"]["Slot"])?
+                } else {
+                    u32::MAX
+                };
+                if sampler_index != u32::MAX && sampler_index >= 16 {
                     return Err(refuse("this sampler slot"));
                 }
                 let texture = array(&interface["slots"])?
                     .iter()
                     .find(|s| &s[0] == source)
                     .ok_or_else(|| refuse("a texture without its resource interface"))?;
-                let texture = &texture[1]["Texture"];
-                if texture["texture_type"] != "Type2D"
-                    || texture["sampled_type"] != "Float"
-                    || texture["depth_compare"] != false
-                    || texture["access"]["sample"] != true
-                    || texture["access"]["read"] != false
-                    || texture["access"]["write"] != false
-                {
-                    return Err(refuse("non-float, non-2D or non-sampled texture access"));
-                }
+                let _texture = &texture[1]["Texture"];
                 plan.bindings[index] = Binding {
                     set: number(&set["set"])?,
                     binding: number(&binding["binding"])?,
@@ -345,6 +353,42 @@ pub fn build(
                     minimum_size: 0,
                     alignment: 0,
                     sampler_index,
+                    constant_bytes: std::ptr::null(),
+                    constant_size: 0,
+                };
+                plan.binding_count += 1;
+                continue;
+            }
+            if vulkan_type == 2 || vulkan_type == 3 {
+                let source = &binding["source"]["Texture"];
+                let (metal_stage, _, metal_index) = resource_slot(source, "Texture", 128)?;
+                plan.bindings[index] = Binding {
+                    set: number(&set["set"])?,
+                    binding: number(&binding["binding"])?,
+                    vulkan_type,
+                    vulkan_stages: number(&binding["stages"])?,
+                    metal_stage,
+                    metal_index,
+                    minimum_size: 0,
+                    alignment: 0,
+                    sampler_index: u32::MAX,
+                    constant_bytes: std::ptr::null(),
+                    constant_size: 0,
+                };
+                plan.binding_count += 1;
+                continue;
+            }
+            if vulkan_type == 0 {
+                plan.bindings[index] = Binding {
+                    set: number(&set["set"])?,
+                    binding: number(&binding["binding"])?,
+                    vulkan_type,
+                    vulkan_stages: number(&binding["stages"])?,
+                    metal_stage: 0,
+                    metal_index: u32::MAX,
+                    minimum_size: 0,
+                    alignment: 0,
+                    sampler_index: u32::MAX,
                     constant_bytes: std::ptr::null(),
                     constant_size: 0,
                 };
@@ -364,18 +408,9 @@ pub fn build(
             if buffer["kind"] != "Buffer" || buffer["form"]["Descriptor"].is_null() {
                 return Err(refuse("argument buffers or address-based resources"));
             }
-            let window = &buffer["window"]["Bounded"];
-            if window["start"] != 0 {
-                return Err(refuse("unbounded or negative buffer windows"));
-            }
-            let length = window["len"]
-                .as_u64()
-                .filter(|&n| n != 0)
-                .ok_or_else(|| refuse("an empty buffer window"))?;
-            let minimum_size = length
-                .checked_add(15)
-                .ok_or_else(|| refuse("an overflowing buffer window"))?
-                & !15;
+            // The canonical per-draw planner instantiates signed/whole windows
+            // against the actual logical allocation and descriptor limits.
+            let minimum_size = 0;
             plan.bindings[index] = Binding {
                 set: number(&set["set"])?,
                 binding: number(&binding["binding"])?,
@@ -396,130 +431,13 @@ pub fn build(
             plan.binding_count += 1;
         }
     }
-    // These variant facts are all false in the initial sampled path: only
-    // linear-UNORM float textures and ordinary normalized samplers may bind.
-    // Their sampler-state specialization is pixel-gated and therefore zero.
-    for dependency in array(&meta["dependencies"])? {
-        let facts = dependency["fact"]
-            .as_object()
-            .ok_or_else(|| refuse("a missing runtime fact"))?;
-        if facts.len() != 1 {
-            return Err(refuse("a composite runtime fact"));
-        }
-        let (name, value) = facts.iter().next().unwrap();
-        let (class, limit, mechanism) = match name.as_str() {
-            "SamplerCoordinates" => ("Sampler", 16, "Specialization"),
-            "SamplerReduction" => ("Sampler", 16, "PlanTimeCheck"),
-            "CubicSampler" | "AnisotropicSampler" => ("Sampler", 16, "Variant"),
-            "SrgbTexture" | "CrossClassReads" => ("Texture", 128, "Variant"),
-            _ => return Err(refuse(&format!("runtime fact {name}"))),
-        };
-        let (metal_stage, _, resource_index) = resource_slot(&value["slot"], class, limit)?;
-        if dependency["mechanism"] != mechanism
-            || !plan.bindings[..plan.binding_count as usize]
-                .iter()
-                .any(|b| {
-                    b.vulkan_type == 1
-                        && b.metal_stage == metal_stage
-                        && (if class == "Sampler" {
-                            b.sampler_index
-                        } else {
-                            b.metal_index
-                        }) == resource_index
-                })
-        {
-            return Err(refuse(
-                "a runtime fact without its supported sampled resource",
-            ));
-        }
-    }
-    for placement in array(&interface["push"])? {
-        let (_, vulkan_stages) = stage(&placement["stage"])?;
-        if placement["argument_table_size"] != 0 {
-            return Err(refuse("synthetic argument tables"));
-        }
-        for field in array(&placement["fields"])? {
-            let index = plan.push_count as usize;
-            if index >= 64 || field["size"] != 4 {
-                return Err(refuse("this push-constant size"));
-            }
-            let offset = number(&field["loc"]["Push"]["offset"])?;
-            let mut push = Push {
-                vulkan_stages,
-                offset,
-                size: 4,
-                kind: 0,
-                metal_index: 0,
-                value: 0,
-            };
-            let value = &field["field"];
-            if !value["SlotBindOffset"].is_null() {
-                let (_, source_stage, metal_index) = slot(&value["SlotBindOffset"])?;
-                if source_stage != vulkan_stages
-                    || !plan.bindings[..plan.binding_count as usize]
-                        .iter()
-                        .any(|b| b.metal_index == metal_index && b.vulkan_stages == vulkan_stages)
-                {
-                    return Err(refuse("an offset field without its direct buffer"));
-                }
-                push.kind = 1;
-                push.metal_index = metal_index;
-            } else if !value["ColorWriteRule"].is_null() {
-                let color = number(&value["ColorWriteRule"])?;
-                if vulkan_stages != 16 || color >= plan.color_attachment_count {
-                    return Err(refuse("this color-write-rule stage or attachment"));
-                }
-                let rule = array(&graphics["color_write_rules"])?
-                    .iter()
-                    .find(|r| r[0] == color)
-                    .ok_or_else(|| refuse("a missing color-write rule"))?;
-                push.kind = 2;
-                push.value = number(&rule[1])?;
-            } else {
-                return Err(refuse("this runtime push-constant field"));
-            }
-            plan.push_constant_size = plan.push_constant_size.max(
-                offset
-                    .checked_add(4)
-                    .ok_or_else(|| refuse("push offset overflow"))?,
-            );
-            plan.pushes[index] = push;
-            plan.push_count += 1;
-        }
-    }
-    if plan.push_constant_size > 128 {
-        return Err(refuse("more than 128 push-constant bytes"));
-    }
-    for stage in array(&meta["stages"])? {
-        if stage["stage_flags"] != 0 || !stage["required_subgroup_size"].is_null() {
-            return Err(refuse("subgroup creation flags"));
-        }
-        for spec in array(&stage["specialization"]["constants"])? {
-            // The generic access form remains correct with residual zero. Its
-            // RangeAtBindOffset=true form is only a driver optimization.
-            if spec["size"] != 4 || spec["default"] != 0 {
-                return Err(refuse("this specialization constant"));
-            }
-            if !spec["key"]["RangeAtBindOffset"].is_null() {
-                slot(&spec["key"]["RangeAtBindOffset"])?;
-            } else if !spec["key"]["SamplerState"].is_null() {
-                let state = &spec["key"]["SamplerState"];
-                let (metal_stage, _, sampler_index) = resource_slot(&state["slot"], "Sampler", 16)?;
-                if number(&state["fields"])? & 0x80000000 == 0
-                    || !plan.bindings[..plan.binding_count as usize]
-                        .iter()
-                        .any(|b| {
-                            b.vulkan_type == 1
-                                && b.metal_stage == metal_stage
-                                && b.sampler_index == sampler_index
-                        })
-                {
-                    return Err(refuse("a non-pixel-gated sampler specialization"));
-                }
-            } else {
-                return Err(refuse("this specialization key"));
-            }
-        }
+    // Resource dependencies, specialization and push fields are resolved from
+    // the actual BindState by RenderPipeline::plan and instantiate_draw.
+    for range in array(&meta["layout"]["push_constants"])? {
+        let end = number(&range["offset"])?
+            .checked_add(number(&range["size"])?)
+            .ok_or_else(|| refuse("push range overflow"))?;
+        plan.push_constant_size = plan.push_constant_size.max(end);
     }
     Ok(plan)
 }

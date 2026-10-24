@@ -1,4 +1,5 @@
 #include "MaliMetalShaderVulkan.h"
+#include "../Vulkan/MaliVulkanResources.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -28,7 +29,7 @@ static MMVKFormat backend_format(uint32_t format) {
     case 50:
         return MMVK_FORMAT_BGRA8_SRGB;
     default:
-        return 0;
+        return format?(MMVKFormat)(MMVK_FORMAT_NATIVE_BASE+format):0;
     }
 }
 
@@ -48,8 +49,8 @@ MMVKResult MMShaderVulkanDescribe(const MMShaderRenderOutput *output,
         plan->vertex_attribute_count > 31 || !plan->color_attachment_count ||
         plan->color_attachment_count > 8)
         return unsupported(error, "Translated execution plan exceeds its ABI bounds");
-    if (requested->topology != plan->topology || plan->topology != 3)
-        return unsupported(error, "Translated execution currently supports triangle-list topology");
+    if (requested->topology != plan->topology || plan->topology > 5)
+        return unsupported(error, "Render topology differs from the compiled shader plan");
     uint32_t requestedCount = requested->color_attachment_count ? requested->color_attachment_count : 1;
     if (requestedCount != plan->color_attachment_count)
         return unsupported(error,
@@ -62,7 +63,7 @@ MMVKResult MMShaderVulkanDescribe(const MMShaderRenderOutput *output,
         MMVKFormat format = color->format ? backend_format(color->format) : 0;
         MMVKFormat requestedFormat = requested->color_attachment_count
                                         ? requested->color_formats[i] : requested->color_format;
-        if ((color->format && !format) || format != requestedFormat)
+        if ((color->format && !format) || mmvk_format_code(format) != mmvk_format_code(requestedFormat))
             return unsupported(error,
                                "Render target format differs from the compiled shader attachment");
         descriptor->color_formats[i] = format;
@@ -95,10 +96,16 @@ MMVKResult MMShaderVulkanDescribe(const MMShaderRenderOutput *output,
         if (!native->stages || binding->metal_stage > MM_SHADER_FRAGMENT)
             return unsupported(error, "Unsupported shader argument stage or slot");
         if (binding->vulkan_type == 1) {
-            if (binding->metal_index >= 128 || binding->sampler_index >= 16)
+            if (binding->metal_index >= 128 || (binding->sampler_index != UINT32_MAX && binding->sampler_index >= 16))
                 return unsupported(error, "Unsupported sampled texture or sampler index");
             native->type = MMVK_BIND_COMBINED_IMAGE_SAMPLER;
-        } else if (binding->constant_bytes && binding->constant_size && binding->vulkan_type == 7)
+        } else if (binding->vulkan_type == 2 && binding->metal_index < 128)
+            native->type = MMVK_BIND_SAMPLED_IMAGE;
+        else if (binding->vulkan_type == 3 && binding->metal_index < 128)
+            native->type = MMVK_BIND_STORAGE_IMAGE;
+        else if (binding->vulkan_type == 0)
+            native->type = MMVK_BIND_SAMPLER;
+        else if (binding->constant_bytes && binding->constant_size && binding->vulkan_type == 7)
             native->type = MMVK_BIND_STORAGE_BUFFER;
         else if (binding->vulkan_type == 6 && binding->metal_index < 31)
             native->type = MMVK_BIND_UNIFORM_BUFFER;

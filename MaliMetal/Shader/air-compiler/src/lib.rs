@@ -1,8 +1,10 @@
 //! C adapter to the separately licensed native AIR compiler. No Apple binary or
 //! generated shader is embedded. The matching C definitions are MaliMetalShader.h.
 #![allow(non_snake_case)]
+mod api_reflection;
 mod backend_plan;
 mod compute;
+mod render;
 
 use metal2vulkan::{
     device::{Device, DeviceDescription, DevicePolicy},
@@ -16,13 +18,15 @@ use metal2vulkan::{
     Budget,
 };
 use std::{
+    collections::BTreeMap,
     ffi::{c_char, c_void, CStr, CString},
     panic::{catch_unwind, AssertUnwindSafe},
     ptr, slice,
+    sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
 
-const ABI: u32 = 3;
+const ABI: u32 = 4;
 const INVALID_ARGUMENT: i32 = 1;
 const INVALID_LIBRARY: i32 = 2;
 const UNSUPPORTED: i32 = 7;
@@ -99,6 +103,15 @@ pub struct RenderOutput {
     backend_plan: *const backend_plan::BackendPlan,
     backend_plan_error: *const c_char,
     release_code: Option<unsafe extern "C" fn(*mut RenderOutput)>,
+    prepare_draw: Option<
+        unsafe extern "C" fn(
+            *const RenderOutput,
+            *const render::Bindings,
+            *const render::DrawRequest,
+            *mut render::DrawPlan,
+            *mut ShaderError,
+        ) -> i32,
+    >,
 }
 #[repr(C)]
 pub struct Compiler {
@@ -120,6 +133,7 @@ pub struct Compiler {
         *mut compute::ComputeOutput,
         *mut ShaderError,
     ) -> i32,
+    capabilities: u64,
 }
 // All fields point to immutable static data or functions.
 unsafe impl Sync for Compiler {}
@@ -185,12 +199,32 @@ unsafe fn constants(p: *const ConstantValue, n: usize) -> Result<FunctionConstan
     Ok(out)
 }
 struct OwnedOutput {
+    device: Device,
+    descriptor: RenderPipelineDescriptor,
     _pipeline: RenderPipeline,
+    variants: Mutex<BTreeMap<metal2vulkan::cache::VariantKey, Arc<RenderPipeline>>>,
     _names: Vec<CString>,
     modules: Vec<StageModule>,
     metadata: CString,
     backend_plan: Option<Box<backend_plan::BackendPlan>>,
     backend_plan_error: Option<CString>,
+}
+
+fn parse_library(input: &[u8]) -> Result<Library> {
+    static LIBRARIES: OnceLock<Mutex<Vec<Library>>> = OnceLock::new();
+    let mut libraries = LIBRARIES
+        .get_or_init(|| Mutex::new(Vec::new()))
+        .lock()
+        .map_err(|_| invalid("Library cache lock is poisoned"))?;
+    if let Some(library) = libraries.iter().find(|library| library.bytes() == input) {
+        return Ok(library.clone());
+    }
+    let library = Library::parse(input)?;
+    if libraries.len() == 8 {
+        libraries.remove(0);
+    }
+    libraries.push(library.clone());
+    Ok(library)
 }
 
 unsafe fn compile(r: &CompilerRequest) -> Result<Box<OwnedOutput>> {
@@ -204,12 +238,12 @@ unsafe fn compile(r: &CompilerRequest) -> Result<Box<OwnedOutput>> {
     let description = DeviceDescription::from_khronos_json(profile, None)?;
     // UNTRUSTED includes resource containment. No device features are fabricated.
     let device = Device::new(description, DevicePolicy::UNTRUSTED)?;
-    let vertex = Library::parse(bytes(r.vertex_bytes, r.vertex_size, 64 * 1024 * 1024)?)?;
+    let vertex = parse_library(bytes(r.vertex_bytes, r.vertex_size, 64 * 1024 * 1024)?)?;
     let mut vf = FunctionDescriptor::new(vertex.function(name(r.vertex_name)?)?);
     vf.constants = constants(r.vertex_constants, r.vertex_constant_count)?;
     let mut descriptor = RenderPipelineDescriptor::new(StageSource::Function(vf));
     if !r.fragment_name.is_null() {
-        let fragment = Library::parse(bytes(r.fragment_bytes, r.fragment_size, 64 * 1024 * 1024)?)?;
+        let fragment = parse_library(bytes(r.fragment_bytes, r.fragment_size, 64 * 1024 * 1024)?)?;
         let mut ff = FunctionDescriptor::new(fragment.function(name(r.fragment_name)?)?);
         ff.constants = constants(r.fragment_constants, r.fragment_constant_count)?;
         descriptor.fragment = Some(StageSource::Function(ff));
@@ -335,9 +369,18 @@ unsafe fn compile(r: &CompilerRequest) -> Result<Box<OwnedOutput>> {
         "formats": formats, "stage_flags": stage_flags,
         "denorm_independence": req.denorm_independence, "rounding_independence": req.rounding_independence,
     });
+    let spirv = pipeline
+        .stages
+        .iter()
+        .filter_map(|s| s.spirv.get(1))
+        .copied()
+        .max()
+        .unwrap_or(0);
     let metadata = serde_json::json!({
         "abi_version": ABI, "compiler_revision": "a2c440b8bcdcf20d34aa1694b61ae22c2a7ea68b",
-        "kind": "render", "profile": pipeline.profile, "spirv_version": "1.5",
+        "compiler_effective_tree": option_env!("MALIMETAL_COMPILER_EFFECTIVE_TREE").unwrap_or(""),
+        "compiler_source_digest": metal2vulkan::cache::SOURCE_DIGEST,
+        "kind": "render", "profile": pipeline.profile, "spirv_version": format!("{}.{}",(spirv>>16)&255,(spirv>>8)&255),
         "layout": pipeline.layout, "interface": pipeline.interface,
         "vertex_input": pipeline.vertex_input, "graphics": pipeline.graphics,
         "requirements": requirements, "dependencies": pipeline.dependencies,
@@ -381,7 +424,10 @@ unsafe fn compile(r: &CompilerRequest) -> Result<Box<OwnedOutput>> {
         })
         .collect();
     Ok(Box::new(OwnedOutput {
+        device,
+        descriptor,
         _pipeline: pipeline,
+        variants: Mutex::new(BTreeMap::new()),
         _names: names,
         modules,
         metadata,
@@ -437,6 +483,7 @@ unsafe extern "C" fn compile_render(
             private_data: Box::into_raw(owner).cast(),
             destroy: Some(destroy),
             release_code: Some(release_code),
+            prepare_draw: Some(render::prepare_draw),
         };
         Ok(())
     }));
@@ -451,18 +498,9 @@ unsafe extern "C" fn destroy(output: *mut RenderOutput) {
     }
 }
 unsafe extern "C" fn release_code(output: *mut RenderOutput) {
-    if let Some(output) = output.as_mut() {
-        if let Some(owner) = output.private_data.cast::<OwnedOutput>().as_mut() {
-            // Pipeline creation consumed the words. ConstantBlob has its own
-            // Arc in each stage and stays alive for the typed binding plan.
-            for stage in &mut owner._pipeline.stages {
-                stage.spirv = std::sync::Arc::from(Vec::<u32>::new());
-            }
-            owner.modules.clear();
-            output.module_count = 0;
-            output.modules = ptr::null();
-        }
-    }
+    // A render output owns the modules used by its per-draw variants. The
+    // pipeline and every recorded draw retain that output until completion.
+    let _ = output;
 }
 unsafe extern "C" fn reflect(
     input: *const c_void,
@@ -482,7 +520,7 @@ unsafe extern "C" fn reflect(
         if output.is_null() || output_size.is_null() {
             return Err(invalid("Missing reflection result"));
         }
-        let library = Library::parse(bytes(input, size, 64 * 1024 * 1024)?)?;
+        let library = parse_library(bytes(input, size, 64 * 1024 * 1024)?)?;
         let function = library.function(name(entry)?)?;
         let reflection = function.reflection(&Budget::standard())?;
         let value =
@@ -501,15 +539,14 @@ unsafe extern "C" fn free_string(value: *mut c_char) {
 
 static COMPILER: Compiler = Compiler {
     abi_version: ABI,
-    name: b"metal2vulkan a2c440b8 (AIR -> SPIR-V 1.5 / Vulkan 1.2+)\0"
-        .as_ptr()
-        .cast(),
+    name: b"metal2vulkan AIR -> SPIR-V / Vulkan\0".as_ptr().cast(),
     compile_render,
     reflect,
     free_string,
     compile_compute: compute::compile_compute,
+    capabilities: render::CAPABILITIES,
 };
 #[no_mangle]
-pub extern "C" fn MMAIRCompilerV3() -> *const Compiler {
+pub extern "C" fn MMAIRCompilerV4() -> *const Compiler {
     &COMPILER
 }

@@ -650,4 +650,72 @@ static void serialize_VkPhysicalDeviceVulkan12Properties(struct json_writer *j, 
     json_flags(j, "framebufferIntegerColorSampleCounts", p->framebufferIntegerColorSampleCounts, VkSampleCountFlags_names);
 }
 
+
+static void serialize_VkPhysicalDeviceVulkan13Features(struct json_writer *j,const VkPhysicalDeviceVulkan13Features *p)
+{
+    MMVK_JSON_BOOL(j, "robustImageAccess", p->robustImageAccess);
+    MMVK_JSON_BOOL(j, "inlineUniformBlock", p->inlineUniformBlock);
+    MMVK_JSON_BOOL(j, "descriptorBindingInlineUniformBlockUpdateAfterBind", p->descriptorBindingInlineUniformBlockUpdateAfterBind);
+    MMVK_JSON_BOOL(j, "pipelineCreationCacheControl", p->pipelineCreationCacheControl);
+    MMVK_JSON_BOOL(j, "privateData", p->privateData);
+    MMVK_JSON_BOOL(j, "shaderDemoteToHelperInvocation", p->shaderDemoteToHelperInvocation);
+    MMVK_JSON_BOOL(j, "shaderTerminateInvocation", p->shaderTerminateInvocation);
+    MMVK_JSON_BOOL(j, "subgroupSizeControl", p->subgroupSizeControl);
+    MMVK_JSON_BOOL(j, "computeFullSubgroups", p->computeFullSubgroups);
+    MMVK_JSON_BOOL(j, "synchronization2", p->synchronization2);
+    MMVK_JSON_BOOL(j, "textureCompressionASTC_HDR", p->textureCompressionASTC_HDR);
+    MMVK_JSON_BOOL(j, "shaderZeroInitializeWorkgroupMemory", p->shaderZeroInitializeWorkgroupMemory);
+    MMVK_JSON_BOOL(j, "dynamicRendering", p->dynamicRendering);
+    MMVK_JSON_BOOL(j, "shaderIntegerDotProduct", p->shaderIntegerDotProduct);
+    MMVK_JSON_BOOL(j, "maintenance4", p->maintenance4);
+}
+
+static void serialize_VkPhysicalDeviceVulkan13Properties(struct json_writer *j,const VkPhysicalDeviceVulkan13Properties *p)
+{
+    json_unsigned(j, "minSubgroupSize", p->minSubgroupSize);
+    json_unsigned(j, "maxSubgroupSize", p->maxSubgroupSize);
+    json_unsigned(j, "maxComputeWorkgroupSubgroups", p->maxComputeWorkgroupSubgroups);
+    json_flags(j, "requiredSubgroupSizeStages", p->requiredSubgroupSizeStages, VkShaderStageFlags_names);
+    json_unsigned(j, "maxInlineUniformBlockSize", p->maxInlineUniformBlockSize);
+    json_unsigned(j, "maxPerStageDescriptorInlineUniformBlocks", p->maxPerStageDescriptorInlineUniformBlocks);
+    json_unsigned(j, "maxPerStageDescriptorUpdateAfterBindInlineUniformBlocks", p->maxPerStageDescriptorUpdateAfterBindInlineUniformBlocks);
+    json_unsigned(j, "maxDescriptorSetInlineUniformBlocks", p->maxDescriptorSetInlineUniformBlocks);
+    json_unsigned(j, "maxDescriptorSetUpdateAfterBindInlineUniformBlocks", p->maxDescriptorSetUpdateAfterBindInlineUniformBlocks);
+    json_unsigned(j, "maxInlineUniformTotalSize", p->maxInlineUniformTotalSize);
+    MMVK_JSON_BOOL(j, "integerDotProduct8BitUnsignedAccelerated", p->integerDotProduct8BitUnsignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProduct8BitSignedAccelerated", p->integerDotProduct8BitSignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProduct8BitMixedSignednessAccelerated", p->integerDotProduct8BitMixedSignednessAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProduct4x8BitPackedUnsignedAccelerated", p->integerDotProduct4x8BitPackedUnsignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProduct4x8BitPackedSignedAccelerated", p->integerDotProduct4x8BitPackedSignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProduct4x8BitPackedMixedSignednessAccelerated", p->integerDotProduct4x8BitPackedMixedSignednessAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProduct16BitUnsignedAccelerated", p->integerDotProduct16BitUnsignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProduct16BitSignedAccelerated", p->integerDotProduct16BitSignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProduct16BitMixedSignednessAccelerated", p->integerDotProduct16BitMixedSignednessAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProduct32BitUnsignedAccelerated", p->integerDotProduct32BitUnsignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProduct32BitSignedAccelerated", p->integerDotProduct32BitSignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProduct32BitMixedSignednessAccelerated", p->integerDotProduct32BitMixedSignednessAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProduct64BitUnsignedAccelerated", p->integerDotProduct64BitUnsignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProduct64BitSignedAccelerated", p->integerDotProduct64BitSignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProduct64BitMixedSignednessAccelerated", p->integerDotProduct64BitMixedSignednessAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProductAccumulatingSaturating8BitUnsignedAccelerated", p->integerDotProductAccumulatingSaturating8BitUnsignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProductAccumulatingSaturating8BitSignedAccelerated", p->integerDotProductAccumulatingSaturating8BitSignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProductAccumulatingSaturating8BitMixedSignednessAccelerated", p->integerDotProductAccumulatingSaturating8BitMixedSignednessAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProductAccumulatingSaturating4x8BitPackedUnsignedAccelerated", p->integerDotProductAccumulatingSaturating4x8BitPackedUnsignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProductAccumulatingSaturating4x8BitPackedSignedAccelerated", p->integerDotProductAccumulatingSaturating4x8BitPackedSignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProductAccumulatingSaturating4x8BitPackedMixedSignednessAccelerated", p->integerDotProductAccumulatingSaturating4x8BitPackedMixedSignednessAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProductAccumulatingSaturating16BitUnsignedAccelerated", p->integerDotProductAccumulatingSaturating16BitUnsignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProductAccumulatingSaturating16BitSignedAccelerated", p->integerDotProductAccumulatingSaturating16BitSignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProductAccumulatingSaturating16BitMixedSignednessAccelerated", p->integerDotProductAccumulatingSaturating16BitMixedSignednessAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProductAccumulatingSaturating32BitUnsignedAccelerated", p->integerDotProductAccumulatingSaturating32BitUnsignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProductAccumulatingSaturating32BitSignedAccelerated", p->integerDotProductAccumulatingSaturating32BitSignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProductAccumulatingSaturating32BitMixedSignednessAccelerated", p->integerDotProductAccumulatingSaturating32BitMixedSignednessAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProductAccumulatingSaturating64BitUnsignedAccelerated", p->integerDotProductAccumulatingSaturating64BitUnsignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProductAccumulatingSaturating64BitSignedAccelerated", p->integerDotProductAccumulatingSaturating64BitSignedAccelerated);
+    MMVK_JSON_BOOL(j, "integerDotProductAccumulatingSaturating64BitMixedSignednessAccelerated", p->integerDotProductAccumulatingSaturating64BitMixedSignednessAccelerated);
+    json_unsigned(j, "storageTexelBufferOffsetAlignmentBytes", p->storageTexelBufferOffsetAlignmentBytes);
+    MMVK_JSON_BOOL(j, "storageTexelBufferOffsetSingleTexelAlignment", p->storageTexelBufferOffsetSingleTexelAlignment);
+    json_unsigned(j, "uniformTexelBufferOffsetAlignmentBytes", p->uniformTexelBufferOffsetAlignmentBytes);
+    MMVK_JSON_BOOL(j, "uniformTexelBufferOffsetSingleTexelAlignment", p->uniformTexelBufferOffsetSingleTexelAlignment);
+    json_unsigned(j, "maxBufferSize", p->maxBufferSize);
+}
 #endif

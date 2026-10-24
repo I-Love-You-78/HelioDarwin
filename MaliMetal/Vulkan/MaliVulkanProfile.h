@@ -3,6 +3,13 @@
 #define MALI_VULKAN_PROFILE_H
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan_core.h>
+#include "MaliVulkanGraphics.h"
+typedef struct {
+    uint32_t api_version;
+    const VkPhysicalDeviceVulkan13Features *features13;
+    const VkPhysicalDeviceVulkan13Properties *properties13;
+    const MMVKGraphicsCapabilities *graphics;
+} MMVKProfileSelection;
 /* All inputs are actual queried properties and the exact enabled feature
  * chains passed to vkCreateDevice. The returned JSON is caller-owned. */
 char *mmvk_profile_create(VkPhysicalDevice physical,
@@ -13,7 +20,8 @@ char *mmvk_profile_create(VkPhysicalDevice physical,
     const VkPhysicalDeviceVulkan11Properties *properties11,
     const VkPhysicalDeviceVulkan12Properties *properties12,
     PFN_vkGetPhysicalDeviceFormatProperties get_format,
-    PFN_vkGetPhysicalDeviceImageFormatProperties2 get_image_format);
+    PFN_vkGetPhysicalDeviceImageFormatProperties2 get_image_format,
+    const MMVKProfileSelection *selection);
 /* Disabled unless MALIMETAL_NATIVE_PROFILE_PATH names an absolute output path. */
 void mmvk_profile_export(const char *json);
 #endif

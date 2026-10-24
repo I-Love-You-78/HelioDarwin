@@ -41,8 +41,10 @@ Metal coverage and assembled GPU rendering remain unfinished. PosterBoard and
 native UIKit geometry have explicit, build-gated compatibility tools awaiting
 device validation. The latest diagnostic reached CoreAnimation shader loading;
 a function-descriptor API gap passed a phone check, exposing missing MRT/blending
-support. That path is now compiled and offline shader-validated, with phone
-execution still pending. A separate shared-cache
+support, followed by native-profile schema and buffer-window failures. The
+integrated ABI 4/compute ABI 2 candidate now passes strict native linking and
+structural planning for both observed pipelines. GPU execution and the expanded
+API/helper paths still require device validation. A separate shared-cache
 metadata failure affecting SpringBoard and several services is under investigation.
 
 ## Priorities

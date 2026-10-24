@@ -1,0 +1,54 @@
+diff --git a/crates/metal2vulkan-air/src/canon/static_init.rs b/crates/metal2vulkan-air/src/canon/static_init.rs
+--- a/crates/metal2vulkan-air/src/canon/static_init.rs
++++ b/crates/metal2vulkan-air/src/canon/static_init.rs
+@@ -50,7 +50,9 @@
+ use crate::error::{Error, Feature, MissingInput, Unsupported};
+ use crate::intrinsics::{AirIntrinsic, FunctionConstant, LlvmIntOp, LlvmIntrinsic, NumKind};
+ use crate::ir::layout::Endian;
+-use crate::ir::{AddrSpace, Arena, BlockId, Body, Callee, CastOp, Const, ConstExpr, ConstId};
++use crate::ir::{
++    AddrSpace, Arena, BinOp, BlockId, Body, Callee, CastOp, Const, ConstExpr, ConstId,
++};
+ use crate::ir::{Constant, FuncId, Function, Global, GlobalId, Idx, InstId, InstKind};
+ use crate::ir::{Linkage, ModuleParts, Section, Type, TypeId, TypeLayouts, TypeTable, Value};
+ 
+@@ -558,7 +560,26 @@
+             }
+             InstKind::BinOp { op, a, b, .. } => {
+                 let (op, a, b) = (*op, val(*a)?, val(*b)?);
+-                self.pure2(a, b, &at, m, |f, x, y, m| f.binop(op, ty, x, y, m))?
++                // An absent FC is symbolic, not a concrete LLVM poison constant. A known
++                // absorbing boolean makes this result independent of that FC, including
++                // predicates protected by is_function_constant_defined. Do not apply this
++                // to opaque values, concrete undef/poison, vectors or other integer ops.
++                let absorbing = match (op, a, b) {
++                    (BinOp::And | BinOp::Or, SVal::C(c), SVal::Fc(_))
++                    | (BinOp::And | BinOp::Or, SVal::Fc(_), SVal::C(c))
++                        if matches!(self.types.get(ty), Some(Type::Int(1)))
++                            && self.folder.consts.ty(c) == Some(ty)
++                            && self.folder.int(c) == Some(u64::from(op == BinOp::Or)) =>
++                    {
++                        Some(c)
++                    }
++                    _ => None,
++                };
++                if let Some(c) = absorbing {
++                    SVal::C(c)
++                } else {
++                    self.pure2(a, b, &at, m, |f, x, y, m| f.binop(op, ty, x, y, m))?
++                }
+             }
+             InstKind::FNeg { v, .. } => {
+                 let x = val(*v)?;
+diff --git a/crates/metal2vulkan/src/cache/mod.rs b/crates/metal2vulkan/src/cache/mod.rs
+--- a/crates/metal2vulkan/src/cache/mod.rs
++++ b/crates/metal2vulkan/src/cache/mod.rs
+@@ -60,7 +60,7 @@
+ /// unchanged version, and its bless records the version. Independent of the crate's version and of
+ /// [`ARTIFACT_FORMAT_VERSION`]. The commit that bumps it says what changed; this comment keeps no
+ /// history.
+-pub const SEMANTICS_VERSION: u32 = 1799;
++pub const SEMANTICS_VERSION: u32 = 1800;
+ 
+ /// The byte-layout version of encoded artifacts (`CompiledFunction::to_bytes` and the
+ /// [`PipelineArtifact`] encodings). Every encoded artifact carries it, and a decode under another

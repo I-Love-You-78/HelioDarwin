@@ -45,14 +45,17 @@ typedef struct {
  * selected. Creation fails unless the ICD verifies the versioned kernel ABI. */
 MMVKResult mmvk_device_create(uint32_t accelerator_connection, const char *icd_path,
                              MMVKDevice **out, MMVKError *error);
-void mmvk_device_destroy(MMVKDevice *device);
+/* A non-success result preserves the device and borrowed connection ownership. */
+MMVKResult mmvk_device_destroy(MMVKDevice *device);
+void mmvk_device_mark_quarantined(MMVKDevice *);
+int mmvk_device_is_quarantined(const MMVKDevice *);
 const MMVKCapabilities *mmvk_device_capabilities(const MMVKDevice *device);
 const char *mmvk_device_shader_profile_json(const MMVKDevice *, size_t *size);
 const char *mmvk_result_string(MMVKResult result);
 
 enum { MMVK_BUFFER_VERTEX=1u, MMVK_BUFFER_INDEX=2u, MMVK_BUFFER_UNIFORM=4u,
        MMVK_BUFFER_STORAGE=8u, MMVK_BUFFER_TRANSFER_SRC=16u,
-       MMVK_BUFFER_TRANSFER_DST=32u };
+       MMVK_BUFFER_TRANSFER_DST=32u, MMVK_BUFFER_INDIRECT=64u };
 MMVKResult mmvk_buffer_create(MMVKDevice *, uint64_t size, uint32_t usage,
                              MMVKBuffer **out, MMVKError *);
 void mmvk_buffer_destroy(MMVKBuffer *);
@@ -64,6 +67,8 @@ MMVKResult mmvk_buffer_invalidate(MMVKBuffer *, uint64_t offset, uint64_t length
 
 typedef enum { MMVK_FORMAT_RGBA8_UNORM=1, MMVK_FORMAT_BGRA8_UNORM=2,
                MMVK_FORMAT_RGBA8_SRGB=3, MMVK_FORMAT_BGRA8_SRGB=4 } MMVKFormat;
+/* Returns the Vulkan numeric format represented by a native format tag. */
+uint32_t mmvk_format_code(MMVKFormat);
 enum { MMVK_IMAGE_SAMPLED=1u, MMVK_IMAGE_RENDER_TARGET=2u,
        MMVK_IMAGE_TRANSFER_SRC=4u, MMVK_IMAGE_TRANSFER_DST=8u, MMVK_IMAGE_STORAGE=16u };
 typedef struct { uint32_t width,height,usage; MMVKFormat format; } MMVKImageDescriptor;
@@ -76,6 +81,7 @@ typedef struct {
     uint32_t address_u,address_v,address_w; /* Vulkan sampler address mode. */
     uint32_t normalized_coordinates,compare_enabled,compare_op,border_color;
     float min_lod,max_lod,lod_bias,max_anisotropy;
+    uint32_t reduction_mode; /* weighted-average=0, min=1, max=2 */
 } MMVKSamplerDescriptor;
 MMVKResult mmvk_sampler_create(MMVKDevice *,const MMVKSamplerDescriptor *,MMVKSampler **out,MMVKError *);
 void mmvk_sampler_destroy(MMVKSampler *);
@@ -136,6 +142,12 @@ MMVKResult mmvk_render_pipeline_create_translated(MMVKDevice *, const struct MMS
 void mmvk_pipeline_destroy(MMVKPipeline *);
 
 MMVKResult mmvk_commands_create(MMVKDevice *, MMVKCommands **out, MMVKError *);
+MMVKResult mmvk_commands_mark_buffer_written(MMVKCommands *,MMVKBuffer *,MMVKError *);
+MMVKResult mmvk_commands_mark_image_written(MMVKCommands *,MMVKImage *,MMVKError *);
+uint32_t mmvk_commands_written_buffer_count(const MMVKCommands *);
+uint32_t mmvk_commands_written_image_count(const MMVKCommands *);
+MMVKBuffer *mmvk_commands_written_buffer(const MMVKCommands *,uint32_t index);
+MMVKImage *mmvk_commands_written_image(const MMVKCommands *,uint32_t index);
 void mmvk_commands_destroy(MMVKCommands *);
 MMVKResult mmvk_commands_bind_pipeline(MMVKCommands *, MMVKPipeline *, MMVKError *);
 MMVKResult mmvk_commands_bind_buffer(MMVKCommands *, uint32_t set, uint32_t binding,

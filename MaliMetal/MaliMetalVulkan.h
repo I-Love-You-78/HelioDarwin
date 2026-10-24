@@ -3,6 +3,7 @@
 #define MALI_METAL_VULKAN_H
 #include "MaliMetalTypes.h"
 #include "Vulkan/MaliVulkanBackend.h"
+#include "Vulkan/MaliVulkanGraphics.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -14,6 +15,7 @@ int MaliMetalBlendOperation(NSUInteger operation, uint32_t *vkOperation);
 }
 #endif
 #ifdef __OBJC__
+@class MaliMetalRenderProgram;
 struct MMShaderRenderOutput;
 struct MMShaderVulkanConstants;
 struct MMShaderComputeOutput;
@@ -32,6 +34,9 @@ struct MMShaderComputeRegion;
 - (MTLPixelFormat)maliColorFormatAtIndex:(NSUInteger)index;
 - (const struct MMShaderRenderOutput *)maliShaderOutput;
 - (const struct MMShaderVulkanConstants *)maliShaderConstants;
+- (MaliMetalRenderProgram *)maliRenderProgram;
+- (const MMVKGraphicsState *)maliGraphicsPipelineState;
+- (const MMVKPassLayout *)maliGraphicsPipelinePass;
 - (BOOL)maliPrepareImage:(BOOL)preserve error:(MMVKError *)error;
 - (BOOL)maliReadbackImage:(MMVKError *)error;
 @end
