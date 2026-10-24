@@ -69,6 +69,7 @@ State is retained until a HID client is ready, and incomplete event allocation i
 The five affected translation units, including startup and shared PWRAP access,
 compile to ARM64 objects. Chip identification and kernel HID press/release
 observations establish part of the physical path. Multi-touch, controller
-recovery, physical buttons and end-to-end iOS input still need validation.
+recovery, volume behavior and display sleep/wake still need validation beyond
+the confirmed touch interaction and button-event delivery.
 
 Source integration: [shared PWRAP patch 0191](https://github.com/squeeeezy/HelioDarwin/blob/x676c/xnu/patches/0191-x676c-shared-pwrap-swinf.patch) and [input patch 0192](https://github.com/squeeeezy/HelioDarwin/blob/x676c/xnu/patches/0192-x676c-real-touch-and-keys.patch).

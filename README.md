@@ -20,9 +20,9 @@ in the [system services documentation](wiki/System-Services-and-Posters.md).
 | Storage | Native UFS reads the `iosroot` HFS+ volume and has performed writes and journal replay. Root-volume backups must be kept separately. |
 | Display | Patch 0190 serializes the vendor DSI refresh sequence. A subsequent phone boot showed the clock/interface and no sampled DSI busy condition. A 60 Hz software timer is not a measured frame-rate guarantee. [Display Pipeline](wiki/Display-Pipeline.md). |
 | UIKit geometry | Physical scanout is 1080×2400. Native cutout, safe-area and status-bar compatibility work is separate from scanout and requires runtime validation. |
-| GPU | XNU has read GPU ID `0x90930010`. The integrated boot verified PMIC enable/readback and loaded PanVK. GPU memory, jobs and rendering remain unvalidated. [GPU power sequence](wiki/MT6789-GPU-Power-Sequence.md). |
+| GPU | XNU has read GPU ID `0x90930010`, verified PMIC enable/readback and created a native Vulkan device after the IOKit and cache-address fixes. GPU jobs and rendering remain unvalidated. [GPU power sequence](wiki/MT6789-GPU-Power-Sequence.md). |
 | MaliMetal | Metal objects, native AIR translation, a Vulkan backend and an arm64 iOS PanVK port are implemented for a bounded feature set. Selected real CoreAnimation shaders pass offline translation checks. End-to-end GPU execution and broader Metal support remain unverified/incomplete. [Driver details](wiki/MaliMetal-Driver.md). |
-| Touch & keys | The replacement FT5452J, keypad and PMIC-key paths are compile-checked against extracted vendor information. Physical events through iOS HID still require phone validation. [Input and HID](wiki/Input-and-HID.md). |
+| Touch & keys | Kernel HID logs contain real touch and power/volume-key press/release events; touch interaction was confirmed on the phone. Multi-touch, volume behavior and display sleep/wake still need validation. [Input and HID](wiki/Input-and-HID.md). |
 | System services | PosterBoard startup preparation and reversible job management are available. Disabled services are not considered working merely because their definitions are restored. [Services and posters](wiki/System-Services-and-Posters.md). |
 | Reset & fallback | The opt-in X676C TOPRGU reset returned a diagnostic boot to Android slot B. A/B retry metadata alone cannot reset a hung system. [Dual-boot safety](wiki/Dual-Boot-Safety.md). |
 | Wi-Fi / BT / NFC / cellular / audio | Functional MT6789 support is not established. Hardware addresses or discovered vendor files do not constitute working drivers. |
@@ -55,15 +55,13 @@ iOS artifacts from source, including the pinned AIR compiler and PanVK dependenc
 Generated binaries are kept outside version control.
 See [MaliMetal build instructions](MaliMetal/README.md).
 
-Run `40083985422` passed the earlier user cache-register trap after rebuilding
-assembly from the current headers. CI and deployment now check the assembled
-startup policy. The kernel also reported real touch press/release events.
-PanVK then failed during logical-device creation: that path still treated an
-IOKit connection as a Unix descriptor. The current source opens a separate
-IOKit client for each logical device. GPU execution and iOS gestures still
-require successful device validation.
-The following retry exposed a missing kernel `getService` implementation;
-patch 0195 supplies the GPU provider for IOKit connection discovery.
+Run `40090751567` created a native Vulkan device after fixes to assembly
+freshness, IOKit connection discovery and physical cache-address conversion.
+The updated frontend passed Metal registration and reached CoreAnimation shader
+loading. Its library now implements the observed function-descriptor call;
+that update is compiled and awaits a phone check. A separate shared-cache
+metadata failure affects SpringBoard and several services and remains under
+investigation. These milestones do not establish GPU job completion or rendering.
 
 Compilation and offline shader validation do not prove that the stock Metal loader,
 PanVK, kernel GPU transport and presentation work together on the phone. Full

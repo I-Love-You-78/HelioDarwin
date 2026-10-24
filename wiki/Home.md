@@ -18,8 +18,14 @@ Run `40083985422` passed the cache-register trap and recorded real touch
 press/release events in the kernel HID path. It then failed to create a Vulkan
 logical device because that path still expected a Unix descriptor. The current
 source uses a separately owned IOKit connection for each logical device.
-GPU jobs, iOS gestures, physical buttons and the installed PosterBoard/native
-display adapters still require successful runtime validation.
+Run `40090751567` subsequently created a native Vulkan device. Frontend updates
+passed Metal registration and reached CoreAnimation shader loading; the observed
+function-descriptor API gap is corrected in source and awaits a phone check.
+A separate shared-cache metadata failure affecting SpringBoard and several
+services is under investigation. Touch interaction was confirmed and kernel HID
+logs include physical power/volume-key events. GPU jobs, multi-touch, volume and
+sleep/wake behavior, and the installed PosterBoard/native display adapters still
+require runtime validation.
 
 ## Documentation boundaries
 

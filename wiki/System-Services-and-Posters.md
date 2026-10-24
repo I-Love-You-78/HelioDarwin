@@ -53,7 +53,7 @@ Binary analysis confirms that UIKit's fallback status-bar provider creates a sys
 
 Native `1080×2400` remains the boot default (`sweetfb_native=1`), giving `360×800` points at scale 3. The new opt-in [native metadata adapter](https://github.com/squeeeezy/HelioDarwin/tree/x676c/tools/native-display) keeps that framebuffer configuration and the existing iPhone X artwork identity. The scanout and touch paths continue to use the full physical panel without crop offsets. The older `1125×2436` cropped canvas is not the resolution fix. See [Display Pipeline](Display-Pipeline.md) and [Input and HID](Input-and-HID.md).
 
-SpringBoard publishes display and device contexts to UIKit applications. Its shared factories now supply the native panel geometry:
+SpringBoard publishes display and device contexts to UIKit applications. When loaded and activated, the adapter changes its shared factories to supply the native panel geometry:
 
 | Metadata | Native profile |
 | --- | --- |
@@ -91,7 +91,7 @@ sudo python3 tools/sweet_native_display.py MOUNTED_ROOT --remove
 
 For Windows/WSL linking, add `--wsl --linker /usr/bin/ld64.lld-18` to the build command. Root mutations require a POSIX root shell. Inspection is read-only; installation adds the scoped SpringBoard startup environment and feature definition. Rollback removes that environment, restores the original Jindo definition, preserves unrelated changes, and retains the dylib, logs and recovery data.
 
-The artifact compiles for arm64 iOS with strict warnings. It is **installed in the phone root; runtime activation and the visible result are not yet validated**. The first integrated boot repeatedly lost backboardd during PanVK CPU cache-type discovery, before a usable UI could be assessed. Startup dylib loading, feature-table regeneration, context propagation to applications, actual provider selection, orientation handling and the visible result remain to be checked in an assembled boot. Successful compilation is not a claim that the red status area or every UIKit layout issue is fixed.
+The artifact compiles for arm64 iOS with strict warnings. It is **installed in the phone root; runtime activation and the visible result are not yet validated**. The latest captured diagnostic contains SpringBoard and service failures while reading shared-cache Objective-C metadata; this common failure is under investigation. The native display log has no adapter activation markers, and the poster-helper logs are empty. Startup dylib loading, feature-table regeneration, context propagation to applications, actual provider selection, orientation handling and the visible result remain to be checked in an assembled boot. Successful compilation is not a claim that the red status area or every UIKit layout issue is fixed.
 
 ## Remaining contracts
 

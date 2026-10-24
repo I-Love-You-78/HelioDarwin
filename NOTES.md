@@ -24,19 +24,23 @@ The old secondary-core display pump and its lifetime timer are not started.
 
 The GPU source uses the shared split-SWINF PMIC interface, preserves inherited
 voltage selectors and implements a versioned JM memory/submission/completion
-transport. New rail access, GPU address spaces, execution and recovery still
-require phone validation. Full DVFS and dynamic GPU power management remain open.
+transport. Rail-enable readbacks and native Vulkan device creation have been
+observed on the phone. GPU page walks, execution and recovery still require
+validation. Full DVFS and dynamic GPU power management remain open.
 
 Input source targets the confirmed FT5452J controller over I2C0/APDMA, the PMIC
 power key and keypad volume keys. UFS startup starts the readers; HID receives
-contact collections and consumer-button events. The replacement path is compiled
-but has not yet delivered verified physical events in iOS.
+contact collections and consumer-button events. Kernel logs contain physical
+touch and power/volume-key press/release events, and touch interaction was
+confirmed. Multi-touch, volume behavior and display sleep/wake remain unvalidated.
 
 MaliMetal includes native AIR translation, Vulkan commands and an iOS PanVK build.
 Selected real CoreAnimation render/compute shaders pass offline checks. Complete
 Metal coverage and assembled GPU rendering remain unfinished. PosterBoard and
 native UIKit geometry have explicit, build-gated compatibility tools awaiting
-device validation.
+device validation. The latest diagnostic reached CoreAnimation shader loading;
+a function-descriptor API gap is corrected in source. A separate shared-cache
+metadata failure affecting SpringBoard and several services is under investigation.
 
 ## Priorities
 

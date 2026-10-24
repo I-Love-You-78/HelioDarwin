@@ -8,8 +8,10 @@ The port builds on the repository's earlier SWEET/Topaz work.
 
 Physical boots execute launchd, SpringBoard and backboardd. The corrected DSI
 sequence has displayed the clock/interface, using system software rendering.
-The new MaliMetal GPU transport/backend, replacement physical input and native
-UIKit metadata adapter are compile-checked and await an assembled device check.
+The native Vulkan device has initialized, and physical touch/key events have
+reached kernel HID. GPU rendering and the native UIKit metadata adapter still
+need device validation; SpringBoard and several services currently encounter a
+shared-cache metadata failure under investigation.
 See [engineering status](../NOTES.md) and the [wiki](../wiki/Home.md).
 
 ## Boot layout
