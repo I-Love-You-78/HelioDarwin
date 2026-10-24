@@ -116,6 +116,8 @@ def air_provider(directory):
     manifest = json.loads((directory / 'build.json').read_text(encoding='utf-8'))
     if manifest['target'] != 'aarch64-apple-ios':
         raise ValueError('AIR provider was not built for arm64 iOS')
+    if manifest.get('compiler_abi') != 3:
+        raise ValueError('AIR provider must implement render compiler ABI 3')
     if manifest['compiler_revision'] != AIR_COMPILER_REVISION:
         raise ValueError('AIR provider compiler revision differs from the pinned source')
     shader = HERE / 'Shader'

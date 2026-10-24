@@ -22,7 +22,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const ABI: u32 = 2;
+const ABI: u32 = 3;
 const INVALID_ARGUMENT: i32 = 1;
 const INVALID_LIBRARY: i32 = 2;
 const UNSUPPORTED: i32 = 7;
@@ -78,6 +78,7 @@ pub struct CompilerRequest {
     stencil_format: u32,
     sample_count: u32,
     timeout_ms: u32,
+    color_states: [backend_plan::Color; 8],
 }
 #[repr(C)]
 pub struct StageModule {
@@ -252,7 +253,24 @@ unsafe fn compile(r: &CompilerRequest) -> Result<Box<OwnedOutput>> {
         if raw != 0 {
             let format = metal::PixelFormat::try_from(raw)
                 .map_err(|_| invalid("Unknown color MTLPixelFormat"))?;
-            descriptor.color_attachments[index] = Some(ColorAttachmentDescriptor::new(format));
+            let state = &r.color_states[index];
+            let mut color = ColorAttachmentDescriptor::new(format);
+            color.blending_enabled = state.enabled != 0;
+            color.source_rgb_blend_factor = metal::BlendFactor::try_from(state.src_rgb)
+                .map_err(|_| invalid("Unknown source RGB blend factor"))?;
+            color.destination_rgb_blend_factor = metal::BlendFactor::try_from(state.dst_rgb)
+                .map_err(|_| invalid("Unknown destination RGB blend factor"))?;
+            color.rgb_blend_operation = metal::BlendOperation::try_from(state.rgb_op)
+                .map_err(|_| invalid("Unknown RGB blend operation"))?;
+            color.source_alpha_blend_factor = metal::BlendFactor::try_from(state.src_alpha)
+                .map_err(|_| invalid("Unknown source alpha blend factor"))?;
+            color.destination_alpha_blend_factor = metal::BlendFactor::try_from(state.dst_alpha)
+                .map_err(|_| invalid("Unknown destination alpha blend factor"))?;
+            color.alpha_blend_operation = metal::BlendOperation::try_from(state.alpha_op)
+                .map_err(|_| invalid("Unknown alpha blend operation"))?;
+            color.write_mask = metal::ColorWriteMask::try_from(state.write_mask)
+                .map_err(|_| invalid("Unknown color write mask"))?;
+            descriptor.color_attachments[index] = Some(color);
         }
     }
     if r.depth_format != 0 {
@@ -492,6 +510,6 @@ static COMPILER: Compiler = Compiler {
     compile_compute: compute::compile_compute,
 };
 #[no_mangle]
-pub extern "C" fn MMAIRCompilerV2() -> *const Compiler {
+pub extern "C" fn MMAIRCompilerV3() -> *const Compiler {
     &COMPILER
 }

@@ -58,14 +58,15 @@ See [MaliMetal build instructions](MaliMetal/README.md).
 Run `40090751567` created a native Vulkan device after fixes to assembly
 freshness, IOKit connection discovery and physical cache-address conversion.
 The updated frontend passed Metal registration and reached CoreAnimation shader
-loading. Its library now implements the observed function-descriptor call;
-that update is compiled and awaits a phone check. A separate shared-cache
+loading. The function-descriptor call subsequently passed on the phone and
+reached a missing MRT/blending path. That path is now implemented and compiled,
+with phone validation pending. A separate shared-cache
 metadata failure affects SpringBoard and several services and remains under
 investigation. These milestones do not establish GPU job completion or rendering.
 
 Compilation and offline shader validation do not prove that the stock Metal loader,
 PanVK, kernel GPU transport and presentation work together on the phone. Full
-Metal or Vulkan conformance is not claimed. Framebuffer fetch, blending, broader
+Metal or Vulkan conformance is not claimed. Framebuffer fetch, broader blend modes,
 texture variants, depth/stencil and multisampling remain among the unsupported
 paths.
 

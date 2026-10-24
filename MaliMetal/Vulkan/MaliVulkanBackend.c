@@ -63,7 +63,7 @@ struct MMVKSampler { MMVKDevice *dev; VkSampler sampler; MMVKSamplerDescriptor d
 struct MMVKPipeline { MMVKDevice *dev; VkPipeline pipeline; VkPipelineLayout layout;
     VkPipelineBindPoint point; VkDescriptorSetLayout sets[4]; uint32_t set_count;
     MMVKBindingLayout bindings[64]; uint32_t binding_count,push_size; VkRenderPass render_pass;
-    MMVKFormat format; uint32_t local_size[3]; };
+    MMVKFormat formats[8]; uint32_t color_count,local_size[3]; };
 struct MMVKComputeProgram { MMVKDevice *dev; MMVKPipeline *definition;
     VkShaderModule module; uint32_t *words; size_t size; char *entry; };
 struct MMVKCommands { MMVKDevice *dev; VkCommandPool pool; VkCommandBuffer cmd;
@@ -72,7 +72,7 @@ struct MMVKCommands { MMVKDevice *dev; VkCommandPool pool; VkCommandBuffer cmd;
     uint64_t bound_bindings;
     uint32_t submitted,in_render,viewport,scissor,descriptor_snapshots;
     VkFramebuffer framebuffers[16]; VkRenderPass render_passes[16];
-    MMVKFormat render_format; MMVKImage *render_target; uint32_t framebuffer_count;
+    MMVKFormat render_formats[8]; MMVKImage *render_targets[8]; uint32_t render_count,framebuffer_count;
     MMVKBuffer *index_buffer; uint64_t index_offset; uint32_t index_element_size;
     struct { MMVKImage *image; uint64_t generation; } images[64]; uint32_t image_count;
 };
@@ -194,6 +194,7 @@ MMVKResult mmvk_device_create(uint32_t connection,const char *path,MMVKDevice **
     CORE_FEATURE(textureCompressionETC2);CORE_FEATURE(textureCompressionASTC_LDR);CORE_FEATURE(textureCompressionBC);
     CORE_FEATURE(shaderStorageImageExtendedFormats);CORE_FEATURE(shaderStorageImageReadWithoutFormat);
     CORE_FEATURE(shaderStorageImageWriteWithoutFormat);
+    CORE_FEATURE(independentBlend);
 #undef CORE_FEATURE
     d->enabled11.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
     d->enabled11.pNext=&d->enabled12;
@@ -235,6 +236,7 @@ MMVKResult mmvk_device_create(uint32_t connection,const char *path,MMVKDevice **
         .max_bound_descriptor_sets=l->maxBoundDescriptorSets,.max_buffer_size=q.max_bo_size};
     d->caps.max_per_stage_sampled_images=l->maxPerStageDescriptorSampledImages;
     d->caps.max_per_stage_samplers=l->maxPerStageDescriptorSamplers;
+    d->caps.max_color_attachments=l->maxColorAttachments<8?l->maxColorAttachments:8;
     d->caps.max_compute_workgroup_invocations=l->maxComputeWorkGroupInvocations;
     d->caps.max_compute_shared_memory_size=l->maxComputeSharedMemorySize;
     if(d->enabled12.shaderFloat16)d->caps.capabilities|=MMVK_CAP_SHADER_FLOAT16;
@@ -689,21 +691,38 @@ MMVKResult mmvk_pipeline_compute_workgroup_size(const MMVKPipeline *p,uint32_t s
     if(!p||!size||p->point!=VK_PIPELINE_BIND_POINT_COMPUTE)return MMVK_ERROR_ARGUMENT;
     memcpy(size,p->local_size,sizeof(p->local_size));return MMVK_OK;
 }
-static VkResult render_pass(MMVKDevice *d,MMVKFormat f,VkRenderPass *out)
+static VkResult render_pass(MMVKDevice *d,const MMVKFormat *formats,uint32_t count,VkRenderPass *out)
 {
-    VkAttachmentDescription a={.format=format(f),.samples=VK_SAMPLE_COUNT_1_BIT,.loadOp=VK_ATTACHMENT_LOAD_OP_LOAD,.storeOp=VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,.stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,.initialLayout=VK_IMAGE_LAYOUT_GENERAL,.finalLayout=VK_IMAGE_LAYOUT_GENERAL};
-    VkAttachmentReference ref={0,VK_IMAGE_LAYOUT_GENERAL};
-    VkSubpassDescription sub={.pipelineBindPoint=VK_PIPELINE_BIND_POINT_GRAPHICS,.colorAttachmentCount=1,.pColorAttachments=&ref};
-    VkRenderPassCreateInfo ci={.sType=VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,.attachmentCount=1,.pAttachments=&a,.subpassCount=1,.pSubpasses=&sub};
+    VkAttachmentDescription attachments[8];VkAttachmentReference refs[8];uint32_t used=0;
+    for(uint32_t n=0;n<count;n++){
+        refs[n]=(VkAttachmentReference){VK_ATTACHMENT_UNUSED,VK_IMAGE_LAYOUT_GENERAL};
+        if(!formats[n])continue;
+        refs[n].attachment=used;
+        attachments[used++]=(VkAttachmentDescription){.format=format(formats[n]),.samples=VK_SAMPLE_COUNT_1_BIT,.loadOp=VK_ATTACHMENT_LOAD_OP_LOAD,.storeOp=VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,.stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,.initialLayout=VK_IMAGE_LAYOUT_GENERAL,.finalLayout=VK_IMAGE_LAYOUT_GENERAL};
+    }
+    VkSubpassDescription sub={.pipelineBindPoint=VK_PIPELINE_BIND_POINT_GRAPHICS,.colorAttachmentCount=count,.pColorAttachments=refs};
+    VkRenderPassCreateInfo ci={.sType=VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,.attachmentCount=used,.pAttachments=attachments,.subpassCount=1,.pSubpasses=&sub};
     return d->CreateRenderPass(d->device,&ci,NULL,out);
 }
 MMVKResult mmvk_render_pipeline_create(MMVKDevice *d,const MMVKRenderPipelineDescriptor *desc,MMVKPipeline **out,MMVKError *e)
 {
-    if(!d||!desc||!out||!format(desc->color_format)||desc->vertex_binding_count>d->caps.max_vertex_buffers||desc->vertex_binding_count>32||desc->vertex_attribute_count>d->caps.max_vertex_attributes||desc->vertex_attribute_count>32||
-        (desc->vertex_binding_count&&!desc->vertex_bindings)||(desc->vertex_attribute_count&&!desc->vertex_attributes)||desc->topology>5||desc->blend.write_mask&~15u)return errorf(e,MMVK_ERROR_ARGUMENT,0,"invalid render pipeline descriptor");
+    if(!d||!desc||!out)return errorf(e,MMVK_ERROR_ARGUMENT,0,"missing render pipeline descriptor");
+    MMVKRenderPipelineDescriptor normalized=*desc;
+    if(!normalized.color_attachment_count){normalized.color_attachment_count=1;normalized.color_formats[0]=desc->color_format;normalized.color_blends[0]=desc->blend;}
+    desc=&normalized;
+    if(desc->color_attachment_count>8||desc->color_attachment_count>d->properties.limits.maxColorAttachments||desc->vertex_binding_count>d->caps.max_vertex_buffers||desc->vertex_binding_count>32||desc->vertex_attribute_count>d->caps.max_vertex_attributes||desc->vertex_attribute_count>32||
+        (desc->vertex_binding_count&&!desc->vertex_bindings)||(desc->vertex_attribute_count&&!desc->vertex_attributes)||desc->topology>5)return errorf(e,MMVK_ERROR_ARGUMENT,0,"invalid render pipeline descriptor");
+    uint32_t active=0;
+    for(uint32_t n=0;n<desc->color_attachment_count;n++){
+        if(!desc->color_formats[n])continue;
+        active++;
+        if(!format(desc->color_formats[n])||(desc->color_blends[n].write_mask&~15u))return errorf(e,MMVK_ERROR_ARGUMENT,0,"invalid render attachment format or mask");
+    }
+    if(!active)return errorf(e,MMVK_ERROR_ARGUMENT,0,"render pipeline has no color attachments");
     *out=NULL;MMVKPipeline *p=calloc(1,sizeof(*p));if(!p)return errorf(e,MMVK_ERROR_MEMORY,0,"pipeline allocation failed");
-    p->dev=d;p->point=VK_PIPELINE_BIND_POINT_GRAPHICS;p->format=desc->color_format;
+    p->dev=d;p->point=VK_PIPELINE_BIND_POINT_GRAPHICS;p->color_count=desc->color_attachment_count;
+    memcpy(p->formats,desc->color_formats,sizeof(p->formats));
     VkShaderModule modules[2]={0};
     MMVKResult result=pipeline_layout(p,&desc->layout,e);if(result)goto done;
     result=shader_module(d,&desc->vertex,&modules[0],e);if(result)goto done;
@@ -723,10 +742,21 @@ MMVKResult mmvk_render_pipeline_create(MMVKDevice *d,const MMVKRenderPipelineDes
         for(uint32_t k=0;k<n;k++)if(attrs[k].location==a->location){result=errorf(e,MMVK_ERROR_ARGUMENT,0,"duplicate vertex location");goto done;}
         attrs[n]=(VkVertexInputAttributeDescription){a->location,a->binding,(VkFormat)a->format,a->offset};
     }
-    const MMVKBlend *blend=&desc->blend;
-    if(blend->enabled&&(blend->src_rgb>18||blend->dst_rgb>18||blend->src_alpha>18||blend->dst_alpha>18||blend->rgb_op>4||blend->alpha_op>4)){result=errorf(e,MMVK_ERROR_UNSUPPORTED,0,"blend mode unsupported");goto done;}
-    if(blend->enabled&&!d->enabled_features.dualSrcBlend&&(blend->src_rgb>=15||blend->dst_rgb>=15||blend->src_alpha>=15||blend->dst_alpha>=15)){result=errorf(e,MMVK_ERROR_UNSUPPORTED,0,"dual-source blend is not enabled");goto done;}
-    VkResult r=render_pass(d,desc->color_format,&p->render_pass);if(r){result=vkresult(e,r,"vkCreateRenderPass");goto done;}
+    VkPipelineColorBlendAttachmentState ba[8]={0};
+    for(uint32_t n=0;n<desc->color_attachment_count;n++){
+        const MMVKBlend *blend=&desc->color_blends[n];
+        if(blend->enabled&&(blend->src_rgb>18||blend->dst_rgb>18||blend->src_alpha>18||blend->dst_alpha>18||blend->rgb_op>4||blend->alpha_op>4)){result=errorf(e,MMVK_ERROR_UNSUPPORTED,0,"blend mode unsupported");goto done;}
+        if(blend->enabled&&((blend->src_rgb>=10&&blend->src_rgb<=13)||(blend->dst_rgb>=10&&blend->dst_rgb<=13)||(blend->src_alpha>=10&&blend->src_alpha<=13)||(blend->dst_alpha>=10&&blend->dst_alpha<=13))){result=errorf(e,MMVK_ERROR_UNSUPPORTED,0,"constant blend factors require blend-color state support");goto done;}
+        if(blend->enabled&&!d->enabled_features.dualSrcBlend&&(blend->src_rgb>=15||blend->dst_rgb>=15||blend->src_alpha>=15||blend->dst_alpha>=15)){result=errorf(e,MMVK_ERROR_UNSUPPORTED,0,"dual-source blend is not enabled");goto done;}
+        ba[n]=(VkPipelineColorBlendAttachmentState){.blendEnable=!!blend->enabled,.srcColorBlendFactor=(VkBlendFactor)blend->src_rgb,.dstColorBlendFactor=(VkBlendFactor)blend->dst_rgb,.colorBlendOp=(VkBlendOp)blend->rgb_op,
+            .srcAlphaBlendFactor=(VkBlendFactor)blend->src_alpha,.dstAlphaBlendFactor=(VkBlendFactor)blend->dst_alpha,.alphaBlendOp=(VkBlendOp)blend->alpha_op,.colorWriteMask=blend->write_mask};
+        if(!d->enabled_features.independentBlend&&n&&memcmp(&ba[0],&ba[n],sizeof(ba[n]))){result=errorf(e,MMVK_ERROR_UNSUPPORTED,0,"independent attachment blending is not enabled");goto done;}
+        if(blend->enabled&&desc->color_formats[n]){
+            VkFormatProperties props;d->GetPhysicalDeviceFormatProperties(d->physical,format(desc->color_formats[n]),&props);
+            if(!(props.optimalTilingFeatures&VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT)){result=errorf(e,MMVK_ERROR_UNSUPPORTED,0,"render format cannot blend");goto done;}
+        }
+    }
+    VkResult r=render_pass(d,desc->color_formats,desc->color_attachment_count,&p->render_pass);if(r){result=vkresult(e,r,"vkCreateRenderPass");goto done;}
     VkPipelineShaderStageCreateInfo ss[2]={{.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,.stage=VK_SHADER_STAGE_VERTEX_BIT,.module=modules[0],.pName=desc->vertex.entry},
         {.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,.stage=VK_SHADER_STAGE_FRAGMENT_BIT,.module=modules[1],.pName=desc->fragment.entry}};
     VkPipelineVertexInputStateCreateInfo vi={.sType=VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,.vertexBindingDescriptionCount=desc->vertex_binding_count,.pVertexBindingDescriptions=bindings,.vertexAttributeDescriptionCount=desc->vertex_attribute_count,.pVertexAttributeDescriptions=attrs};
@@ -734,9 +764,7 @@ MMVKResult mmvk_render_pipeline_create(MMVKDevice *d,const MMVKRenderPipelineDes
     VkPipelineViewportStateCreateInfo vp={.sType=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,.viewportCount=1,.scissorCount=1};
     VkPipelineRasterizationStateCreateInfo rs={.sType=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,.polygonMode=VK_POLYGON_MODE_FILL,.cullMode=VK_CULL_MODE_NONE,.frontFace=VK_FRONT_FACE_COUNTER_CLOCKWISE,.lineWidth=1};
     VkPipelineMultisampleStateCreateInfo ms={.sType=VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,.rasterizationSamples=VK_SAMPLE_COUNT_1_BIT};
-    VkPipelineColorBlendAttachmentState ba={.blendEnable=!!blend->enabled,.srcColorBlendFactor=(VkBlendFactor)blend->src_rgb,.dstColorBlendFactor=(VkBlendFactor)blend->dst_rgb,.colorBlendOp=(VkBlendOp)blend->rgb_op,
-        .srcAlphaBlendFactor=(VkBlendFactor)blend->src_alpha,.dstAlphaBlendFactor=(VkBlendFactor)blend->dst_alpha,.alphaBlendOp=(VkBlendOp)blend->alpha_op,.colorWriteMask=blend->write_mask};
-    VkPipelineColorBlendStateCreateInfo bs={.sType=VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,.attachmentCount=1,.pAttachments=&ba};
+    VkPipelineColorBlendStateCreateInfo bs={.sType=VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,.attachmentCount=desc->color_attachment_count,.pAttachments=ba};
     VkDynamicState dynamic[]={VK_DYNAMIC_STATE_VIEWPORT,VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo ds={.sType=VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,.dynamicStateCount=2,.pDynamicStates=dynamic};
     VkGraphicsPipelineCreateInfo ci={.sType=VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,.stageCount=2,.pStages=ss,.pVertexInputState=&vi,.pInputAssemblyState=&ia,
@@ -780,10 +808,15 @@ MMVKResult mmvk_sampler_create(MMVKDevice *d,const MMVKSamplerDescriptor *desc,M
     if(r){free(s);return vkresult(e,r,"vkCreateSampler");}*out=s;return MMVK_OK;
 }
 void mmvk_sampler_destroy(MMVKSampler *s){if(s){s->dev->DestroySampler(s->dev->device,s->sampler,NULL);free(s);}}
+static int render_compatible(const MMVKCommands *c,const MMVKPipeline *p)
+{
+    return p->point==VK_PIPELINE_BIND_POINT_GRAPHICS&&p->color_count==c->render_count&&
+        !memcmp(p->formats,c->render_formats,p->color_count*sizeof(p->formats[0]));
+}
 MMVKResult mmvk_commands_bind_pipeline(MMVKCommands *c,MMVKPipeline *p,MMVKError *e)
 {
     if(recording(c,e))return MMVK_ERROR_STATE;
-    if(!p||p->dev!=c->dev||(c->in_render&&(p->point!=VK_PIPELINE_BIND_POINT_GRAPHICS||p->format!=c->render_format)))return errorf(e,MMVK_ERROR_ARGUMENT,0,"pipeline type or render format mismatch");
+    if(!p||p->dev!=c->dev||(c->in_render&&!render_compatible(c,p)))return errorf(e,MMVK_ERROR_ARGUMENT,0,"pipeline type or render format mismatch");
     if(c->pipeline==p)return MMVK_OK;
     c->pipeline=p;c->bound_bindings=0;
     c->dev->CmdBindPipeline(c->cmd,p->point,p->pipeline);return MMVK_OK;
@@ -809,7 +842,8 @@ MMVKResult mmvk_commands_bind_buffer(MMVKCommands *c,uint32_t set,uint32_t bindi
 static MMVKResult prepare_descriptor_image(MMVKCommands *c,MMVKImage *i,uint32_t usage,MMVKError *e)
 {
     if(recording(c,e))return MMVK_ERROR_STATE;
-    if(!c->pipeline||!i||i->dev!=c->dev||!(i->desc.usage&usage)||!i->view||i==c->render_target)
+    uint32_t feedback=0;for(uint32_t n=0;n<c->render_count;n++)if(c->render_targets[n]==i)feedback=1;
+    if(!c->pipeline||!i||i->dev!=c->dev||!(i->desc.usage&usage)||!i->view||feedback)
         return errorf(e,MMVK_ERROR_ARGUMENT,0,"invalid descriptor image usage or feedback loop");
     /* Texture uploads/clears transition to GENERAL before render encoding.
      * In-pass image transitions are refused; the frontend prepares snapshots
@@ -895,19 +929,39 @@ MMVKResult mmvk_commands_dispatch(MMVKCommands *c,uint32_t x,uint32_t y,uint32_t
 }
 MMVKResult mmvk_commands_begin_render(MMVKCommands *c,MMVKImage *i,uint32_t clear,const float rgba[4],MMVKError *e)
 {
+    MMVKRenderTarget target={.image=i,.clear=clear};
+    if(rgba)memcpy(target.rgba,rgba,sizeof(target.rgba));
+    return mmvk_commands_begin_render_targets(c,&target,1,e);
+}
+MMVKResult mmvk_commands_begin_render_targets(MMVKCommands *c,const MMVKRenderTarget *targets,uint32_t count,MMVKError *e)
+{
     if(recording(c,e))return MMVK_ERROR_STATE;
-    if(!i||i->dev!=c->dev||!(i->desc.usage&MMVK_IMAGE_RENDER_TARGET)||c->in_render||c->framebuffer_count==16)return errorf(e,MMVK_ERROR_ARGUMENT,0,"invalid render target or open pass");
-    MMVKResult result=clear?mmvk_commands_clear_image(c,i,rgba,e):image_access(c,i,e);if(result)return result;
-    VkRenderPass pass;VkResult r=render_pass(c->dev,i->desc.format,&pass);if(r)return vkresult(e,r,"vkCreateRenderPass");
-    VkFramebufferCreateInfo fi={.sType=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,.renderPass=pass,.attachmentCount=1,.pAttachments=&i->view,.width=i->desc.width,.height=i->desc.height,.layers=1};
+    if(!targets||!count||count>8||count>c->dev->properties.limits.maxColorAttachments||c->in_render||c->framebuffer_count==16)return errorf(e,MMVK_ERROR_ARGUMENT,0,"invalid render targets or open pass");
+    MMVKFormat formats[8]={0};VkImageView views[8];uint32_t used=0,width=0,height=0;
+    for(uint32_t n=0;n<count;n++){
+        MMVKImage *i=targets[n].image;if(!i)continue;
+        if(i->dev!=c->dev||!(i->desc.usage&MMVK_IMAGE_RENDER_TARGET)||
+           (used&&(width!=i->desc.width||height!=i->desc.height)))return errorf(e,MMVK_ERROR_ARGUMENT,0,"incompatible render attachment");
+        for(uint32_t k=0;k<n;k++)if(targets[k].image==i)return errorf(e,MMVK_ERROR_ARGUMENT,0,"aliased render attachments");
+        width=i->desc.width;height=i->desc.height;formats[n]=i->desc.format;views[used++]=i->view;
+    }
+    if(!used)return errorf(e,MMVK_ERROR_ARGUMENT,0,"render pass has no attachments");
+    for(uint32_t n=0;n<count;n++){
+        MMVKImage *i=targets[n].image;if(!i)continue;
+        MMVKResult result=targets[n].clear?mmvk_commands_clear_image(c,i,targets[n].rgba,e):image_access(c,i,e);if(result)return result;
+    }
+    VkRenderPass pass;VkResult r=render_pass(c->dev,formats,count,&pass);if(r)return vkresult(e,r,"vkCreateRenderPass");
+    VkFramebufferCreateInfo fi={.sType=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,.renderPass=pass,.attachmentCount=used,.pAttachments=views,.width=width,.height=height,.layers=1};
     VkFramebuffer fb;r=c->dev->CreateFramebuffer(c->dev->device,&fi,NULL,&fb);
     if(r){c->dev->DestroyRenderPass(c->dev->device,pass,NULL);return vkresult(e,r,"vkCreateFramebuffer");}
     c->render_passes[c->framebuffer_count]=pass;c->framebuffers[c->framebuffer_count++]=fb;
-    VkRenderPassBeginInfo bi={.sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,.renderPass=pass,.framebuffer=fb,.renderArea={{0,0},{i->desc.width,i->desc.height}}};
+    VkRenderPassBeginInfo bi={.sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,.renderPass=pass,.framebuffer=fb,.renderArea={{0,0},{width,height}}};
     memory_barrier(c);
-    c->dev->CmdBeginRenderPass(c->cmd,&bi,VK_SUBPASS_CONTENTS_INLINE);c->in_render=1;c->render_format=i->desc.format;c->render_target=i;
-    mmvk_commands_set_viewport(c,0,0,(float)i->desc.width,(float)i->desc.height,0,1,NULL);
-    mmvk_commands_set_scissor(c,0,0,i->desc.width,i->desc.height,NULL);return MMVK_OK;
+    c->dev->CmdBeginRenderPass(c->cmd,&bi,VK_SUBPASS_CONTENTS_INLINE);c->in_render=1;c->render_count=count;
+    memcpy(c->render_formats,formats,sizeof(formats));
+    for(uint32_t n=0;n<count;n++)c->render_targets[n]=targets[n].image;
+    mmvk_commands_set_viewport(c,0,0,(float)width,(float)height,0,1,NULL);
+    mmvk_commands_set_scissor(c,0,0,width,height,NULL);return MMVK_OK;
 }
 MMVKResult mmvk_commands_set_viewport(MMVKCommands *c,float x,float y,float w,float h,float near,float far,MMVKError *e)
 {
@@ -934,7 +988,7 @@ MMVKResult mmvk_commands_bind_vertex_buffer(MMVKCommands *c,uint32_t binding,MMV
 MMVKResult mmvk_commands_draw(MMVKCommands *c,uint32_t start,uint32_t count,uint32_t instances,uint32_t first_instance,MMVKError *e)
 {
     if(recording(c,e))return MMVK_ERROR_STATE;
-    if(!c->in_render||!c->pipeline||c->pipeline->point!=VK_PIPELINE_BIND_POINT_GRAPHICS||c->pipeline->format!=c->render_format||!c->viewport||!c->scissor)return errorf(e,MMVK_ERROR_STATE,0,"draw requires a compatible render pass and pipeline");
+    if(!c->in_render||!c->pipeline||!render_compatible(c,c->pipeline)||!c->viewport||!c->scissor)return errorf(e,MMVK_ERROR_STATE,0,"draw requires a compatible render pass and pipeline");
     MMVKResult result=bind_snapshot(c,e);if(result)return result;
     c->dev->CmdDraw(c->cmd,count,instances,start,first_instance);return MMVK_OK;
 }
@@ -953,7 +1007,7 @@ MMVKResult mmvk_commands_bind_index_buffer(MMVKCommands *c,MMVKBuffer *b,uint64_
 MMVKResult mmvk_commands_draw_indexed(MMVKCommands *c,uint32_t count,uint32_t instances,uint32_t first,int32_t base,uint32_t first_instance,MMVKError *e)
 {
     if(recording(c,e))return MMVK_ERROR_STATE;
-    if(!c->in_render||!c->pipeline||c->pipeline->point!=VK_PIPELINE_BIND_POINT_GRAPHICS||c->pipeline->format!=c->render_format||!c->viewport||!c->scissor||!c->index_buffer)
+    if(!c->in_render||!c->pipeline||!render_compatible(c,c->pipeline)||!c->viewport||!c->scissor||!c->index_buffer)
         return errorf(e,MMVK_ERROR_STATE,0,"indexed draw requires a compatible pass, pipeline and index buffer");
     uint64_t available=(c->index_buffer->size-c->index_offset)/c->index_element_size;
     if(first>available||count>available-first)return errorf(e,MMVK_ERROR_ARGUMENT,0,"indexed draw exceeds the bound index buffer");
@@ -964,5 +1018,5 @@ MMVKResult mmvk_commands_end_render(MMVKCommands *c,MMVKError *e)
 {
     if(recording(c,e))return MMVK_ERROR_STATE;
     if(!c->in_render)return errorf(e,MMVK_ERROR_STATE,0,"no open render pass");
-    c->dev->CmdEndRenderPass(c->cmd);c->in_render=0;c->render_target=NULL;return MMVK_OK;
+    c->dev->CmdEndRenderPass(c->cmd);c->in_render=0;c->render_count=0;memset(c->render_targets,0,sizeof(c->render_targets));return MMVK_OK;
 }

@@ -80,7 +80,7 @@ def main():
     artifacts = [path for path in (manifest_dir / 'target' / args.target / 'release').glob('*MaliMetalAIR*')
                  if path.suffix in ('.a', '.lib', '.dll', '.dylib')]
     hashes = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in artifacts if path.is_file()}
-    result = {'compiler_revision': PIN, 'compiler_abi': 2, 'compute_abi': 1, 'target': args.target,
+    result = {'compiler_revision': PIN, 'compiler_abi': 3, 'compute_abi': 1, 'target': args.target,
               'compiler_tree': subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD^{tree}'], text=True).strip(),
               'rustc_version': subprocess.check_output(['rustc', '--version'], text=True).strip(),
               'cargo_lock_sha256': hashlib.sha256((manifest_dir / 'Cargo.lock').read_bytes()).hexdigest(),

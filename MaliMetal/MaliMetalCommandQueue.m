@@ -45,8 +45,8 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     MaliMetalCommandBuffer *_buffer;
     BOOL _ended;
     id _pipeline;
-    MTLPixelFormat _colorFormat;
-    id<MTLTexture> _targetTexture;
+    MTLPixelFormat _colorFormats[8];
+    id<MTLTexture> _targetTextures[8];
     id<MTLTexture> _vertexTextures[128], _fragmentTextures[128];
     id<MTLSamplerState> _vertexSamplers[16], _fragmentSamplers[16];
     id<MTLBuffer> _vertexBuffers[31];
@@ -820,46 +820,76 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
         [self release];
         return nil;
     }
-    for (NSUInteger i = 1; i < 8; i++)
-        if ([[descriptor colorAttachments] objectAtIndexedSubscript:i].texture) {
-            [buffer recordUnsupported:"Multiple color attachments are not implemented"];
+    struct {
+        void *textures[8];
+        BOOL preserve[8], clear[8];
+        MTLClearColor colors[8];
+        uint32_t count, width, height;
+    } pass = {0};
+    for (NSUInteger i = 0; i < 8; i++) {
+        MTLRenderPassColorAttachmentDescriptor *attachment =
+            [[descriptor colorAttachments] objectAtIndexedSubscript:i];
+        id<MTLTexture> texture = [attachment texture];
+        if (!texture)
+            continue;
+        BOOL previouslyWritten = [buffer hasWrittenTexture:texture];
+        if (![buffer writeTexture:texture] || [attachment level] || [attachment slice] ||
+            [attachment depthPlane] || [attachment resolveTexture] ||
+            [attachment loadAction] > MTLLoadActionClear ||
+            [attachment storeAction] != MTLStoreActionStore ||
+            ([texture usage] && !([texture usage] & MTLTextureUsageRenderTarget)) ||
+            [texture width] > UINT32_MAX || [texture height] > UINT32_MAX ||
+            (pass.count && (pass.width != [texture width] || pass.height != [texture height]))) {
+            [buffer recordUnsupported:
+                "Unsupported render attachment, dimensions, subresource, usage or store action"];
             [self release];
             return nil;
         }
-    MTLRenderPassColorAttachmentDescriptor *attachment =
-        [[descriptor colorAttachments] objectAtIndexedSubscript:0];
-    id<MTLTexture> texture = [attachment texture];
-    BOOL previouslyWritten = [buffer hasWrittenTexture:texture];
-    if (!texture || ![buffer writeTexture:texture] || [attachment level] || [attachment slice] ||
-        [attachment depthPlane] || [attachment resolveTexture] ||
-        [attachment loadAction] > MTLLoadActionClear ||
-        [attachment storeAction] != MTLStoreActionStore ||
-        ([texture usage] && !([texture usage] & MTLTextureUsageRenderTarget))) {
-        [buffer
-            recordUnsupported:"Unsupported render attachment, subresource, usage or store action"];
+        for (NSUInteger k = 0; k < i; k++)
+            if (texture == _targetTextures[k] ||
+                ([texture iosurface] && [texture iosurface] == [_targetTextures[k] iosurface])) {
+                [buffer recordUnsupported:"Render attachments alias the same texture"];
+                [self release];
+                return nil;
+            }
+        _colorFormats[i] = [texture pixelFormat];
+        _targetTextures[i] = texture;
+        pass.textures[i] = (void *)texture;
+        pass.preserve[i] = !previouslyWritten && [attachment loadAction] == MTLLoadActionLoad;
+        pass.clear[i] = [attachment loadAction] == MTLLoadActionClear;
+        pass.colors[i] = [attachment clearColor];
+        pass.count = (uint32_t)i + 1;
+        pass.width = (uint32_t)[texture width];
+        pass.height = (uint32_t)[texture height];
+    }
+    if (!pass.count) {
+        [buffer recordUnsupported:"Render pass requires a color attachment"];
         [self release];
         return nil;
     }
-    _colorFormat = [texture pixelFormat];
-    _targetTexture = texture;
-    void *rawTexture = (void *)texture;
-    BOOL preserve = !previouslyWritten && [attachment loadAction] == MTLLoadActionLoad;
-    BOOL clear = [attachment loadAction] == MTLLoadActionClear;
-    MTLClearColor color = [attachment clearColor];
     [buffer appendOperation:^MMVKResult(MMVKCommands *commands, MMVKError *error) {
-        id target = (id)rawTexture;
-        if (![target maliPrepareImage:preserve error:error])
-            return error->code ? error->code : MMVK_ERROR_IO;
-        float rgba[] = {(float)color.red, (float)color.green, (float)color.blue,
-                        (float)color.alpha};
+        MMVKRenderTarget targets[8] = {0};
+        for (uint32_t i = 0; i < pass.count; i++) {
+            id target = (id)pass.textures[i];
+            if (!target)
+                continue;
+            if (![target maliPrepareImage:pass.preserve[i] error:error])
+                return error->code ? error->code : MMVK_ERROR_IO;
+            targets[i].image = [target maliImage];
+            targets[i].clear = pass.clear[i];
+            MTLClearColor color = pass.colors[i];
+            targets[i].rgba[0] = (float)color.red;
+            targets[i].rgba[1] = (float)color.green;
+            targets[i].rgba[2] = (float)color.blue;
+            targets[i].rgba[3] = (float)color.alpha;
+        }
         MMVKResult result =
-            mmvk_commands_begin_render(commands, [target maliImage], clear, rgba, error);
+            mmvk_commands_begin_render_targets(commands, targets, pass.count, error);
         if (result == MMVK_OK)
-            result = mmvk_commands_set_viewport(commands, 0, [target height], [target width],
-                                                -(float)[target height], 0, 1, error);
+            result = mmvk_commands_set_viewport(commands, 0, pass.height, pass.width,
+                                                -(float)pass.height, 0, 1, error);
         if (result == MMVK_OK)
-            result = mmvk_commands_set_scissor(commands, 0, 0, (uint32_t)[target width],
-                                               (uint32_t)[target height], error);
+            result = mmvk_commands_set_scissor(commands, 0, 0, pass.width, pass.height, error);
         return result;
     }];
     if ([buffer error]) {
@@ -886,10 +916,11 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
         [_buffer recordUnsupported:"Render pipeline has no executable native shader"];
         return;
     }
-    if ([(id)pipeline maliColorFormat] != _colorFormat) {
-        [_buffer recordUnsupported:"Pipeline format differs from render target"];
-        return;
-    }
+    for (NSUInteger i = 0; i < 8; i++)
+        if ([(id)pipeline maliColorFormatAtIndex:i] != _colorFormats[i]) {
+            [_buffer recordUnsupported:"Pipeline formats differ from render attachments"];
+            return;
+        }
     if (![_buffer useResource:(id)pipeline])
         return;
     _pipeline = (id)pipeline;
@@ -1171,8 +1202,12 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
             id<MTLSamplerState> sampler = binding->metal_stage == MM_SHADER_VERTEX
                                               ? _vertexSamplers[binding->sampler_index]
                                               : _fragmentSamplers[binding->sampler_index];
-            if (!sampler || !texture || texture == _targetTexture ||
-                ([texture iosurface] && [texture iosurface] == [_targetTexture iosurface])) {
+            BOOL aliases = NO;
+            for (NSUInteger k = 0; k < 8; k++)
+                if (texture == _targetTextures[k] ||
+                    ([texture iosurface] && [texture iosurface] == [_targetTextures[k] iosurface]))
+                    aliases = YES;
+            if (!sampler || !texture || aliases) {
                 [_buffer recordUnsupported:
                              "Sampled image/sampler is missing or aliases the render target"];
                 return NO;

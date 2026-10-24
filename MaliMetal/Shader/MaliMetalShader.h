@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-#define MM_SHADER_ABI_VERSION 2u
+#define MM_SHADER_ABI_VERSION 3u
 #define MM_SHADER_NO_FRAGMENT UINT32_MAX
 
 typedef enum MMShaderStatus {
@@ -125,6 +125,9 @@ typedef struct MMShaderBackendVertexBinding {
 typedef struct MMShaderBackendVertexAttribute {
     uint32_t location, binding, format, offset;
 } MMShaderBackendVertexAttribute;
+typedef struct MMShaderBackendColor {
+    uint32_t format, enabled, src_rgb, dst_rgb, rgb_op, src_alpha, dst_alpha, alpha_op, write_mask;
+} MMShaderBackendColor;
 typedef struct MMShaderBackendPlan {
     uint32_t binding_count, push_count, vertex_binding_count, vertex_attribute_count;
     uint32_t push_constant_size, color_format, topology;
@@ -132,6 +135,8 @@ typedef struct MMShaderBackendPlan {
     MMShaderBackendPush pushes[MM_SHADER_MAX_PUSH_FIELDS];
     MMShaderBackendVertexBinding vertex_bindings[31];
     MMShaderBackendVertexAttribute vertex_attributes[31];
+    uint32_t color_attachment_count;
+    MMShaderBackendColor colors[8];
 } MMShaderBackendPlan;
 
 typedef struct MMShaderRenderOutput {
@@ -172,6 +177,8 @@ typedef struct MMShaderCompilerRequest {
     size_t fragment_constant_count;
     uint32_t color_formats[8]; /* MTLPixelFormat; 0 = no attachment. */
     uint32_t depth_format, stencil_format, sample_count, timeout_ms;
+    /* Metal numeric blend factors, operations and channel mask, by attachment. */
+    MMShaderBackendColor color_states[8];
 } MMShaderCompilerRequest;
 
 struct MMShaderComputeRequest;

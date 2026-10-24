@@ -45,20 +45,30 @@ MMVKResult MMShaderVulkanDescribe(const MMShaderRenderOutput *output,
                                       : "AIR compiler did not provide a supported execution plan");
     if (plan->binding_count > MM_SHADER_MAX_BINDINGS ||
         plan->push_count > MM_SHADER_MAX_PUSH_FIELDS || plan->vertex_binding_count > 31 ||
-        plan->vertex_attribute_count > 31)
+        plan->vertex_attribute_count > 31 || !plan->color_attachment_count ||
+        plan->color_attachment_count > 8)
         return unsupported(error, "Translated execution plan exceeds its ABI bounds");
-    if (requested->blend.enabled || requested->blend.write_mask != 15)
-        return unsupported(
-            error,
-            "Translated execution currently requires disabled blending and all color channels");
     if (requested->topology != plan->topology || plan->topology != 3)
         return unsupported(error, "Translated execution currently supports triangle-list topology");
-    MMVKFormat format = backend_format(plan->color_format);
-    if (!format || requested->color_format != format)
+    uint32_t requestedCount = requested->color_attachment_count ? requested->color_attachment_count : 1;
+    if (requestedCount != plan->color_attachment_count)
         return unsupported(error,
-                           "Render target format differs from the compiled shader attachment");
+                           "Render target count differs from the compiled shader attachments");
 
     MMVKRenderPipelineDescriptor *descriptor = &description->descriptor;
+    descriptor->color_attachment_count = plan->color_attachment_count;
+    for (uint32_t i = 0; i < plan->color_attachment_count; i++) {
+        const MMShaderBackendColor *color = plan->colors + i;
+        MMVKFormat format = color->format ? backend_format(color->format) : 0;
+        MMVKFormat requestedFormat = requested->color_attachment_count
+                                        ? requested->color_formats[i] : requested->color_format;
+        if ((color->format && !format) || format != requestedFormat)
+            return unsupported(error,
+                               "Render target format differs from the compiled shader attachment");
+        descriptor->color_formats[i] = format;
+        descriptor->color_blends[i] = (MMVKBlend){color->enabled, color->src_rgb, color->dst_rgb,
+            color->rgb_op, color->src_alpha, color->dst_alpha, color->alpha_op, color->write_mask};
+    }
     for (uint32_t i = 0; i < output->module_count; ++i) {
         const MMShaderStageModule *module = output->modules + i;
         if (!module->words || module->word_count < 5 || module->words[0] != 0x07230203 ||
@@ -114,8 +124,8 @@ MMVKResult MMShaderVulkanDescribe(const MMShaderRenderOutput *output,
     descriptor->vertex_binding_count = plan->vertex_binding_count;
     descriptor->vertex_attributes = description->vertex_attributes;
     descriptor->vertex_attribute_count = plan->vertex_attribute_count;
-    descriptor->color_format = format;
-    descriptor->blend = requested->blend;
+    descriptor->color_format = descriptor->color_formats[0];
+    descriptor->blend = descriptor->color_blends[0];
     descriptor->topology = plan->topology;
     return MMVK_OK;
 }

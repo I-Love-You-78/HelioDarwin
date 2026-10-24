@@ -1154,28 +1154,29 @@ static BOOL MaliMetalSamplerAddress(NSUInteger mode, uint32_t *native) {
 @interface MaliMetalRenderPipeline : MaliMetalObject <MTLRenderPipelineState> {
     MaliMetalDevice *_device;
     MMVKPipeline *_pipeline;
-    MTLPixelFormat _colorFormat;
+    MTLPixelFormat _colorFormats[8];
     MMShaderRenderOutput _output;
     MMShaderVulkanConstants _constants;
     NSUInteger _constantAllocatedSize;
 }
 - (instancetype)initWithDevice:(MaliMetalDevice *)device
                       pipeline:(MMVKPipeline *)pipeline
-                   colorFormat:(MTLPixelFormat)format
+                  colorFormats:(const uint32_t *)formats
                         output:(MMShaderRenderOutput *)output
                      constants:(MMShaderVulkanConstants *)constants;
 @end
 @implementation MaliMetalRenderPipeline
 - (instancetype)initWithDevice:(MaliMetalDevice *)device
                       pipeline:(MMVKPipeline *)pipeline
-                   colorFormat:(MTLPixelFormat)format
+                  colorFormats:(const uint32_t *)formats
                         output:(MMShaderRenderOutput *)output
                      constants:(MMShaderVulkanConstants *)constants {
     self = [super init];
     if (self) {
         _device = [device retain];
         _pipeline = pipeline;
-        _colorFormat = format;
+        for (NSUInteger i = 0; i < 8; i++)
+            _colorFormats[i] = formats[i];
         _output = *output;
         memset(output, 0, sizeof(*output));
         _constants = *constants;
@@ -1202,7 +1203,10 @@ static BOOL MaliMetalSamplerAddress(NSUInteger mode, uint32_t *native) {
     return _pipeline;
 }
 - (MTLPixelFormat)maliColorFormat {
-    return _colorFormat;
+    return _colorFormats[0];
+}
+- (MTLPixelFormat)maliColorFormatAtIndex:(NSUInteger)index {
+    return index < 8 ? _colorFormats[index] : MTLPixelFormatInvalid;
 }
 - (const MMShaderRenderOutput *)maliShaderOutput {
     return &_output;
@@ -1454,9 +1458,9 @@ static void MaliMetalComputeSetError(MMVKError *error, MMVKResult code, const ch
     const MMShaderCompiler *compiler = MMShaderGetNativeCompiler();
     BOOL compute = (caps->capabilities & MMVK_CAP_COMPUTE) && compiler && compiler->compile_compute;
     MMMetalDeviceLimits limits = {0};
-    /* One RGBA8/BGRA8 target, one viewport and no optional tile/MSAA/depth path. */
-    limits.maxFramebufferStorageBits = 32;
-    limits.maxColorAttachments = 1;
+    /* RGBA8/BGRA8 attachments, one viewport and no tile/MSAA/depth path. */
+    limits.maxColorAttachments = caps->max_color_attachments;
+    limits.maxFramebufferStorageBits = 32 * limits.maxColorAttachments;
     limits.maxVertexAttributes = caps->max_vertex_attributes < 31 ? caps->max_vertex_attributes : 31;
     limits.maxVertexBuffers = caps->max_vertex_buffers < 31 ? caps->max_vertex_buffers : 31;
     limits.maxFragmentBuffers = 31;
@@ -1654,7 +1658,8 @@ static void MaliMetalComputeSetError(MMVKError *error, MMVKResult code, const ch
     return [self maxFragmentSamplers];
 }
 - (NSUInteger)maxColorAttachments {
-    return _backend ? 1 : 0;
+    const MMVKCapabilities *c = [self backendCapabilities];
+    return c ? c->max_color_attachments : 0;
 }
 - (NSUInteger)maxTextureWidth2D {
     const MMVKCapabilities *c = [self backendCapabilities];
@@ -1859,30 +1864,45 @@ static void MaliMetalComputeSetError(MMVKError *error, MMVKResult code, const ch
         MTLRenderPipelineColorAttachmentDescriptor *a =
             [[descriptor colorAttachments] objectAtIndexedSubscript:i];
         request.color_formats[i] = [a pixelFormat];
-        if (i && [a pixelFormat])
-            return MaliMetalUnsupported(error, @"Multiple render targets are unsupported");
+        if (![a pixelFormat])
+            continue;
+        native.color_attachment_count = (uint32_t)i + 1;
+        native.color_formats[i] = MaliMetalPixelFormat([a pixelFormat]);
+        if (!native.color_formats[i])
+            return MaliMetalUnsupported(error, @"Render color format is unsupported");
+        MMShaderBackendColor *state = request.color_states + i;
+        state->enabled = [a isBlendingEnabled];
+        state->src_rgb = (uint32_t)[a sourceRGBBlendFactor];
+        state->dst_rgb = (uint32_t)[a destinationRGBBlendFactor];
+        state->rgb_op = (uint32_t)[a rgbBlendOperation];
+        state->src_alpha = (uint32_t)[a sourceAlphaBlendFactor];
+        state->dst_alpha = (uint32_t)[a destinationAlphaBlendFactor];
+        state->alpha_op = (uint32_t)[a alphaBlendOperation];
+        state->write_mask = (uint32_t)[a writeMask];
+        if (state->enabled && ((state->src_rgb >= 11 && state->src_rgb <= 14) ||
+                              (state->dst_rgb >= 11 && state->dst_rgb <= 14) ||
+                              (state->src_alpha >= 11 && state->src_alpha <= 14) ||
+                              (state->dst_alpha >= 11 && state->dst_alpha <= 14)))
+            return MaliMetalUnsupported(error, @"Constant blend factors require blend-color state support");
+        MMVKBlend *blend = native.color_blends + i;
+        blend->enabled = state->enabled;
+        if (!MaliMetalBlendFactor([a sourceRGBBlendFactor], &blend->src_rgb) ||
+            !MaliMetalBlendFactor([a destinationRGBBlendFactor], &blend->dst_rgb) ||
+            !MaliMetalBlendFactor([a sourceAlphaBlendFactor], &blend->src_alpha) ||
+            !MaliMetalBlendFactor([a destinationAlphaBlendFactor], &blend->dst_alpha) ||
+            !MaliMetalBlendOperation([a rgbBlendOperation], &blend->rgb_op) ||
+            !MaliMetalBlendOperation([a alphaBlendOperation], &blend->alpha_op))
+            return MaliMetalUnsupported(error, @"Blend state is unsupported");
+        NSUInteger mask = [a writeMask];
+        if (mask > 15)
+            return MaliMetalUnsupported(error, @"Invalid color write mask");
+        blend->write_mask =
+            ((mask & 8) >> 3) | ((mask & 4) >> 1) | ((mask & 2) << 1) | ((mask & 1) << 3);
     }
-    MTLRenderPipelineColorAttachmentDescriptor *color =
-        [[descriptor colorAttachments] objectAtIndexedSubscript:0];
-    native.color_format = MaliMetalPixelFormat([color pixelFormat]);
-    if (!native.color_format)
-        return MaliMetalUnsupported(error, @"Render color format is unsupported");
-    native.blend.enabled = [color isBlendingEnabled];
-    if (native.blend.enabled)
-        return MaliMetalUnsupported(
-            error, @"AIR blend specialization has not been connected to the shader compiler");
-    if (!MaliMetalBlendFactor([color sourceRGBBlendFactor], &native.blend.src_rgb) ||
-        !MaliMetalBlendFactor([color destinationRGBBlendFactor], &native.blend.dst_rgb) ||
-        !MaliMetalBlendFactor([color sourceAlphaBlendFactor], &native.blend.src_alpha) ||
-        !MaliMetalBlendFactor([color destinationAlphaBlendFactor], &native.blend.dst_alpha) ||
-        !MaliMetalBlendOperation([color rgbBlendOperation], &native.blend.rgb_op) ||
-        !MaliMetalBlendOperation([color alphaBlendOperation], &native.blend.alpha_op))
-        return MaliMetalUnsupported(error, @"Blend state is unsupported");
-    NSUInteger mask = [color writeMask];
-    if (mask > 15)
-        return MaliMetalUnsupported(error, @"Invalid color write mask");
-    native.blend.write_mask =
-        ((mask & 8) >> 3) | ((mask & 4) >> 1) | ((mask & 2) << 1) | ((mask & 1) << 3);
+    if (!native.color_attachment_count)
+        return MaliMetalUnsupported(error, @"Render pipeline requires a color attachment");
+    if (native.color_attachment_count > [self maxColorAttachments])
+        return MaliMetalUnsupported(error, @"Render attachment count exceeds the native device limit");
     if (!_backend) {
         if (error)
             *error = MaliMetalMakeError(MMVK_ERROR_DRIVER_UNAVAILABLE, _backendError.message);
@@ -1956,7 +1976,7 @@ static void MaliMetalComputeSetError(MMVKError *error, MMVKResult code, const ch
     MMShaderRenderOutputReleaseCode(&output);
     id state = [[MaliMetalRenderPipeline alloc] initWithDevice:self
                                                       pipeline:pipeline
-                                                   colorFormat:[color pixelFormat]
+                                                  colorFormats:request.color_formats
                                                         output:&output
                                                      constants:&constants];
     if (!state) {

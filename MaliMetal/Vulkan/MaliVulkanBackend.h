@@ -31,6 +31,7 @@ typedef struct {
     uint32_t max_image_dimension_2d, max_vertex_buffers, max_vertex_attributes;
     uint32_t max_push_constant_size, max_bound_descriptor_sets;
     uint32_t max_per_stage_sampled_images, max_per_stage_samplers;
+    uint32_t max_color_attachments;
     uint32_t max_compute_workgroup_count[3], max_compute_workgroup_size[3];
     uint32_t max_compute_workgroup_invocations, max_compute_shared_memory_size;
     uint32_t subgroup_size;
@@ -123,6 +124,9 @@ typedef struct {
     const MMVKVertexAttribute *vertex_attributes; uint32_t vertex_attribute_count;
     MMVKFormat color_format; MMVKBlend blend;
     uint32_t topology; /* Vulkan VkPrimitiveTopology; triangle-list=3 */
+    uint32_t color_attachment_count;
+    MMVKFormat color_formats[8];
+    MMVKBlend color_blends[8];
 } MMVKRenderPipelineDescriptor;
 MMVKResult mmvk_render_pipeline_create(MMVKDevice *, const MMVKRenderPipelineDescriptor *,
                                        MMVKPipeline **out, MMVKError *);
@@ -152,6 +156,13 @@ MMVKResult mmvk_commands_clear_image(MMVKCommands *, MMVKImage *, const float rg
 MMVKResult mmvk_commands_prepare_image(MMVKCommands *,MMVKImage *,MMVKError *);
 MMVKResult mmvk_commands_begin_render(MMVKCommands *, MMVKImage *, uint32_t clear,
                                       const float rgba[4], MMVKError *);
+typedef struct {
+    MMVKImage *image;
+    uint32_t clear;
+    float rgba[4];
+} MMVKRenderTarget;
+MMVKResult mmvk_commands_begin_render_targets(MMVKCommands *, const MMVKRenderTarget *,
+                                               uint32_t count, MMVKError *);
 MMVKResult mmvk_commands_set_viewport(MMVKCommands *, float x,float y,float width,float height,
                                       float z_near,float z_far, MMVKError *);
 MMVKResult mmvk_commands_set_scissor(MMVKCommands *, int32_t x,int32_t y,

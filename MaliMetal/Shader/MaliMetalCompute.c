@@ -31,7 +31,7 @@ MMShaderStatus MMShaderCompileCompute(const MMShaderCompiler *compiler,
         compiler = MMShaderGetNativeCompiler();
     if (!compiler || compiler->abi_version != MM_SHADER_ABI_VERSION || !compiler->compile_compute)
         return compute_error(error, MM_SHADER_COMPILER_UNAVAILABLE,
-                             "Native AIR compute compiler ABI2 is unavailable");
+                             "Native AIR compiler ABI or compute entry point is unavailable");
     MMShaderComputeRequest request = *options;
     request.library_bytes = MMShaderLibraryBytes(library, &request.library_size);
     request.entry_name = entry->name;

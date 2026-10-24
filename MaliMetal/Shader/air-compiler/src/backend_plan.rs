@@ -44,6 +44,19 @@ pub struct VertexAttribute {
     pub offset: u32,
 }
 #[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Color {
+    pub format: u32,
+    pub enabled: u32,
+    pub src_rgb: u32,
+    pub dst_rgb: u32,
+    pub rgb_op: u32,
+    pub src_alpha: u32,
+    pub dst_alpha: u32,
+    pub alpha_op: u32,
+    pub write_mask: u32,
+}
+#[repr(C)]
 pub struct BackendPlan {
     pub binding_count: u32,
     pub push_count: u32,
@@ -56,6 +69,8 @@ pub struct BackendPlan {
     pub pushes: [Push; 64],
     pub vertex_bindings: [VertexBinding; 31],
     pub vertex_attributes: [VertexAttribute; 31],
+    pub color_attachment_count: u32,
+    pub colors: [Color; 8],
 }
 type Result<T> = std::result::Result<T, String>;
 fn refuse(name: &str) -> String {
@@ -176,10 +191,9 @@ pub fn build(
     if graphics["rasterization_samples"] != 1
         || graphics["max_vertex_amplification_count"] != 1
         || graphics["clip_distances"] != 0
-        || graphics["color_outputs"] != 1
     {
         return Err(refuse(
-            "multisampling, amplification, clip distances or multiple color outputs",
+            "multisampling, amplification or clip distances",
         ));
     }
     plan.topology = number(&graphics["topology"])?;
@@ -187,15 +201,30 @@ pub fn build(
         return Err(refuse("non-triangle topology"));
     }
     let colors = array(&graphics["color_attachments"])?;
-    if colors.len() != 1 || !colors[0]["blend"].is_null() || colors[0]["write_mask"] != 15 {
-        return Err(refuse(
-            "multiple attachments, blending or masked color writes",
-        ));
+    if colors.is_empty() || colors.len() > 8 || number(&graphics["color_outputs"])? & !0xff != 0 {
+        return Err(refuse("this color attachment count"));
     }
-    plan.color_format = number(&colors[0]["format"])?;
-    if ![37, 43, 44, 50].contains(&plan.color_format) {
-        return Err(refuse("this color format"));
+    plan.color_attachment_count = colors.len() as u32;
+    for (index, value) in colors.iter().enumerate() {
+        if value.is_null() { continue; }
+        let color = &mut plan.colors[index];
+        color.format = number(&value["format"])?;
+        color.write_mask = number(&value["write_mask"])?;
+        if ![37, 43, 44, 50].contains(&color.format) || color.write_mask & !15 != 0 {
+            return Err(refuse("this color format or write mask"));
+        }
+        let blend = &value["blend"];
+        if !blend.is_null() {
+            color.enabled = 1;
+            color.src_rgb = number(&blend["src_color"])?;
+            color.dst_rgb = number(&blend["dst_color"])?;
+            color.rgb_op = number(&blend["color_op"])?;
+            color.src_alpha = number(&blend["src_alpha"])?;
+            color.dst_alpha = number(&blend["dst_alpha"])?;
+            color.alpha_op = number(&blend["alpha_op"])?;
+        }
     }
+    plan.color_format = plan.colors[0].format;
 
     let vertex = &meta["vertex_input"];
     empty(&vertex["pulled"], "shader-pulled vertex attributes")?;
@@ -437,7 +466,7 @@ pub fn build(
                 push.metal_index = metal_index;
             } else if !value["ColorWriteRule"].is_null() {
                 let color = number(&value["ColorWriteRule"])?;
-                if vulkan_stages != 16 || color != 0 {
+                if vulkan_stages != 16 || color >= plan.color_attachment_count {
                     return Err(refuse("this color-write-rule stage or attachment"));
                 }
                 let rule = array(&graphics["color_write_rules"])?

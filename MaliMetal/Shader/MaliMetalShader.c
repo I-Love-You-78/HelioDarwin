@@ -477,11 +477,11 @@ const void *MMShaderLibraryAIR(const MMShaderLibrary *library, uint32_t i, size_
 }
 
 #ifdef MM_SHADER_ENABLE_AIR_COMPILER
-extern const MMShaderCompiler *MMAIRCompilerV2(void);
+extern const MMShaderCompiler *MMAIRCompilerV3(void);
 #endif
 const MMShaderCompiler *MMShaderGetNativeCompiler(void) {
 #ifdef MM_SHADER_ENABLE_AIR_COMPILER
-    return MMAIRCompilerV2();
+    return MMAIRCompilerV3();
 #else
     return NULL;
 #endif

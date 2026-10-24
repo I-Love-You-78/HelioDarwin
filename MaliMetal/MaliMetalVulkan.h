@@ -29,6 +29,7 @@ struct MMShaderComputeRegion;
 - (MMVKPipeline *)maliComputeVariantForRegion:(const struct MMShaderComputeRegion *)region
                                         error:(MMVKError *)error;
 - (MTLPixelFormat)maliColorFormat;
+- (MTLPixelFormat)maliColorFormatAtIndex:(NSUInteger)index;
 - (const struct MMShaderRenderOutput *)maliShaderOutput;
 - (const struct MMShaderVulkanConstants *)maliShaderConstants;
 - (BOOL)maliPrepareImage:(BOOL)preserve error:(MMVKError *)error;

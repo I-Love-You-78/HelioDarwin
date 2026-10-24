@@ -58,8 +58,17 @@ CoreAnimation shader loading. QuartzCore then called the absent
 `newFunctionWithDescriptor:error:` selector. The library now accepts the target
 function descriptor's name, constants and specialized name through its existing
 AIR-function path. Unsupported descriptor options, archives, private linking
-and deferred constants return errors. This descriptor update is compiled but
-not yet device-validated. GPU job execution is not yet established.
+and deferred constants return errors. The following phone boot passed this
+descriptor path and stopped at render-pipeline validation: CoreAnimation
+requested multiple color attachments and source-over blending.
+
+The source now carries up to eight color slots, within the native device limit,
+through AIR compilation, the typed execution plan, Vulkan pipeline/render-pass
+creation and command encoding. Each attachment retains its own format, write
+mask and supported blend state. The failing CoreAnimation shader pair compiled
+offline and passed SPIR-V validation with the new path. This uses an offline
+Vulkan baseline profile, not a captured phone profile. The MRT/blending update
+and GPU job execution still need phone validation.
 
 ## Dependencies and build
 
@@ -83,6 +92,9 @@ For native AIR compilation, build the pinned external compiler using
 toolchain and artifact hashes. Its output preserves the compiler and dependency
 license notices; the compiler retains its own license.
 
+The current render compiler interface is ABI 3. Rebuild the AIR provider and
+frontend together; the bundle builder rejects a provider with an older ABI.
+
 ```powershell
 python MaliMetal/Shader/build_air.py --compiler-source PINNED_COMPILER_CHECKOUT --out AIR_BUILD
 python MaliMetal/build.py --sysroot IOS_SYSROOT --vulkan-headers MESA_INCLUDE --air-provider AIR_BUILD --vulkan-icd PATH_TO_IOS_ICD --wsl --linker /usr/bin/ld64.lld-18
@@ -102,10 +114,12 @@ validation. The bundle includes dependency provenance and license notices.
 
 ## Coverage limits
 
-The implemented render path is bounded to one color attachment, single-sample
-2D textures and supported triangle draws. AIR blending/framebuffer fetch, masked
-color writes, multiple render targets, depth/stencil and broader texture or
-resource variants remain unsupported. Runtime MSL source compilation is absent.
+The implemented render path uses single-sample 2D textures, supported triangle
+draws and up to eight RGBA8/BGRA8 color slots, bounded by the native device.
+Supported fixed-function blending and per-attachment write masks pass through
+the compiler's effective state. Constant-blend-color and dual-source modes,
+framebuffer fetch, depth/stencil and broader texture or resource variants remain
+unsupported. Runtime MSL source compilation is absent.
 Compute translation supports verified direct-buffer and sampled-image forms;
 other resource forms and unsupported shader variants return explicit errors.
 

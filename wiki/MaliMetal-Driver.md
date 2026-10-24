@@ -61,8 +61,18 @@ loading, where QuartzCore called the absent `newFunctionWithDescriptor:error:`.
 The library now routes the target descriptor's name and constant values through
 the existing AIR-function creation path and preserves a copied specialized name.
 Unsupported options, binary archives, private linking, deferred constants and
-other descriptor modes return errors. This descriptor update is compiled and
-awaits a phone check. GPU command execution remains unvalidated.
+other descriptor modes return errors. A phone boot with that update reached
+render-pipeline validation and failed because CoreAnimation requested multiple
+color attachments. The crash payload identifies a downsample/blur pipeline
+using two BGRA8 targets and source-over blending.
+
+The current source propagates those attachment formats, masks and blend states
+through the compiler, typed plan, Vulkan render pass/pipeline and command encoder.
+It preserves slot indices and checks dimensions, aliasing and pipeline/pass
+compatibility. The exact failing shader pair compiled offline and passed SPIR-V
+validation using a Vulkan baseline profile; that profile is not a phone capability
+capture. The updated MRT path and GPU command execution remain unvalidated on
+the phone.
 
 ## Execution layers
 
@@ -102,6 +112,13 @@ programs retain the compiled module/layout and create exact specialization
 variants from compiler-produced dispatch plans. Nonuniform grids are represented
 by exact interior/edge regions, rather than rounded-up extra invocations.
 Unsupported operations produce explicit errors.
+
+Color attachment count is bounded to eight and the native device limit, using
+the supported 32-bit RGBA8/BGRA8 formats. Independent blending is enabled only
+when reported by the native Vulkan device. The backend consumes the compiler's
+effective attachment states, which can differ from the input states when it
+removes unwritten outputs. The render compiler/provider interface is ABI 3;
+older providers are rejected during the bundle build.
 
 ## AIR and native shader compilation
 
@@ -154,9 +171,9 @@ runtime compatibility of this implementation.
 
 ## Remaining coverage and validation
 
-Framebuffer fetch, AIR blend specialization, masked color writes, multiple render
-targets, depth/stencil, MSAA, mipmaps, texture arrays/3D and broader shader/resource
-forms remain unsupported. Advanced Metal interfaces and private SPI coverage
+Framebuffer fetch, constant-blend-color and dual-source modes, depth/stencil,
+MSAA, mipmaps, texture arrays/3D and broader shader/resource forms remain
+unsupported. Advanced Metal interfaces and private SPI coverage
 also need further work. Explicit compute barrier selectors and storage-image
 write kernels are not part of the verified initial compute path.
 
