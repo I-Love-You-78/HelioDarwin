@@ -1,5 +1,10 @@
 # Hardware Architecture: MT6789 / X676C
 
+The current rank-1 RAM window starts above 4 GiB. Physical page numbers must be
+converted to byte addresses in 64-bit arithmetic before cache maintenance.
+Patch 0196 corrects a narrowing shift in `pmap_sync_page_attributes_phys` exposed
+by the first GPU-buffer cache-mode setup; it does not expand the declared RAM.
+
 This page describes the Infinix Note 12 2023 (X676C, MediaTek Helio G99) configuration used by HelioDarwin. Addresses below are port inputs or device-tree values, not a complete SoC register map. A mapped address alone does not prove that a peripheral is powered, initialized or usable.
 
 ## CPU and memory configuration

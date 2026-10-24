@@ -36,6 +36,12 @@ The first retry of that path reached IOKit service discovery and returned
 GPU provider, completing the connection-discovery contract. GPU execution still
 needs validation with that kernel.
 
+Run `40089627425` passed service discovery, then panicked during GPU-buffer
+cache-mode setup. `pmap_sync_page_attributes_phys` shifted a 32-bit page number
+before converting it to an address, dropping physical-address bits above 4 GiB.
+Patch 0196 uses `ptoa_64` and `flush_dcache64`. The corrected local object uses
+a 64-bit shift; its hardware result is still pending.
+
 ## Execution layers
 
 | Layer | Implementation |
