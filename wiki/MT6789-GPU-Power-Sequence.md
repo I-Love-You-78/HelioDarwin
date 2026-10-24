@@ -2,9 +2,22 @@
 
 The Infinix X676C has a Mali-G57 MC2, Valhall v9 **Job Manager (JM)** GPU. It does not use the newer CSF submission interface.
 
+## Current status — 2026-10-24
+
+**GPU power-on is confirmed on the phone.** XNU has verified the VGPU and
+VSRAM_GPU enable bits, observed the MFG power-domain status and read Mali
+identification registers. Power-on is separate from rendering validation.
+
+| Stage | Observed status |
+| --- | --- |
+| GPU power-on and register access | Confirmed on physical X676C boots. |
+| Native Vulkan device creation | Succeeded after the IOKit and cache-address fixes. |
+| GPU job completion and rendering | Not yet confirmed. |
+| Full DVFS and dynamic power-off | Remain unfinished. |
+
 XNU diagnostic boots have read `GPU_ID = 0x90930010`, `AS_PRESENT = 0xff`, and `JS_PRESENT = 0x7`. Android identifies the device as Mali-G57 r0p1 and reports shader/core mask `0x5`: two cores at bits 0 and 2.
 
-These observations establish register access. The new GPU memory and submission transport has compiled to arm64 XNU objects, but has **not executed GPU jobs on the phone**. Display output is covered separately in [Display Pipeline](https://github.com/squeeeezy/HelioDarwin/wiki/Display-Pipeline); its working framebuffer path does not establish Metal or Vulkan rendering.
+The GPU memory and submission transport compiles to arm64 XNU objects; **GPU job execution is not yet confirmed on the phone**. Display output is covered separately in [Display Pipeline](https://github.com/squeeeezy/HelioDarwin/wiki/Display-Pipeline); its working framebuffer path does not establish Metal or Vulkan rendering.
 
 ## Evidence and scope
 

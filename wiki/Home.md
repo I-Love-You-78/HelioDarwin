@@ -9,6 +9,11 @@ Physical boots reach iOS userland. After patch 0190, the panel displayed the
 clock/interface and a diagnostic boot returned automatically to Android B.
 The observed interface uses the system's software rendering fallback.
 
+**GPU power-on is already confirmed:** PMIC rail-enable readbacks, MFG power
+status and readable GPU identification have been observed. Native Vulkan device
+creation has also succeeded. GPU job completion/rendering and full DVFS are
+separate milestones that remain unvalidated or unfinished.
+
 The new MaliMetal source includes Metal objects, native AIR translation, an
 arm64 iOS PanVK build and a versioned XNU GPU transport. Offline compilation
 and selected shader checks pass. The first integrated phone boot loaded PanVK

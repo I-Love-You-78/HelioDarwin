@@ -11,7 +11,8 @@ This page summarizes the current implementation and observed milestones.
 - XNU reaches IOKit/BSD startup, mounts the named HFS+ root over the native UFS
   driver and executes launchd. Captures include SpringBoard and backboardd.
 - XNU has read Mali `GPU_ID=0x90930010` and availability registers. Register
-  access is distinct from shader execution.
+  access and verified PMIC/MFG power-on establish the GPU power-on path.
+  Shader execution remains unverified.
 - Following patch 0190, the physical panel displayed the clock/interface.
   A bounded diagnostic boot also returned automatically to Android B using
   TOPRGU. The observed UI used system software rendering.
