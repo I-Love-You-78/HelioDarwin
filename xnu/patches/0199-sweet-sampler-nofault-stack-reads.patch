@@ -1,0 +1,116 @@
+diff --git a/osfmk/kern/exception.c b/osfmk/kern/exception.c
+--- a/osfmk/kern/exception.c
++++ b/osfmk/kern/exception.c
+@@ -824,6 +824,7 @@
+ #if defined(ARM64_BOARD_CONFIG_SWEET)
+ #include <vm/vm_shared_region.h>
+ #include <arm/thread.h>
++#include <machine/machine_routines.h>
+ #include <vm/pmap.h>
+ #include <os/atomic_private.h>
+ 
+@@ -1039,6 +1040,22 @@
+  */
+ void sweet_sample_task(const char *name, int pid, task_t task);
+ 
++/* A remote thread may switch/detach its stack while the task list is locked. */
++static bool
++sweet_sample_stack_read(thread_t thread, uint64_t base, uint64_t top,
++    uint64_t address, void *buffer, size_t size)
++{
++	if (address < base || address > top || size > top - address ||
++	    os_atomic_load(&thread->kernel_stack, relaxed) != base) {
++		return false;
++	}
++	/* Copy via valid physical translations, never dereference a remote stack VA. */
++	if (ml_nofault_copy((vm_offset_t)address, (vm_offset_t)buffer, size) != size) {
++		return false;
++	}
++	return os_atomic_load(&thread->kernel_stack, relaxed) == base;
++}
++
+ void
+ sweet_sample_task(const char *name, int pid, task_t task)
+ {
+@@ -1138,9 +1155,17 @@
+ 		    (uint64_t)thread->wait_event, thread->wait_result, (uint32_t)thread->reason,
+ 		    (uint32_t)thread->block_hint, (uint32_t)thread->pending_block_hint);
+ 
+-		if (thread->kernel_stack != 0) {
+-			arm_kernel_saved_state_t *kstate = &thread_get_kernel_state(thread)->machine.ss;
+-			if (kstate) {
++		uint64_t stackbase = os_atomic_load(&thread->kernel_stack, relaxed);
++		if (stackbase >= VM_MIN_KERNEL_ADDRESS && stackbase < VM_MAX_KERNEL_ADDRESS &&
++		    kernel_stack_size >= sizeof(struct thread_kernel_state) &&
++		    kernel_stack_size <= VM_MAX_KERNEL_ADDRESS - stackbase) {
++			uint64_t stacktop = stackbase + kernel_stack_size;
++			thread_kernel_state_t context = (thread_kernel_state_t)
++			    (stacktop - sizeof(struct thread_kernel_state));
++			arm_kernel_saved_state_t saved;
++			if (sweet_sample_stack_read(thread, stackbase, stacktop,
++			    (uint64_t)&context->machine.ss, &saved, sizeof(saved))) {
++				arm_kernel_saved_state_t *kstate = &saved;
+ 				char kline[400];
+ 				uint64_t kfp = kstate->fp;
+ 				uint64_t klr = kstate->lr ? (kstate->lr - (uint64_t)vm_kernel_slide) : 0;
+@@ -1148,14 +1173,15 @@
+ 				int kn = snprintf(kline, sizeof(kline), "SMP %s t%d ksp 0x%llx kfp 0x%llx klr 0x%llx kbt",
+ 				    name, cur_tn, ksp, kfp, klr);
+ 				for (int ki = 0; ki < 16 && kfp != 0 && (kfp & 7) == 0 && kn < (int)sizeof(kline) - 30; ki++) {
+-					if (kfp < VM_MIN_KERNEL_ADDRESS || kfp >= VM_MAX_KERNEL_ADDRESS) {
++					uint64_t frame[2];
++					if (!sweet_sample_stack_read(thread, stackbase, stacktop,
++					    kfp, frame, sizeof(frame))) {
+ 						break;
+ 					}
+-					uint64_t *frame = (uint64_t *)kfp;
+ 					uint64_t next_fp = frame[0];
+ 					uint64_t ret_pc = frame[1] ? (frame[1] - (uint64_t)vm_kernel_slide) : 0;
+ 					kn += snprintf(kline + kn, sizeof(kline) - kn, " 0x%llx", ret_pc);
+-					if (next_fp <= kfp || next_fp >= VM_MAX_KERNEL_ADDRESS) {
++					if (next_fp <= kfp || next_fp >= stacktop) {
+ 						break;
+ 					}
+ 					kfp = next_fp;
+@@ -1171,13 +1197,16 @@
+ 				 * few hits are its wait path (vm_fault, lck_mtx_sleep,
+ 				 * vm_page_wait, ...).
+ 				 */
+-				uint64_t stacktop = thread->kernel_stack + kernel_stack_size;
+ 				uint64_t pscan = ksp & ~7ull;
+ 				char sline[400];
+ 				int sn = snprintf(sline, sizeof(sline), "SMP %s t%d kscan", name, cur_tn);
+-				for (uint64_t p = pscan; p >= VM_MIN_KERNEL_ADDRESS && p < stacktop &&
++				for (uint64_t p = pscan; p >= stackbase && p < stacktop &&
+ 				    (p - pscan) < 0x3000 && sn < (int)sizeof(sline) - 20; p += 8) {
+-					uint64_t v = *(uint64_t *)p;
++					uint64_t v;
++					if (!sweet_sample_stack_read(thread, stackbase, stacktop,
++					    p, &v, sizeof(v))) {
++						break;
++					}
+ 					if (v >= vm_kernel_stext && v < vm_kernel_etext) {
+ 						sn += snprintf(sline + sn, sizeof(sline) - sn, " 0x%llx",
+ 						    v - (uint64_t)vm_kernel_slide);
+@@ -1194,13 +1223,18 @@
+ 				 */
+ 				char fline[400];
+ 				int fn = snprintf(fline, sizeof(fline), "SMP %s t%d kframes", name, cur_tn);
+-				for (uint64_t p = pscan; p >= VM_MIN_KERNEL_ADDRESS && p < stacktop &&
++				for (uint64_t p = pscan; p >= stackbase && p < stacktop &&
+ 				    (p - pscan) < 0x4000 && fn < (int)sizeof(fline) - 20; p += 8) {
+-					uint64_t cand_fp = *(uint64_t *)p;
++					uint64_t frame[2];
++					if (!sweet_sample_stack_read(thread, stackbase, stacktop,
++					    p, frame, sizeof(frame))) {
++						break;
++					}
++					uint64_t cand_fp = frame[0];
+ 					if (cand_fp <= p || cand_fp >= stacktop || (cand_fp & 15)) {
+ 						continue;
+ 					}
+-					uint64_t lr = *(uint64_t *)(p + 8);
++					uint64_t lr = frame[1];
+ 					if (lr >= vm_kernel_stext && lr < vm_kernel_etext) {
+ 						fn += snprintf(fline + fn, sizeof(fline) - fn, " 0x%llx",
+ 						    lr - (uint64_t)vm_kernel_slide);
