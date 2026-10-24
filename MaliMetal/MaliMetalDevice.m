@@ -692,6 +692,12 @@ static id MaliMetalUnsupported(NSError **error, NSString *reason) {
 - (const void *)data;
 - (NSString *)name;
 @end
+@interface MTLFunctionDescriptor (MaliMetalSpecialization)
+- (BOOL)applyFunctionConstants;
+- (NSArray *)privateFunctions;
+- (NSUInteger)pipelineOptions;
+- (id)pluginData;
+@end
 @interface MaliMetalAttribute : NSObject {
     NSString *_name;
     MMShaderAttribute _attribute;
@@ -735,10 +741,12 @@ static id MaliMetalUnsupported(NSError **error, NSString *reason) {
     MaliMetalLibrary *_library;
     uint32_t _index;
     NSArray *_indexedConstants, *_namedConstants;
+    NSString *_specializedName;
 }
 - (instancetype)initWithLibrary:(MaliMetalLibrary *)library
                           index:(uint32_t)index
-                      constants:(id)values;
+                      constants:(id)values
+                specializedName:(NSString *)specializedName;
 - (MMShaderLibrary *)maliLibrary;
 - (uint32_t)maliIndex;
 - (MMShaderStatus)copyConstants:(MMShaderConstantValue **)out
@@ -760,6 +768,12 @@ static id MaliMetalUnsupported(NSError **error, NSString *reason) {
 - (id<MTLFunction>)newFunctionWithName:(NSString *)name
                         constantValues:(id)values
                                  error:(NSError **)error;
+- (id<MTLFunction>)newFunctionWithDescriptor:(MTLFunctionDescriptor *)descriptor
+                                     error:(NSError **)error;
+- (id<MTLFunction>)newFunctionWithName:(NSString *)name
+                      constantValues:(id)values
+                     specializedName:(NSString *)specializedName
+                               error:(NSError **)error;
 @end
 @implementation MaliMetalLibrary
 - (instancetype)initWithBytes:(const void *)bytes
@@ -810,6 +824,39 @@ static id MaliMetalUnsupported(NSError **error, NSString *reason) {
 - (id<MTLFunction>)newFunctionWithName:(NSString *)name
                         constantValues:(id)values
                                  error:(NSError **)error {
+    return [self newFunctionWithName:name constantValues:values specializedName:nil error:error];
+}
+- (id<MTLFunction>)newFunctionWithDescriptor:(MTLFunctionDescriptor *)descriptor
+                                     error:(NSError **)error {
+    if (error)
+        *error = nil;
+    if (!descriptor) {
+        if (error)
+            *error = MaliMetalMakeError(100 + MM_SHADER_INVALID_ARGUMENT,
+                                       "Missing Metal function descriptor");
+        return nil;
+    }
+    if (object_getClass(descriptor) != [MTLFunctionDescriptor class])
+        return MaliMetalUnsupported(error, @"Unsupported Metal function descriptor class");
+    if ([descriptor options] != 0)
+        return MaliMetalUnsupported(error, @"Metal function compilation options are unsupported");
+    if ([[descriptor binaryArchives] count] != 0)
+        return MaliMetalUnsupported(error, @"Metal function binary archives are unsupported");
+    if ([[descriptor privateFunctions] count] != 0)
+        return MaliMetalUnsupported(error, @"Metal function private linking is unsupported");
+    if (![descriptor applyFunctionConstants])
+        return MaliMetalUnsupported(error, @"Deferred Metal function constants are unsupported");
+    if ([descriptor pipelineOptions] != 0 || [descriptor pluginData] != nil)
+        return MaliMetalUnsupported(error, @"Metal function pipeline and plugin modes are unsupported");
+    return [self newFunctionWithName:[descriptor name]
+                     constantValues:[descriptor constantValues]
+                    specializedName:[descriptor specializedName]
+                              error:error];
+}
+- (id<MTLFunction>)newFunctionWithName:(NSString *)name
+                      constantValues:(id)values
+                     specializedName:(NSString *)specializedName
+                               error:(NSError **)error {
     uint32_t index = 0;
     MMShaderError failure = {0};
     if (MMShaderLibraryFindEntry(_library, [name UTF8String], &index, &failure) != MM_SHADER_OK) {
@@ -845,7 +892,8 @@ static id MaliMetalUnsupported(NSError **error, NSString *reason) {
     }
     MaliMetalFunction *function = [[MaliMetalFunction alloc] initWithLibrary:self
                                                                        index:index
-                                                                   constants:values];
+                                                                   constants:values
+                                                             specializedName:specializedName];
     if (!function)
         return nil;
     MMShaderConstantValue *constants = NULL;
@@ -881,11 +929,13 @@ static size_t MaliMetalConstantSize(uint32_t type) {
 @implementation MaliMetalFunction
 - (instancetype)initWithLibrary:(MaliMetalLibrary *)library
                           index:(uint32_t)index
-                      constants:(id)values {
+                      constants:(id)values
+                specializedName:(NSString *)specializedName {
     self = [super init];
     if (self) {
         _library = [library retain];
         _index = index;
+        _specializedName = [specializedName copy];
         if (values) {
             _indexedConstants = [values newIndexedConstantArray];
             _namedConstants = [values newNamedConstantArray];
@@ -896,10 +946,13 @@ static size_t MaliMetalConstantSize(uint32_t type) {
 - (void)dealloc {
     [_indexedConstants release];
     [_namedConstants release];
+    [_specializedName release];
     [_library release];
     [super dealloc];
 }
 - (NSString *)name {
+    if (_specializedName)
+        return _specializedName;
     return [NSString
         stringWithUTF8String:MMShaderLibraryGetEntry([_library maliLibrary], _index)->name];
 }

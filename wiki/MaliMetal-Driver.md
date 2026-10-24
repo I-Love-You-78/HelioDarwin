@@ -28,13 +28,14 @@ The current port opens a separate client on the same accelerator with
 and closes that owned connection when the logical device is destroyed. The
 physical-device query connection remains borrowed from its caller. Transport
 initialization failures use `VK_ERROR_INITIALIZATION_FAILED`; allocation failures
-retain their allocation error. This updated path is not yet device-validated.
+retain their allocation error. The later boot with run `40090751567` created
+the native device; GPU execution remains unvalidated.
 
 The first retry of that path reached IOKit service discovery and returned
 `kIOReturnUnsupported` (`0xe00002c7`). The kernel user client inherited
 `IOUserClient::getService`, which returns `NULL`. Patch 0195 returns the attached
-GPU provider, completing the connection-discovery contract. GPU execution still
-needs validation with that kernel.
+GPU provider, completing the connection-discovery contract. The next boot passed
+service discovery; GPU execution still needs validation.
 
 Run `40089627425` passed service discovery, then panicked during GPU-buffer
 cache-mode setup. `pmap_sync_page_attributes_phys` shifted a 32-bit page number
@@ -55,7 +56,13 @@ the standalone `NSObject` declaration omitted `isa`; it tried to release the
 packed object header. The declaration now reserves that word and synthesized
 atomic copy accessors use offset eight. Derived frontend objects share the
 corrected layout; ivars following the opaque `_MTLDevice` base still use runtime
-offsets. The layout fix and GPU command execution remain hardware-unvalidated.
+offsets. The following phone boot passed that queue setup and reached shader
+loading, where QuartzCore called the absent `newFunctionWithDescriptor:error:`.
+The library now routes the target descriptor's name and constant values through
+the existing AIR-function creation path and preserves a copied specialized name.
+Unsupported options, binary archives, private linking, deferred constants and
+other descriptor modes return errors. This descriptor update is compiled and
+awaits a phone check. GPU command execution remains unvalidated.
 
 ## Execution layers
 

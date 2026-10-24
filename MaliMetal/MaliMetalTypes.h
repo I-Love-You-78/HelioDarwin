@@ -229,6 +229,7 @@ enum {
     MTLFunctionTypeFragment = 2,
     MTLFunctionTypeKernel = 3,
 };
+typedef NSUInteger MTLFunctionOptions;
 
 #ifdef __OBJC__
 
@@ -386,6 +387,14 @@ extern void dispatch_set_target_queue(void *, dispatch_queue_t);
 @end
 
 typedef void (^MTLCommandBufferHandler)(id<MTLCommandBuffer>);
+
+@interface MTLFunctionDescriptor : NSObject
+- (NSString *)name;
+- (NSString *)specializedName;
+- (id)constantValues;
+- (MTLFunctionOptions)options;
+- (NSArray *)binaryArchives;
+@end
 
 @interface MTLTextureDescriptor : NSObject
 @property(nonatomic) NSUInteger width;

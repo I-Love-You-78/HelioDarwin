@@ -53,8 +53,13 @@ those checks and reached CoreAnimation's command-queue setup, then crashed
 when a label accessor read offset zero as an object pointer. The standalone
 `NSObject` declaration now reserves its `isa` word; label access uses the
 runtime's atomic copy property accessors at offset eight. This object-layout
-fix is compiled but not yet device-validated. GPU job execution is not yet
-established.
+fix passed command-queue setup in the following phone boot, which reached
+CoreAnimation shader loading. QuartzCore then called the absent
+`newFunctionWithDescriptor:error:` selector. The library now accepts the target
+function descriptor's name, constants and specialized name through its existing
+AIR-function path. Unsupported descriptor options, archives, private linking
+and deferred constants return errors. This descriptor update is compiled but
+not yet device-validated. GPU job execution is not yet established.
 
 ## Dependencies and build
 
