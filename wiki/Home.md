@@ -14,6 +14,9 @@ arm64 iOS PanVK build and a versioned XNU GPU transport. Offline compilation
 and selected shader checks pass. The first integrated phone boot loaded PanVK
 and read its GPU identity, then backboardd repeatedly trapped on `CTR_EL0`.
 Patch 0193 addresses the user cache-query permission and I2C0 gate selection.
+Run `39984534077` identified the touch controller but still rejected reports;
+its kernel retained the old startup register constant. Assembly now bypasses
+the restored compiler cache, with the binary register policy checked before boot.
 GPU jobs, physical input and the installed PosterBoard/native display adapters
 still require successful runtime validation.
 

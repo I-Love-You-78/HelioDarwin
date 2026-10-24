@@ -33,6 +33,11 @@ This target is built for **16 KiB pages**. That is a choice of this XNU/iOS conf
 
 The loader separately checks its allowed rank-1 bounds, ending at `0x23ffff000`. The ADT's declared RAM size is narrower. These are explicit port limits, not a complete map of all installed DRAM or firmware carveouts. See [Hardware Architecture](Hardware-Architecture.md).
 
+CI and `boot-xnu.ps1` run `verify-startup.py` against the kernel Mach-O. It checks
+the assembled SCTLR startup policy, including user cache queries, user cache
+maintenance and SPAN. Assembly sources bypass the restored compiler cache after
+a build retained the older register constant despite updated source headers.
+
 Some compatibility strings retain earlier port class names, while product metadata identifies a D22AP/iPhone X profile. These are software compatibility choices; they do not describe the physical SoC. Display and input coordinates must follow the selected logical display profile.
 
 ## Returning to Android

@@ -11,10 +11,14 @@ Full Metal or Vulkan conformance is not claimed.
 Run `39972968304` loaded the native PanVK library and read Mali-G57 identity and
 texture features. Backboardd then repeatedly received SIGILL while PanVK queried
 `nonCoherentAtomSize`: `util_cache_granularity` reads `CTR_EL0`, but the kernel
-left user access disabled. Patch 0193 enables the read-only hardware cache-type
+left user access disabled. Patch 0193 configures the read-only hardware cache-type
 query for SWEET; its configured X676C cluster contains only Cortex-A55 cores.
-The generic illegal-instruction handler remains unchanged. This observation
-does not establish Vulkan device creation, GPU memory mappings or GPU jobs.
+Run `39984534077` still assembled the old `SCTLR_EL1=0x3454593d`, while a fresh
+local assembly of its archived source and headers produces `0x34d4d93d`.
+Assembly now bypasses the restored compiler cache. CI and deployment check the
+startup constant in the Mach-O before booting. The generic illegal-instruction
+handler remains unchanged. These observations do not establish Vulkan device
+creation, GPU memory mappings or GPU jobs.
 
 ## Execution layers
 

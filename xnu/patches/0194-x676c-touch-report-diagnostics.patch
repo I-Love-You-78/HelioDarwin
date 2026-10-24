@@ -1,0 +1,17 @@
+diff --git a/bsd/dev/sweet_touch_mtk.inc b/bsd/dev/sweet_touch_mtk.inc
+--- a/bsd/dev/sweet_touch_mtk.inc
++++ b/bsd/dev/sweet_touch_mtk.inc
+@@ -184,6 +184,13 @@
+ 	unsigned format = report[1] >> 4, count = report[1] & 15u;
+ 	memcpy(st.s_raw, report, sizeof(st.s_raw));
+ 	st.s_frames++;
++	if (st.s_frames <= 3) {
++		printf("SWEET TOUCH: frame=%u status=%#x dma=%#llx "
++		    "raw=%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
++		    st.s_frames, st.irq_status, (unsigned long long)mt.physical,
++		    report[0], report[1], report[2], report[3], report[4], report[5],
++		    report[6], report[7], report[8], report[9], report[10], report[11]);
++	}
+ 	if ((format != 0 && format != 2) || count > MTK_TOUCH_CONTACTS) {
+ 		return EIO; /* includes all-FF reset/recovery frames */
+ 	}

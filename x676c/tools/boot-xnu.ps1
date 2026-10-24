@@ -40,6 +40,8 @@ if (-not (Test-Path "$k\kernel.development.sweet")) {
 }
 
 # 2. ADT, payload, boot image
+python -I (Join-Path $x676c "tools\verify-startup.py") "$k\kernel.development.sweet"
+if ($LASTEXITCODE) { throw "Kernel startup policy verification failed" }
 python -I (Join-Path $x676c "tools\mkadt.py") "$out\x676c.adt"
 if ($LASTEXITCODE) { throw "ADT build failed" }
 python -I (Join-Path $x676c "tools\mkpayload.py") "$k\kernel.development.sweet" "$out\x676c.adt" "$out\payload.bin" --cmdline $BootArgs

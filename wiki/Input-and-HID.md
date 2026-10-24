@@ -6,7 +6,11 @@ The first integrated boot reached the hardware startup thread but stopped
 with `error=5` during clock setup. The shipped gate descriptor orders its fields
 as status/clear/set: IMPW uses `0xe00`/`0xe04`/`0xe08`. Patch 0193 changes the
 I2C0 enable write to CLR at `0xe04` and reports gate/reset failures separately.
-Controller identification and physical contact delivery remain unvalidated.
+Run `39984534077` subsequently read the expected `54:52` chip ID and entered
+polling. Report parsing still returned `error=5` with completed I2C status `0x1`.
+Patch 0194 records the first three report prefixes and DMA buffer address to
+distinguish returned data from transport errors. Physical contact delivery
+remains unvalidated.
 
 ## Touchscreen
 

@@ -82,7 +82,10 @@ jobs:
           xcrun --find iig
           mkdir -p "$CCACHE_WRAP"
           for t in clang clang++; do
-            printf '#!/bin/sh\nexec ccache %s "$@"\n' "$(xcrun -find $t)" > "$CCACHE_WRAP/$t"
+            compiler=$(xcrun -find "$t")
+            # The restored assembly cache retained old header-derived register
+            # values. Assemble from the current headers; keep caching C/C++.
+            printf '#!/bin/sh\nfor arg do\n  case "$arg" in\n    *.s|*.S) exec "%s" "$@" ;;\n  esac\ndone\nexec ccache "%s" "$@"\n' "$compiler" "$compiler" > "$CCACHE_WRAP/$t"
             chmod +x "$CCACHE_WRAP/$t"
           done
           cat "$CCACHE_WRAP/clang"
@@ -146,6 +149,12 @@ jobs:
           cp -R dxb/fakeroot/System/Library/Kernels/. out/ 2>/dev/null || true
           ls -la out
           (cd out && shasum -a 256 kernel.* > SHA256SUMS) || true
+
+      - name: Verify SWEET startup policy
+        if: success() && env.MACHINE_CONFIG == 'SWEET'
+        run: |
+          config=$(printf '%s' "$KERNEL_CONFIG" | tr '[:upper:]' '[:lower:]')
+          python3 x676c/tools/verify-startup.py "out/kernel.$config.sweet"
 
       - uses: actions/upload-artifact@v4
         if: always()
