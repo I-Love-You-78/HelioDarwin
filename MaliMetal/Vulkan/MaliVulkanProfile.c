@@ -67,9 +67,10 @@ char *mmvk_profile_create(VkPhysicalDevice physical,
     for(const struct json_name *f=VkFormat_names;f->name;f++){
         VkFormatProperties props;get_format(physical,(VkFormat)f->value,&props);
         if(!(props.linearTilingFeatures|props.optimalTilingFeatures|props.bufferFeatures))continue;
-        object(&j,f->name);json_flags(&j,"linearTilingFeatures",props.linearTilingFeatures,VkFormatFeatureFlags_names);
+        object(&j,f->name);object(&j,"VkFormatProperties");
+        json_flags(&j,"linearTilingFeatures",props.linearTilingFeatures,VkFormatFeatureFlags_names);
         json_flags(&j,"optimalTilingFeatures",props.optimalTilingFeatures,VkFormatFeatureFlags_names);
-        json_flags(&j,"bufferFeatures",props.bufferFeatures,VkFormatFeatureFlags_names);close_object(&j);
+        json_flags(&j,"bufferFeatures",props.bufferFeatures,VkFormatFeatureFlags_names);close_object(&j);close_object(&j);
         if(props.optimalTilingFeatures&VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT){
             VkPhysicalDeviceImageFormatInfo2 info={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
                 .format=(VkFormat)f->value,.type=VK_IMAGE_TYPE_2D,.tiling=VK_IMAGE_TILING_OPTIMAL,.usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT};

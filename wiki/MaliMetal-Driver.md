@@ -74,6 +74,13 @@ validation using a Vulkan baseline profile; that profile is not a phone capabili
 capture. The updated MRT path and GPU command execution remain unvalidated on
 the phone.
 
+The next phone boot passed the attachment-count guard but failed native-profile
+parsing: format flags had been serialized without their `VkFormatProperties`
+wrapper. The corrected serializer preserves the queried capabilities and sample
+counts in the structure the Khronos reader expects. An isolated offline check
+reproduced the exact rejection before the correction and passed profile parsing
+afterward. Device validation of that correction remains pending.
+
 ## Execution layers
 
 | Layer | Implementation |

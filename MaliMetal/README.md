@@ -70,6 +70,13 @@ offline and passed SPIR-V validation with the new path. This uses an offline
 Vulkan baseline profile, not a captured phone profile. The MRT/blending update
 and GPU job execution still need phone validation.
 
+The MRT candidate passed the earlier attachment-count guard on the phone, then
+the AIR compiler rejected the native Vulkan profile's format-property structure.
+The serializer now nests queried flags under `VkFormatProperties`, matching the
+compiler's Khronos reader. Queried flags and sample counts are preserved. The
+schema correction passes an isolated offline reproduction; its phone check is
+pending.
+
 ## Dependencies and build
 
 Build a fresh iOS artifact from the current source. Generated bundles and native
