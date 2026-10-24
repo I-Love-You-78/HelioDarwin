@@ -34,7 +34,7 @@ in the [system services documentation](wiki/System-Services-and-Posters.md).
 - `MaliMetal/` — userspace Metal implementation, AIR compiler adapter and Vulkan/XNU backend.
 - `tools/` — offline root preparation and explicit compatibility adapters.
 - `wiki/` — public hardware and implementation documentation, mirrored to the separate wiki.
-- `logs/` — selected historical `pstore` captures; not every local observation is published here.
+- `logs/` — selected raw `pstore` captures; [latest completed runs](logs/README.md) include versions, results and retention limits.
 
 ## Building and flashing
 

@@ -36,6 +36,11 @@ Capture as soon as a root shell is available. Another Android restart can replac
 the imported XNU console with Android output. Check the record's contents before
 attributing it to an iOS attempt; its filename alone does not identify the OS.
 
+Published captures are indexed in the repository's
+[device log directory](https://github.com/squeeeezy/HelioDarwin/blob/x676c/logs/README.md),
+with boot times, userspace revisions and retention limits. Separate crash reports
+can contain a detailed termination payload absent from the console banner.
+
 Useful boundaries are the shim's CPU/payload messages, XNU early-boot markers, UFS initialization, HID service opens and the first userspace failures. Console output is evidence of that path executing; a rendered frame in a log is not proof that the physical panel presented it. See [Display Pipeline](Display-Pipeline.md) and [Input and HID](Input-and-HID.md).
 
 ## Opt-in read and fault samples

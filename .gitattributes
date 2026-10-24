@@ -1,1 +1,3 @@
 *.sh text eol=lf
+# Preserve raw pstore bytes, including mixed line endings.
+logs/*.log -text
