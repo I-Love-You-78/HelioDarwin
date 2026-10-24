@@ -325,6 +325,8 @@ extern void dispatch_set_target_queue(void *, dispatch_queue_t);
 
 @protocol MTLDevice
 @end
+@protocol MTLDeviceSPI
+@end
 @protocol MTLCommandQueue
 @end
 @protocol MTLCommandBuffer

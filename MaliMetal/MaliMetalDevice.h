@@ -11,14 +11,14 @@
 #import "MaliMetalVulkan.h"
 
 /* Forward-declare Metal.framework's base device class */
-@interface _MTLDevice : NSObject <MTLDevice>
+@interface _MTLDevice : NSObject
 - (instancetype)init;
 - (void)initLimits;
 - (void)initFeatureQueries;
 - (void)initGPUFamilySupport;
 @end
 
-@interface MaliMetalDevice : _MTLDevice
+@interface MaliMetalDevice : _MTLDevice <MTLDevice, MTLDeviceSPI>
 
 @property(readonly) NSString *name;
 @property(readonly) uint64_t registryID;
@@ -49,6 +49,8 @@
 /* Feature Queries */
 - (BOOL)supportsFeatureSet:(MTLFeatureSet)featureSet;
 - (BOOL)supportsFamily:(MTLGPUFamily)gpuFamily;
+- (NSUInteger)maxFragmentTextures;
+- (NSUInteger)maxFragmentSamplers;
 
 /* Command Queue Creation */
 - (id<MTLCommandQueue>)newCommandQueue;

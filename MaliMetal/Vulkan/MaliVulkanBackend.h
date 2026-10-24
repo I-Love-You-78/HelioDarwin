@@ -34,6 +34,7 @@ typedef struct {
     uint32_t max_compute_workgroup_count[3], max_compute_workgroup_size[3];
     uint32_t max_compute_workgroup_invocations, max_compute_shared_memory_size;
     uint32_t subgroup_size;
+    uint32_t max_inline_uniform_bytes, max_varying_components, cpu_page_size;
     uint64_t max_buffer_size;
     uint64_t min_uniform_buffer_offset_alignment, min_storage_buffer_offset_alignment;
     char device_name[256];

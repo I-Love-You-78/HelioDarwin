@@ -3,6 +3,7 @@
 
 #import "MaliMetalDevice.h"
 #import "MaliMetalCommandQueue.h"
+#import "MaliMetalDeviceLimits.h"
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
@@ -11,6 +12,20 @@
 #import "Shader/MaliMetalShaderVulkan.h"
 #import "Shader/MaliMetalCompute.h"
 #import "Shader/MaliMetalComputeVulkan.h"
+
+static MMMetalDeviceLimits *MaliMetalLimitsStorage(id device) {
+    Class base = objc_getClass("_MTLDevice");
+    Ivar limits = class_getInstanceVariable(base, "_limits");
+    Ivar families = class_getInstanceVariable(base, "_supportedGPUFamilies");
+    const char *encoding = limits ? ivar_getTypeEncoding(limits) : NULL;
+    if (!encoding || !families ||
+        strcmp(encoding, MMMetalDeviceLimitsEncoding) ||
+        ivar_getOffset(limits) < (ptrdiff_t)sizeof(id) ||
+        ivar_getOffset(families) - ivar_getOffset(limits) != (ptrdiff_t)sizeof(MMMetalDeviceLimits) ||
+        (size_t)ivar_getOffset(families) > class_getInstanceSize(base))
+        return NULL;
+    return (MMMetalDeviceLimits *)((unsigned char *)(void *)device + ivar_getOffset(limits));
+}
 
 @implementation MaliMetalObject
 
@@ -1340,6 +1355,7 @@ static void MaliMetalComputeSetError(MMVKError *error, MMVKResult code, const ch
     MMVKError _backendError;
     uint64_t _allocatedBytes;
     pthread_mutex_t _allocationLock, _executionLock;
+    MMMetalDeviceLimits *_nativeLimits;
 }
 
 - (instancetype)initWithAcceleratorPort:(mach_port_t)acceleratorPort {
@@ -1348,6 +1364,12 @@ static void MaliMetalComputeSetError(MMVKError *error, MMVKResult code, const ch
         return nil;
     pthread_mutex_init(&_allocationLock, NULL);
     pthread_mutex_init(&_executionLock, NULL);
+    _nativeLimits = MaliMetalLimitsStorage(self);
+    if (!_nativeLimits) {
+        NSLog(@"[MaliMetal] Unsupported Metal device-limits ABI");
+        [self release];
+        return nil;
+    }
     kern_return_t kr = IORegistryEntryGetRegistryEntryID(acceleratorPort, &_registryID);
     if (kr != KERN_SUCCESS ||
         IOServiceOpen(acceleratorPort, mach_task_self(), 0, &_userClient) != KERN_SUCCESS) {
@@ -1373,15 +1395,54 @@ static void MaliMetalComputeSetError(MMVKError *error, MMVKResult code, const ch
         [self release];
         return nil;
     }
-    /* iOS 16.7 Metal: initGPUFamilySupport (0x181a1ea28) allocates an empty
-     * family vector for unknown profiles; _MTLDeviceFeatureQueries initWithDevice:
-     * (0x181a1c070) then records driver-specific supports* answers. Profile zero
-     * instead advertises Apple1/Common1 and must never be used here. The sentinel
-     * path is specific to the analyzed binary and still needs hardware validation.
-     * Base initLimits is deliberately not called: it only contains Apple profiles.
-     * Limit getters below expose the native backend and implemented frontend. */
-    [self initFeatureQueries];
+    /* MTLAddDevice calls initLimits and initFeatureQueries after checking both
+     * device protocols. Leave those initializers to the loader; the base limits
+     * table only describes Apple profiles, while our override uses native caps. */
     return self;
+}
+
+- (void)initLimits {
+    const MMVKCapabilities *caps = [self backendCapabilities];
+    if (!_nativeLimits || !caps) {
+        NSLog(@"[MaliMetal] Device limits requested before native initialization");
+        abort();
+    }
+    const MMShaderCompiler *compiler = MMShaderGetNativeCompiler();
+    BOOL compute = (caps->capabilities & MMVK_CAP_COMPUTE) && compiler && compiler->compile_compute;
+    MMMetalDeviceLimits limits = {0};
+    /* One RGBA8/BGRA8 target, one viewport and no optional tile/MSAA/depth path. */
+    limits.maxFramebufferStorageBits = 32;
+    limits.maxColorAttachments = 1;
+    limits.maxVertexAttributes = caps->max_vertex_attributes < 31 ? caps->max_vertex_attributes : 31;
+    limits.maxVertexBuffers = caps->max_vertex_buffers < 31 ? caps->max_vertex_buffers : 31;
+    limits.maxFragmentBuffers = 31;
+    limits.maxVertexTextures = limits.maxFragmentTextures = (uint32_t)[self maxFragmentTextures];
+    limits.maxVertexSamplers = limits.maxFragmentSamplers = (uint32_t)[self maxFragmentSamplers];
+    limits.maxVertexInlineDataSize = limits.maxFragmentInlineDataSize = caps->max_inline_uniform_bytes;
+    limits.maxInterpolants = caps->max_varying_components / 4;
+    limits.maxInterpolatedComponents = caps->max_varying_components;
+    /* The frontend currently accepts triangle draws only. */
+    limits.minConstantBufferAlignmentBytes = (uint32_t)caps->min_uniform_buffer_offset_alignment;
+    limits.minBufferNoCopyAlignmentBytes = caps->cpu_page_size;
+    limits.maxTextureWidth2D = limits.maxTextureHeight2D = caps->max_image_dimension_2d;
+    limits.maxTextureLayers = 1;
+    /* IOSurface access copies rows through the transfer path; no zero-copy
+     * alignment or foreign-memory import capability is advertised. */
+    limits.iosurfaceTextureAlignmentBytes = limits.iosurfaceReadOnlyTextureAlignmentBytes = 1;
+    limits.maxFunctionConstantIndices = 65536;
+    limits.maxViewportCount = 1;
+    limits.maxVertexAmplificationFactor = limits.maxVertexAmplificationCount = 1;
+    limits.maxBufferLength = caps->max_buffer_size;
+    if (compute) {
+        limits.maxComputeBuffers = limits.maxComputeLocalMemorySizes = 31;
+        limits.maxComputeTextures = limits.maxFragmentTextures;
+        limits.maxComputeSamplers = limits.maxFragmentSamplers;
+        limits.maxComputeInlineDataSize = caps->max_inline_uniform_bytes;
+        limits.maxTotalComputeThreadsPerThreadgroup = caps->max_compute_workgroup_invocations;
+        limits.maxComputeThreadgroupMemory = caps->max_compute_shared_memory_size;
+        limits.maxComputeThreadgroupMemoryAlignmentBytes = 16;
+    }
+    *_nativeLimits = limits;
 }
 - (MMVKDevice *)backendDevice {
     return _backend;
@@ -1443,8 +1504,14 @@ static void MaliMetalComputeSetError(MMVKError *error, MMVKResult code, const ch
     if (!caps || !(caps->capabilities & MMVK_CAP_COMPUTE) || !compiler ||
         !compiler->compile_compute)
         return MTLSizeMake(0, 0, 0);
-    return MTLSizeMake(caps->max_compute_workgroup_size[0], caps->max_compute_workgroup_size[1],
-                       caps->max_compute_workgroup_size[2]);
+    uint32_t maximum = caps->max_compute_workgroup_invocations;
+    MTLSize size = MTLSizeMake(caps->max_compute_workgroup_size[0],
+                               caps->max_compute_workgroup_size[1],
+                               caps->max_compute_workgroup_size[2]);
+    if (size.width > maximum) size.width = maximum;
+    if (size.height > maximum) size.height = maximum;
+    if (size.depth > maximum) size.depth = maximum;
+    return size;
 }
 
 - (NSUInteger)maxThreadgroupMemoryLength {
@@ -1471,7 +1538,7 @@ static void MaliMetalComputeSetError(MMVKError *error, MMVKResult code, const ch
 
 - (NSUInteger)maxBufferLength {
     const MMVKCapabilities *c = [self backendCapabilities];
-    return c ? c->max_buffer_size : 1024ULL * 1024 * 1024;
+    return c ? c->max_buffer_size : 0;
 }
 
 - (NSUInteger)featureProfile {

@@ -241,6 +241,10 @@ MMVKResult mmvk_device_create(uint32_t connection,const char *path,MMVKDevice **
     if(d->enabled_features.robustBufferAccess)d->caps.capabilities|=MMVK_CAP_INDEXED_RENDER;
     if(d->enabled_features.fullDrawIndexUint32)d->caps.capabilities|=MMVK_CAP_INDEX_UINT32;
     d->caps.subgroup_size=d->properties11.subgroupSize;
+    d->caps.max_inline_uniform_bytes=l->maxUniformBufferRange;
+    d->caps.max_varying_components=l->maxVertexOutputComponents<l->maxFragmentInputComponents?
+        l->maxVertexOutputComponents:l->maxFragmentInputComponents;
+    d->caps.cpu_page_size=q.cpu_page_size;
     d->caps.min_uniform_buffer_offset_alignment=l->minUniformBufferOffsetAlignment;
     d->caps.min_storage_buffer_offset_alignment=l->minStorageBufferOffsetAlignment;
     memcpy(d->caps.max_compute_workgroup_count,l->maxComputeWorkGroupCount,sizeof(l->maxComputeWorkGroupCount));

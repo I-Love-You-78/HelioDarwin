@@ -41,8 +41,15 @@ returned `VK_ERROR_OUT_OF_HOST_MEMORY`: the logical-device path duplicated the
 transport's deliberately invalid Unix descriptor instead of using IOKit.
 The current source opens and owns a separate IOKit client for each logical
 device, preserves the caller's query connection, and reports connection
-initialization failures separately from host allocations. The updated path
-still requires device validation; GPU job execution is not yet established.
+initialization failures separately from host allocations. Run `40090751567`
+created the Vulkan device after the kernel connection-discovery and physical
+address fixes, then stopped at Metal's device-protocol assertion.
+
+The frontend now declares both `MTLDevice` and `MTLDeviceSPI` on its own class.
+Its `initLimits` uses native Vulkan limits and implemented frontend bounds;
+the target Metal ivar encoding is checked before accessing its storage.
+Metal's normal registration checks remain active. This registration change is
+compiled but not yet device-validated; GPU job execution is not yet established.
 
 ## Dependencies and build
 

@@ -40,7 +40,16 @@ Run `40089627425` passed service discovery, then panicked during GPU-buffer
 cache-mode setup. `pmap_sync_page_attributes_phys` shifted a 32-bit page number
 before converting it to an address, dropping physical-address bits above 4 GiB.
 Patch 0196 uses `ptoa_64` and `flush_dcache64`. The corrected local object uses
-a 64-bit shift; its hardware result is still pending.
+a 64-bit shift, and the following boot passed that cache-mode setup.
+
+Run `40090751567` subsequently created the Vulkan device (`VkResult 0`), but
+Metal aborted in `MTLAddDevice` because the frontend class did not declare
+`MTLDevice`. That function also requires `MTLDeviceSPI`, then invokes
+`initLimits` and `initFeatureQueries`. The current frontend declares both
+protocols and provides its own native limits rather than selecting an Apple
+GPU profile. The 264-byte limits layout and named field encoding are checked
+against the loaded Metal runtime. These changes have compiled; registration
+and GPU command execution still need hardware validation.
 
 ## Execution layers
 
