@@ -2,7 +2,10 @@
 
 X676C input support has been implemented and compiled locally to ARM64 objects.
 Run `40083985422` recorded physical touch press/release events in the kernel HID
-path. **End-to-end iOS gestures and physical button delivery remain unvalidated.**
+path. The subsequent retry also recorded power, volume-up and volume-down
+press/release events. The user confirmed touch interaction; display sleep/wake
+still behaves incorrectly. **Multi-touch, volume behavior and complete gesture
+handling remain unvalidated.**
 Hardware identity and wiring below are established by Android's active driver
 binding, input metadata, device tree and vendor driver behavior.
 

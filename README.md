@@ -62,6 +62,8 @@ PanVK then failed during logical-device creation: that path still treated an
 IOKit connection as a Unix descriptor. The current source opens a separate
 IOKit client for each logical device. GPU execution and iOS gestures still
 require successful device validation.
+The following retry exposed a missing kernel `getService` implementation;
+patch 0195 supplies the GPU provider for IOKit connection discovery.
 
 Compilation and offline shader validation do not prove that the stock Metal loader,
 PanVK, kernel GPU transport and presentation work together on the phone. Full

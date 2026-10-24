@@ -30,6 +30,12 @@ physical-device query connection remains borrowed from its caller. Transport
 initialization failures use `VK_ERROR_INITIALIZATION_FAILED`; allocation failures
 retain their allocation error. This updated path is not yet device-validated.
 
+The first retry of that path reached IOKit service discovery and returned
+`kIOReturnUnsupported` (`0xe00002c7`). The kernel user client inherited
+`IOUserClient::getService`, which returns `NULL`. Patch 0195 returns the attached
+GPU provider, completing the connection-discovery contract. GPU execution still
+needs validation with that kernel.
+
 ## Execution layers
 
 | Layer | Implementation |

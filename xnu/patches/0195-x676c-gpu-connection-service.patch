@@ -1,0 +1,14 @@
+diff --git a/iokit/Kernel/arm/SweetMaliUserClient.inc b/iokit/Kernel/arm/SweetMaliUserClient.inc
+--- a/iokit/Kernel/arm/SweetMaliUserClient.inc
++++ b/iokit/Kernel/arm/SweetMaliUserClient.inc
+@@ -717,6 +717,10 @@
+ 	}
+ 
+ public:
++	IOService *getService(void) APPLE_KEXT_OVERRIDE
++	{
++		return getProvider();
++	}
+ 	bool initWithTask(task_t task, void *securityID, UInt32 type) APPLE_KEXT_OVERRIDE
+ 	{
+ 		if (type != 0 || !IOUserClient::initWithTask(task, securityID, type)) {
