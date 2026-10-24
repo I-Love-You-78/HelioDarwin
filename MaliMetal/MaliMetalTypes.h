@@ -235,7 +235,11 @@ enum {
 @class NSMethodSignature;
 @class NSInvocation;
 
-@interface NSObject
+/* The real Objective-C root object begins with an isa-sized word. Omitting it
+ * makes Clang place direct subclasses' ivars over the runtime object header. */
+@interface NSObject {
+    Class isa;
+}
 + (id)alloc;
 - (id)init;
 - (void)dealloc;

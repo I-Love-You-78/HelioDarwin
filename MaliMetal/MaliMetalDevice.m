@@ -29,20 +29,11 @@ static MMMetalDeviceLimits *MaliMetalLimitsStorage(id device) {
 
 @implementation MaliMetalObject
 
+@synthesize label = _label;
+
 - (void)dealloc {
     [_label release];
     [super dealloc];
-}
-
-- (NSString *)label {
-    return _label;
-}
-
-- (void)setLabel:(NSString *)label {
-    if (_label != label) {
-        [_label release];
-        _label = [label copy];
-    }
 }
 
 @end

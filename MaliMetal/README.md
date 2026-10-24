@@ -48,8 +48,13 @@ address fixes, then stopped at Metal's device-protocol assertion.
 The frontend now declares both `MTLDevice` and `MTLDeviceSPI` on its own class.
 Its `initLimits` uses native Vulkan limits and implemented frontend bounds;
 the target Metal ivar encoding is checked before accessing its storage.
-Metal's normal registration checks remain active. This registration change is
-compiled but not yet device-validated; GPU job execution is not yet established.
+Metal's normal registration checks remain active. The driver update passed
+those checks and reached CoreAnimation's command-queue setup, then crashed
+when a label accessor read offset zero as an object pointer. The standalone
+`NSObject` declaration now reserves its `isa` word; label access uses the
+runtime's atomic copy property accessors at offset eight. This object-layout
+fix is compiled but not yet device-validated. GPU job execution is not yet
+established.
 
 ## Dependencies and build
 

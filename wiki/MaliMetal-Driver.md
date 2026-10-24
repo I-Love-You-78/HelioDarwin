@@ -48,8 +48,14 @@ Metal aborted in `MTLAddDevice` because the frontend class did not declare
 `initLimits` and `initFeatureQueries`. The current frontend declares both
 protocols and provides its own native limits rather than selecting an Apple
 GPU profile. The 264-byte limits layout and named field encoding are checked
-against the loaded Metal runtime. These changes have compiled; registration
-and GPU command execution still need hardware validation.
+against the loaded Metal runtime. A retry with that frontend passed the
+registration checks and reached `CA::OGL::new_metal_context`, then crashed in
+`MaliMetalObject setLabel:`. Its compiled accessor used offset zero because
+the standalone `NSObject` declaration omitted `isa`; it tried to release the
+packed object header. The declaration now reserves that word and synthesized
+atomic copy accessors use offset eight. Derived frontend objects share the
+corrected layout; ivars following the opaque `_MTLDevice` base still use runtime
+offsets. The layout fix and GPU command execution remain hardware-unvalidated.
 
 ## Execution layers
 
