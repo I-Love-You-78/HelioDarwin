@@ -43,7 +43,8 @@ genuine native `MPSDevice_Common` for the real device, using pinned MPSCore
 exports, object layout and cache guards. It is off by default and leaves Apple
 family reports unchanged. Published native objects retain their device for the
 native process-lifetime cache; partial construction failures are quarantined.
-Actual registration, Gaussian dispatch and pixels still require a device run.
+Native registration/readback has succeeded in backboardd and SpringBoard.
+Gaussian dispatch and pixels remain unverified.
 
 When enabled, the builder requires the matching MPSCore and libc++ libraries in
 the supplied sysroot and links them strongly. Compute descriptor threadgroup
@@ -51,6 +52,15 @@ width promises are accepted without enabling dependent optimization. The native
 pipeline getter reports the queried execution width (16 on this G57), separately
 from the translator's preferred logical width. Unsupported compilation controls
 remain rejected. Default-off bundles do not acquire the MPSCore/libc++ dependency.
+
+The 21:10:55 run reached native MPS Common registration in SpringBoard and
+the real `D8F18H` compute pipeline request. The native compute descriptor lazily
+creates a nonnil, empty stage-input descriptor; rejecting its mere presence
+aborted pipeline construction. The frontend now accepts the verified empty
+public defaults and rejects configured stage input. Other unsupported controls
+report their individual reason. Both observed D8F18H specializations pass offline
+compilation and SPIR-V validation; GPU dispatch, pixels and performance still
+require a new device run.
 
 The current compiler series also fixes sRGB tile-read metadata and forwards the
 actual canonical color-write table. PointSize output is accepted only for the

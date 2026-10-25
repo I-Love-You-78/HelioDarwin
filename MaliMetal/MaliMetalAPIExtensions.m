@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <stdio.h>
 
 #ifndef NSUIntegerMax
 #define NSUIntegerMax ((NSUInteger)-1)
@@ -29,6 +30,10 @@ static void MMInvalid(const char *reason);
 - (NSArray *)privateFunctions;
 - (NSDictionary *)groups;
 - (id)stageInputDescriptor;
+- (id)attributes;
+- (id)layouts;
+- (NSUInteger)indexType;
+- (NSUInteger)indexBufferIndex;
 - (NSArray *)binaryArchives;
 - (NSArray *)insertLibraries;
 - (NSArray *)preloadedLibraries;
@@ -36,6 +41,7 @@ static void MMInvalid(const char *reason);
 - (BOOL)supportIndirectCommandBuffers;
 - (BOOL)threadGroupSizeIsMultipleOfThreadExecutionWidth;
 - (id)driverCompilerOptions;
+- (NSUInteger)textureWriteRoundingMode;
 - (NSUInteger)maxTotalThreadsPerThreadgroup;
 - (NSUInteger)maxCallStackDepth;
 - (id)buffers;
@@ -650,30 +656,71 @@ static id MMRenderReflection(MTLRenderPipelineDescriptor *descriptor,NSError **e
 #endif
 }
 
+static BOOL MMComputeControlUnsupported(NSError **error,const char *control) {
+    char reason[256];
+    snprintf(reason,sizeof(reason),"Compute descriptor control %s is unavailable on the function pipeline path",control);
+    MMFail(error,reason);return NO;
+}
+static BOOL MMComputeStageInputEmpty(id stage,NSError **error) {
+    if (!stage)return YES;
+    if (![stage respondsToSelector:@selector(attributes)] || ![stage respondsToSelector:@selector(layouts)] ||
+        ![stage respondsToSelector:@selector(indexType)] || ![stage respondsToSelector:@selector(indexBufferIndex)])
+        return MMComputeControlUnsupported(error,"stageInputDescriptor public layout inspection");
+    if ([stage indexType]!=MTLIndexTypeUInt16)
+        return MMComputeControlUnsupported(error,"stageInput.indexType");
+    if ([stage indexBufferIndex])return MMComputeControlUnsupported(error,"stageInput.indexBufferIndex");
+    id attributes=[stage attributes],layouts=[stage layouts];
+    for (NSUInteger i=0;i<31;i++) {
+        MTLVertexAttributeDescriptor *a=[attributes objectAtIndexedSubscript:i];
+        MTLVertexBufferLayoutDescriptor *l=[layouts objectAtIndexedSubscript:i];
+        if ([a format] || [a offset] || [a bufferIndex]) {
+            char control[128];
+            snprintf(control,sizeof(control),"stageInput.attributes[%lu] format=%lu offset=%lu bufferIndex=%lu",
+                (unsigned long)i,(unsigned long)[a format],(unsigned long)[a offset],(unsigned long)[a bufferIndex]);
+            return MMComputeControlUnsupported(error,control);
+        }
+        /* Metal lazily creates default layouts with stride0, stepFunction1,
+         * stepRate1. Only that empty state is equivalent to no stage input. */
+        if (l && ([l stride] || [l stepFunction]!=1 || [l stepRate]!=1)) {
+            char control[128];
+            snprintf(control,sizeof(control),"stageInput.layouts[%lu] stride=%lu stepFunction=%lu stepRate=%lu",
+                (unsigned long)i,(unsigned long)[l stride],(unsigned long)[l stepFunction],(unsigned long)[l stepRate]);
+            return MMComputeControlUnsupported(error,control);
+        }
+    }
+    return YES;
+}
 static BOOL MMComputeDescriptorSupported(id descriptor,NSError **error) {
     if (!descriptor || ![descriptor respondsToSelector:@selector(computeFunction)]) {
         MMFail(error,"Compute pipeline descriptor is missing or invalid"); return NO;
     }
+    if (!MMComputeStageInputEmpty([descriptor stageInputDescriptor],error))return NO;
     id linked=[descriptor linkedFunctions];
     if ([descriptor respondsToSelector:@selector(driverCompilerOptions)] &&
         [descriptor driverCompilerOptions]) {
         MMFail(error,"Private compute driver compiler options are unsupported");return NO;
     }
+    if ([descriptor respondsToSelector:@selector(textureWriteRoundingMode)] &&
+        [descriptor textureWriteRoundingMode])
+        return MMComputeControlUnsupported(error,"textureWriteRoundingMode");
     /* The threadgroup multiple is a caller promise. This function path does
      * not specialize for it; native pipeline and dispatch limits still apply. */
-    if ([descriptor stageInputDescriptor] || [[descriptor binaryArchives] count] ||
-        [[descriptor insertLibraries] count] || [[descriptor preloadedLibraries] count] ||
-        [descriptor supportAddingBinaryFunctions] || [descriptor supportIndirectCommandBuffers] ||
-        [descriptor maxTotalThreadsPerThreadgroup] ||
-        [descriptor maxCallStackDepth]>1 || [[linked functions] count] ||
-        [[linked binaryFunctions] count] || [[linked privateFunctions] count] ||
-        [[linked groups] allKeys].count) {
-        MMFail(error,"Compute descriptor requires compilation controls unavailable on the function pipeline path");return NO;
-    }
+    if ([[descriptor binaryArchives] count])return MMComputeControlUnsupported(error,"binaryArchives");
+    if ([[descriptor insertLibraries] count])return MMComputeControlUnsupported(error,"insertLibraries");
+    if ([[descriptor preloadedLibraries] count])return MMComputeControlUnsupported(error,"preloadedLibraries");
+    if ([descriptor supportAddingBinaryFunctions])return MMComputeControlUnsupported(error,"supportAddingBinaryFunctions");
+    if ([descriptor supportIndirectCommandBuffers])return MMComputeControlUnsupported(error,"supportIndirectCommandBuffers");
+    if ([descriptor maxTotalThreadsPerThreadgroup])return MMComputeControlUnsupported(error,"maxTotalThreadsPerThreadgroup");
+    if ([descriptor maxCallStackDepth]>1)return MMComputeControlUnsupported(error,"maxCallStackDepth");
+    if ([[linked functions] count])return MMComputeControlUnsupported(error,"linkedFunctions.functions");
+    if ([[linked binaryFunctions] count])return MMComputeControlUnsupported(error,"linkedFunctions.binaryFunctions");
+    if ([[linked privateFunctions] count])return MMComputeControlUnsupported(error,"linkedFunctions.privateFunctions");
+    if ([[linked groups] allKeys].count)return MMComputeControlUnsupported(error,"linkedFunctions.groups");
     id buffers=[descriptor buffers];
     for (NSUInteger i=0;buffers && i<31;i++)
         if ([[buffers objectAtIndexedSubscript:i] mutability]) {
-            MMFail(error,"Compute buffer mutability overrides are unsupported");return NO;
+            char control[64];snprintf(control,sizeof(control),"buffers[%lu].mutability",(unsigned long)i);
+            return MMComputeControlUnsupported(error,control);
         }
     return YES;
 }
