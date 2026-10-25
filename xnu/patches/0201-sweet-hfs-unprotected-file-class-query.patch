@@ -1,0 +1,119 @@
+SWEET HFS: answer protection-class queries only for proven unprotected files
+
+The iOS Foundation mmap-if-safe path requires F_GETPROTECTIONCLASS. Preserve
+unsupported protected operations while reporting the native no-entry class only
+for regular files on a non-protected, non-CoreStorage, consistent mount with no
+volume or file cprotect attribute key. Inspect B-tree keys directly so malformed
+protection records or orphaned extents cannot become false absence.
+
+diff --git a/bsd/sweet_hfs/core/hfs_vnops.c b/bsd/sweet_hfs/core/hfs_vnops.c
+--- a/bsd/sweet_hfs/core/hfs_vnops.c
++++ b/bsd/sweet_hfs/core/hfs_vnops.c
+@@ -751,6 +751,72 @@
+ 			&& cp->c_desc.cd_cnid != kHFSRootFolderID
+ 			&& (S_ISDIR(cp->c_mode) || S_ISREG(cp->c_mode) || S_ISLNK(cp->c_mode)));
+ }
++
++#if !CONFIG_PROTECT
++/* Called with the attributes B-tree locked. Check keys, not xattr payloads:
++ * malformed protection data must not be mistaken for an absent attribute. */
++static bool
++sweet_hfs_cprotect_absent(struct hfsmount *hfsmp, uint32_t fileid,
++    BTreeIterator *iterator)
++{
++	static const char name[] = "com.apple.system.cprotect";
++	HFSPlusAttrKey *key = (HFSPlusAttrKey *)&iterator->key;
++	int result;
++	size_t i;
++
++	bzero(iterator, sizeof(*iterator));
++	if (hfs_buildattrkey(fileid, name, key) != 0)
++		return false;
++	result = BTSearchRecord(VTOF(hfsmp->hfs_attribute_vp), iterator, NULL, NULL, NULL);
++	if (result != btNotFound)
++		return false; /* Found any record, or could not establish absence. */
++
++	/* Include orphaned nonzero-startBlock records of the same attribute. */
++	result = BTIterateRecord(VTOF(hfsmp->hfs_attribute_vp), kBTreeNextRecord,
++	    iterator, NULL, NULL);
++	if (result == btNotFound) /* Exported API maps empty/end to not-found. */
++		return true;
++	if (result != 0 || key->attrNameLen > kHFSMaxAttrNameLen || key->pad != 0 ||
++	    key->keyLength != kHFSPlusAttrKeyMinimumLength + key->attrNameLen * sizeof(uint16_t))
++		return false;
++	if (key->fileID != fileid || key->attrNameLen != sizeof(name) - 1)
++		return true;
++	for (i = 0; i < sizeof(name) - 1; i++) {
++		if (key->attrName[i] != (uint8_t)name[i])
++			return true;
++	}
++	return false;
++}
++
++/* The caller holds the file's shared/exclusive cnode lock, like getxattr.
++ * This reports only known unprotected regular files, never encryption support. */
++static bool
++sweet_hfs_file_is_unprotected(struct vnode *vp, struct hfsmount *hfsmp,
++    struct cnode *cp)
++{
++	BTreeIterator *iterator;
++	int lockflags;
++	bool absent;
++
++	if (vnode_vtype(vp) != VREG ||
++	    (cp->c_flag & (C_DELETED | C_NOEXISTS)) != 0 ||
++	    (hfsmp->hfs_flags & HFS_CS) != 0 ||
++	    (vfs_flags(hfsmp->hfs_mp) & MNT_CPROTECT) != 0 ||
++	    (hfsmp->vcbAtrb & (kHFSContentProtectionMask | kHFSVolumeInconsistentMask)) != 0 ||
++	    hfsmp->hfs_attribute_vp == NULL)
++		return false;
++	iterator = hfs_malloc_type(struct BTreeIterator);
++	if (iterator == NULL)
++		return false;
++	lockflags = hfs_systemfile_lock(hfsmp, SFL_ATTRIBUTE, HFS_SHARED_LOCK);
++	/* The content-protection volume record uses the special file ID 1. */
++	absent = sweet_hfs_cprotect_absent(hfsmp, 1, iterator) &&
++	    sweet_hfs_cprotect_absent(hfsmp, cp->c_fileid, iterator);
++	hfs_systemfile_unlock(hfsmp, lockflags);
++	hfs_free_type(iterator, struct BTreeIterator);
++	return absent;
++}
++#endif
+ 
+ /*
+  * Get basic attributes.
+@@ -1154,6 +1220,12 @@
+     		vap->va_dataprotect_class = cp->c_cpentry ? CP_CLASS(cp->c_cpentry->cp_pclass) : 0;
+     		VATTR_SET_SUPPORTED(vap, va_dataprotect_class);
+     	} 	
++#else
++	if (VATTR_IS_ACTIVE(vap, va_dataprotect_class) &&
++	    sweet_hfs_file_is_unprotected(vp, hfsmp, cp)) {
++		/* Matches the native getter's no-protection-entry value. */
++		VATTR_RETURN(vap, va_dataprotect_class, 0);
++	}
+ #endif
+ 	if (VATTR_IS_ACTIVE(vap, va_write_gencount)) {
+ 		if (ubc_is_mapped_writable(vp)) {
+diff --git a/bsd/sweet_hfs/core/hfs_endian.c b/bsd/sweet_hfs/core/hfs_endian.c
+--- a/bsd/sweet_hfs/core/hfs_endian.c
++++ b/bsd/sweet_hfs/core/hfs_endian.c
+@@ -764,10 +764,14 @@
+ 			/* 
+ 			 * Swap and check the attribute name
+ 			 */
+-    		if (direction == kSwapBTNodeBigToHost)
+-    			srcKey->attrNameLen = SWAP_BE16(srcKey->attrNameLen);
+-    		/* Sanity check the attribute name length */
+-    		if (srcKey->attrNameLen > kHFSMaxAttrNameLen || keyLength < (kHFSPlusAttrKeyMinimumLength + sizeof(u_int16_t)*srcKey->attrNameLen)) {
++			if (direction == kSwapBTNodeBigToHost) {
++				srcKey->attrNameLen = SWAP_BE16(srcKey->attrNameLen);
++			}
++			/* Validate the complete key before B-tree code copies it into an
++			 * iterator. Node-sized padding is not a valid attribute key. */
++			if (srcKey->attrNameLen > kHFSMaxAttrNameLen ||
++			    keyLength > kHFSPlusAttrKeyMaximumLength ||
++			    keyLength != (kHFSPlusAttrKeyMinimumLength + sizeof(u_int16_t)*srcKey->attrNameLen)) {
+ 				if (direction == kSwapBTNodeHostToBig) {
+ 					panic("hfs_swap_HFSPlusBTInternalNode: attr key #%d keyLength=%d attrNameLen=%d\n", srcDesc->numRecords-i-1, keyLength, srcKey->attrNameLen);
+ 				} else {

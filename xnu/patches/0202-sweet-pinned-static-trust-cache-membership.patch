@@ -1,0 +1,348 @@
+SWEET: expose an entitled, software-pinned static trust-cache membership query
+
+Provide the genuine AppleMobileFileIntegrity IOService matching identity and only
+its observed type-0, selector-6 membership ABI. Preserve caller entitlements and
+signature validation. Authenticate an owned device-tree payload copy against the
+independent original 20H392 SHA256 pin before parsing or admitting records. Missing
+or invalid data remains NotReady; nonmembers and unknown operations fail closed.
+This custom boot trust set does not claim Apple authenticated boot or SEP state.
+
+diff --git a/iokit/Kernel/arm/SweetAMFIService.cpp b/iokit/Kernel/arm/SweetAMFIService.cpp
+new file mode 100644
+--- /dev/null
++++ b/iokit/Kernel/arm/SweetAMFIService.cpp
+@@ -0,0 +1,307 @@
++/*
++ * SWEET software compatibility for the iOS 16 AMFI trust-cache query ABI.
++ *
++ * This is a custom, software-pinned boot trust set, not Apple authenticated
++ * boot. It does not change signature validation, the AMFI MAC policy, SEP or
++ * secure-boot state. Only selector 6 membership in the exact original 20H392
++ * static payload is implemented; no trust registration/write API exists.
++ */
++#include <pexpert/arm64/board_config.h>
++
++#if defined(SWEET)
++#include <IOKit/IOService.h>
++#include <IOKit/IOUserClient.h>
++#include <IOKit/IOKitKeys.h>
++#include <IOKit/IODeviceTreeSupport.h>
++#include <IOKit/IOLib.h>
++#include <IOKit/IOLocks.h>
++#include <libkern/c++/OSBoolean.h>
++#include <libkern/c++/OSData.h>
++#include <libkern/crypto/sha2.h>
++#include <libkern/OSByteOrder.h>
++#include <TrustCache/RawTypes.h>
++#include <kern/task.h>
++#include <sys/proc.h>
++
++static const char kTrustEntitlement[] = "com.apple.private.amfi.can-check-trust-cache";
++static const unsigned int kPayloadSize = 66264;
++static const uint32_t kEntryCount = 2760;
++static const uint32_t kMembershipSelector = 6;
++static const uint8_t kPayloadDigest[SHA256_DIGEST_LENGTH] = {
++	0xb7, 0xab, 0x28, 0xe0, 0x00, 0x99, 0x00, 0x32,
++	0x6a, 0xe6, 0x85, 0xa8, 0x87, 0x48, 0x00, 0x8a,
++	0x96, 0x53, 0xe6, 0xbc, 0xbd, 0x70, 0x67, 0x41,
++	0x35, 0xda, 0xc4, 0xeb, 0x52, 0x31, 0xad, 0x64
++};
++static const uint8_t kPayloadUUID[kUUIDSize] = {
++	0x9f, 0x36, 0x8a, 0x73, 0xd9, 0x0b, 0x40, 0xce,
++	0x94, 0x3c, 0x82, 0x7e, 0x13, 0xe7, 0x2e, 0xee
++};
++static_assert(sizeof(TrustCacheModule2_t) == 24, "20H392 trust-cache header ABI");
++static_assert(sizeof(TrustCacheEntry2_t) == 24, "20H392 trust-cache entry ABI");
++static_assert((uint32_t)kIOReturnNotFound == 0xe00002f0U, "iOS AMFI nonmember result");
++
++static bool
++sweet_amfi_entitled(task_t task)
++{
++	if (task == TASK_NULL || task == kernel_task || get_bsdtask_info(task) == NULL) {
++		return false;
++	}
++	OSObject *entitlement = IOUserClient::copyClientEntitlement(task, kTrustEntitlement);
++	bool allowed = entitlement == kOSBooleanTrue;
++	OSSafeReleaseNULL(entitlement);
++	return allowed;
++}
++
++static bool
++sweet_amfi_category(uint8_t category)
++{
++	/* Exact categories present in the independently pinned 20H392 payload.
++	 * They are validated metadata, not new constraint-policy implementations. */
++	return category <= 5 || category == 18;
++}
++
++static bool
++sweet_amfi_payload_valid(const OSData *data)
++{
++	if (data == NULL || data->getLength() != kPayloadSize) {
++		return false;
++	}
++	const void *bytes = data->getBytesNoCopy();
++	if (bytes == NULL) {
++		return false;
++	}
++	uint8_t digest[SHA256_DIGEST_LENGTH];
++	SHA256_CTX context;
++	/* SWEET's existing SHA256 wrappers use built-in ccsha256_ltc_di, not an
++	 * optional corecrypto kext. Authenticate the owned copy before parsing. */
++	SHA256_Init(&context);
++	SHA256_Update(&context, bytes, data->getLength());
++	SHA256_Final(digest, &context);
++	if (memcmp(digest, kPayloadDigest, sizeof(digest)) != 0) {
++		return false;
++	}
++	const TrustCacheModule2_t *module = (const TrustCacheModule2_t *)bytes;
++	uint32_t count = OSReadLittleInt32(bytes, 20);
++	if (OSReadLittleInt32(bytes, 0) != kTCVersion2 ||
++	    memcmp(module->uuid, kPayloadUUID, sizeof(kPayloadUUID)) != 0 ||
++	    count != kEntryCount ||
++	    count > (data->getLength() - sizeof(*module)) / sizeof(TrustCacheEntry2_t) ||
++	    sizeof(*module) + count * sizeof(TrustCacheEntry2_t) != data->getLength()) {
++		return false;
++	}
++	for (uint32_t i = 0; i < count; i++) {
++		const TrustCacheEntry2_t *entry = &module->entries[i];
++		if ((entry->hashType != 1 && entry->hashType != 2) ||
++		    (entry->flags & ~kTCFlagAMFID) != 0 || entry->reserved0 != 0 ||
++		    !sweet_amfi_category(entry->constraintCategory) ||
++		    (i != 0 && memcmp(module->entries[i - 1].CDHash, entry->CDHash, kTCEntryHashSize) > 0)) {
++			return false;
++		}
++	}
++	return true;
++}
++
++class AppleMobileFileIntegrity : public IOService {
++	OSDeclareDefaultStructors(AppleMobileFileIntegrity);
++
++	/* Private owned copy; never published as a mutable registry property and
++	 * never mutated after start. Clients retain this service through queries. */
++	const OSData *fTrustCache;
++public:
++	bool init(OSDictionary *properties = NULL) APPLE_KEXT_OVERRIDE;
++	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
++	void free(void) APPLE_KEXT_OVERRIDE;
++	IOReturn newUserClient(task_t task, void *securityID, UInt32 type,
++	    OSDictionary *properties, IOUserClient **handler) APPLE_KEXT_OVERRIDE;
++	IOReturn membership(const uint8_t hash[kTCEntryHashSize]) const;
++};
++
++OSDefineMetaClassAndStructors(AppleMobileFileIntegrity, IOService);
++
++bool
++AppleMobileFileIntegrity::init(OSDictionary *properties)
++{
++	fTrustCache = NULL;
++	return IOService::init(properties);
++}
++
++bool
++AppleMobileFileIntegrity::start(IOService *provider)
++{
++	if (!IOService::start(provider)) {
++		return false;
++	}
++	IORegistryEntry *chosen = IORegistryEntry::fromPath("/chosen", gIODTPlane);
++	OSObject *property = chosen != NULL ? chosen->copyProperty("sweet-static-trust-cache") : NULL;
++	OSData *source = OSDynamicCast(OSData, property);
++	OSData *copy = source != NULL && source->getLength() == kPayloadSize ? OSData::withData(source) : NULL;
++	OSSafeReleaseNULL(property);
++	OSSafeReleaseNULL(chosen);
++	if (sweet_amfi_payload_valid(copy)) {
++		fTrustCache = copy;
++	} else {
++		OSSafeReleaseNULL(copy);
++	}
++	setProperty(kIOUserClientClassKey, "SweetAMFIUserClient");
++	setProperty("SweetTrustSetAuthority", "software-pinned 20H392 static payload");
++	registerService();
++	IOLog("SWEET AMFI: AppleMobileFileIntegrity registered; pinned trust set %s (%u records)\n",
++	    fTrustCache != NULL ? "ready" : "NOT READY", fTrustCache != NULL ? kEntryCount : 0);
++	return true;
++}
++
++void
++AppleMobileFileIntegrity::free(void)
++{
++	OSSafeReleaseNULL(fTrustCache);
++	IOService::free();
++}
++
++IOReturn
++AppleMobileFileIntegrity::newUserClient(task_t task, void *securityID, UInt32 type,
++    OSDictionary *properties, IOUserClient **handler)
++{
++	if (handler == NULL) {
++		return kIOReturnBadArgument;
++	}
++	*handler = NULL;
++	if (type != 0) {
++		return kIOReturnUnsupported;
++	}
++	if (!sweet_amfi_entitled(task)) {
++		return kIOReturnNotPrivileged;
++	}
++	return IOService::newUserClient(task, securityID, type, properties, handler);
++}
++
++IOReturn
++AppleMobileFileIntegrity::membership(const uint8_t hash[kTCEntryHashSize]) const
++{
++	if (isInactive() || fTrustCache == NULL) {
++		return kIOReturnNotReady;
++	}
++	const TrustCacheModule2_t *module = (const TrustCacheModule2_t *)fTrustCache->getBytesNoCopy();
++	uint32_t low = 0, high = kEntryCount;
++	while (low < high) {
++		uint32_t middle = low + (high - low) / 2;
++		int order = memcmp(hash, module->entries[middle].CDHash, kTCEntryHashSize);
++		if (order == 0) {
++			return kIOReturnSuccess;
++		}
++		if (order < 0) {
++			high = middle;
++		} else {
++			low = middle + 1;
++		}
++	}
++	return kIOReturnNotFound;
++}
++
++class SweetAMFIUserClient : public IOUserClient {
++	OSDeclareDefaultStructors(SweetAMFIUserClient);
++	task_t fTask;
++	IOLock *fLock;
++	AppleMobileFileIntegrity *fService;
++	bool fClosed;
++public:
++	bool initWithTask(task_t task, void *securityID, UInt32 type) APPLE_KEXT_OVERRIDE;
++	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
++	void free(void) APPLE_KEXT_OVERRIDE;
++	IOReturn clientClose(void) APPLE_KEXT_OVERRIDE;
++	IOReturn externalMethod(uint32_t selector, IOExternalMethodArguments *arguments,
++	    IOExternalMethodDispatch *dispatch, OSObject *target, void *reference) APPLE_KEXT_OVERRIDE;
++};
++
++OSDefineMetaClassAndStructors(SweetAMFIUserClient, IOUserClient);
++
++bool
++SweetAMFIUserClient::initWithTask(task_t task, void *securityID, UInt32 type)
++{
++	fTask = TASK_NULL;
++	fLock = NULL;
++	fService = NULL;
++	fClosed = false;
++	if (!IOUserClient::initWithTask(task, securityID, type) || type != 0 || !sweet_amfi_entitled(task)) {
++		return false;
++	}
++	task_reference(task);
++	fTask = task;
++	fLock = IOLockAlloc();
++	return fLock != NULL;
++}
++
++bool
++SweetAMFIUserClient::start(IOService *provider)
++{
++	AppleMobileFileIntegrity *service = OSDynamicCast(AppleMobileFileIntegrity, provider);
++	if (service == NULL || !IOUserClient::start(provider)) {
++		return false;
++	}
++	service->retain();
++	fService = service;
++	return true;
++}
++
++void
++SweetAMFIUserClient::free(void)
++{
++	OSSafeReleaseNULL(fService);
++	if (fTask != TASK_NULL) {
++		task_deallocate(fTask);
++		fTask = TASK_NULL;
++	}
++	if (fLock != NULL) {
++		IOLockFree(fLock);
++		fLock = NULL;
++	}
++	IOUserClient::free();
++}
++
++IOReturn
++SweetAMFIUserClient::clientClose(void)
++{
++	IOLockLock(fLock);
++	fClosed = true;
++	IOLockUnlock(fLock);
++	terminate();
++	return kIOReturnSuccess;
++}
++
++IOReturn
++SweetAMFIUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *arguments,
++    IOExternalMethodDispatch *dispatch, OSObject *target, void *reference)
++{
++	(void)dispatch;
++	(void)target;
++	(void)reference;
++	IOLockLock(fLock);
++	IOReturn result;
++	if (fClosed || fService == NULL) {
++		result = kIOReturnNotOpen;
++	} else if (current_task() != fTask || !sweet_amfi_entitled(current_task())) {
++		result = kIOReturnNotPrivileged;
++	} else if (selector != kMembershipSelector) {
++		result = kIOReturnUnsupported;
++	} else if (arguments == NULL || arguments->version != kIOExternalMethodArgumentsCurrentVersion ||
++	    arguments->asyncWakePort != MACH_PORT_NULL || arguments->asyncReferenceCount != 0 ||
++	    arguments->scalarInputCount != 1 || arguments->scalarInput == NULL || arguments->scalarInput[0] != 1 ||
++	    arguments->structureInputDescriptor != NULL || arguments->structureInput == NULL ||
++	    arguments->structureInputSize != kTCEntryHashSize || arguments->scalarOutputCount != 0 ||
++	    arguments->structureOutputSize != 0 || arguments->structureOutputDescriptor != NULL ||
++	    arguments->structureOutputDescriptorSize != 0 || arguments->structureVariableOutputData != NULL) {
++		result = kIOReturnBadArgument;
++	} else {
++		uint8_t hash[kTCEntryHashSize];
++		memcpy(hash, arguments->structureInput, sizeof(hash));
++		result = fService->membership(hash);
++	}
++	IOLockUnlock(fLock);
++	if (selector == kMembershipSelector) {
++		char name[32] = {};
++		proc_selfname(name, sizeof(name));
++		IOLog("SWEET AMFI: %s selector 6 pinned membership -> 0x%x\n", name, (uint32_t)result);
++	}
++	return result;
++}
++#endif /* SWEET */
+diff --git a/iokit/conf/files.arm64 b/iokit/conf/files.arm64
+--- a/iokit/conf/files.arm64
++++ b/iokit/conf/files.arm64
+@@ -14,6 +14,7 @@
+ iokit/Kernel/arm/SweetBusy.cpp                                   optional iokitcpp
+ iokit/Kernel/arm/SweetEntitlements.cpp                           optional iokitcpp
+ iokit/Kernel/arm/SweetKeyStore.cpp                               optional iokitcpp
++iokit/Kernel/arm/SweetAMFIService.cpp                            optional iokitcpp
+ iokit/Kernel/arm/SweetWatchdog.cpp                               optional iokitcpp
+ iokit/Kernel/arm/SweetSurface.cpp                                optional iokitcpp
+ iokit/Kernel/arm/SweetFramebuffer.cpp                            optional iokitcpp
+diff --git a/iokit/KernelConfigTables.cpp b/iokit/KernelConfigTables.cpp
+--- a/iokit/KernelConfigTables.cpp
++++ b/iokit/KernelConfigTables.cpp
+@@ -53,6 +53,12 @@
+     "     'IOMatchCategory' = AppleKeyStore;"
+     "   },"
+     "   {"
++    "     'IOClass'         = AppleMobileFileIntegrity;"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOResourceMatch' = IOBSD;"
++    "     'IOMatchCategory' = AppleMobileFileIntegrity;"
++    "   },"
++    "   {"
+     "     'IOClass'         = IOWatchdog;"
+     "     'IOProviderClass' = IOResources;"
+     "     'IOMatchCategory' = IOWatchdog;"
