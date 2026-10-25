@@ -20,6 +20,21 @@ backboardd aborted before that copy reached Vulkan. The run also ended in a
 kernel panic in diagnostic stack sampling. Enabled features establish device
 configuration, not successful GPU command execution.
 
+The later 01:01:09 boot passed the former texture-copy selector and stopped at
+`fixed_frag_lpf_cpf`: the phone library contains the corresponding half-precision
+variants, while PanVK's inherited architecture policy reported FP16 unavailable.
+The optional PanVK build flag `--qualify-g57-fp16` prepares an experimental
+qualification ICD for exactly `GPU_ID=0x90930010` on arch 9. It is off by default,
+leaves other devices' policy unchanged, and does not establish native numeric
+FP16 correctness. The enabled profile must be captured from the candidate itself.
+
+The current compiler series also fixes sRGB tile-read metadata and forwards the
+actual canonical color-write table. PointSize output is accepted only for the
+qualified triangle/fill path with native feature checks; this does not add a
+point-drawing API. The existing 1304-request offline corpus now has 511 compile
+and structural model-draw successes. Remaining guarded XR/format and texture
+paths are not considered implemented by those results.
+
 - **Kernel transport:** versioned IOKit calls for pinned buffers, GPU address
   spaces, cache maintenance, Job Manager submission, completion and fault
   recovery. Register definitions and product errata were checked against the
@@ -127,7 +142,7 @@ verifies that exact source state using a temporary Git index. It records the
 baseline, effective tree and patch hashes, and rejects undeclared changes.
 
 ```powershell
-python MaliMetal/Shader/build_air.py --compiler-source PINNED_COMPILER_CHECKOUT --compiler-patch MaliMetal/Shader/compiler-patches/0001-coherent-tile-image-color-fetch.patch --compiler-patch MaliMetal/Shader/compiler-patches/0002-static-init-boolean-fc-absorption.patch --shader-tile-image --out AIR_BUILD
+python MaliMetal/Shader/build_air.py --compiler-source PINNED_COMPILER_CHECKOUT --compiler-patch MaliMetal/Shader/compiler-patches/0001-coherent-tile-image-color-fetch.patch --compiler-patch MaliMetal/Shader/compiler-patches/0002-static-init-boolean-fc-absorption.patch --compiler-patch MaliMetal/Shader/compiler-patches/0003-tile-image-srgb-fetch-contract.patch --shader-tile-image --out AIR_BUILD
 python MaliMetal/build.py --sysroot IOS_SYSROOT --vulkan-headers MESA_INCLUDE --air-provider AIR_BUILD --vulkan-icd PATH_TO_IOS_ICD --wsl --linker /usr/bin/ld64.lld-18
 ```
 
@@ -142,6 +157,8 @@ resolution of the driver's own symbols. System symbols link strictly against
 the matching supplied iOS libraries. Limited Darwin declarations are used rather
 than a complete iOS SDK; Objective-C selector compatibility still needs runtime
 validation. The bundle includes dependency provenance and license notices.
+The local encoder protocol declarations do not enumerate native method
+requirements, so compilation alone cannot check Metal selector completeness.
 
 ## Coverage limits
 
@@ -155,6 +172,14 @@ validation. The bundle includes dependency provenance and license notices.
 | Events | Ordinary native timelines/fences and a shared-event bridge. Shared factories require the live IOSurface kernel readiness/right/mapping probe. Unknown retirement retains submitted owners while reporting the real logical error. |
 | API | Async methods, specialized reflection and argument encoders. Resource argument consumers remain disabled until canonical root/resident table consumption is connected. |
 | MSL source | A linked adapter to the genuine system Metal frontend, without an Apple GPU identity/plugin. Native loading, source output and service lifetime still require device validation; unsupported controls return errors. |
+
+Resource allocation validates protection options; protected allocations remain
+unsupported. Encoder debug groups retain real nesting state, and disabled
+visibility mode is checked; nonzero visibility queries are not implemented.
+GPU/kernel timing getters remain unavailable to profiling paths. Root-based
+publication avoids duplicate readbacks of unchanged IOSurfaces, and Scheduled
+handlers run outside the device mutex. These are source-level changes awaiting
+assembled runtime verification.
 
 No complete Apple GPU family is advertised. Device limits and selected Vulkan
 features are checked separately from API/helper presence. Explicit unavailable

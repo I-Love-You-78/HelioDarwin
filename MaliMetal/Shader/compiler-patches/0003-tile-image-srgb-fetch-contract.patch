@@ -1,0 +1,20 @@
+--- a/crates/metal2vulkan/src/pipeline/color_writes.rs
++++ b/crates/metal2vulkan/src/pipeline/color_writes.rs
+@@ -410,7 +410,8 @@
+ 
+ /// The input attachments `fragment` reads whose pixel format in `colors` takes Metal's decode
+ /// ([`srgb_fetched`]): the set the function must have compiled under
+-/// (`StageIo::srgb_fetches`).
++/// (`StageIo::srgb_fetches`). Descriptor-free tile-image reads take the same decode and
++/// must participate in the same link contract.
+ pub(crate) fn wanted_srgb_fetches(
+     fragment: &FunctionArtifact,
+     colors: &[Option<ColorAttachmentDescriptor>],
+@@ -423,6 +424,7 @@
+             crate::pipeline::sym::ResourceKind::InputAttachment(color) => Some(color),
+             _ => None,
+         })
++        .chain(fragment.interface.io.tile_image_colors.iter().copied())
+         .filter(|&c| {
+             colors
+                 .get(c as usize)

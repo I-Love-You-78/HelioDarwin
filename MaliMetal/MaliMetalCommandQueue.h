@@ -37,6 +37,10 @@
 - (void)presentDrawable:(id<MTLDrawable>)drawable afterMinimumDuration:(CFTimeInterval)duration;
 - (void)addScheduledHandler:(MTLCommandBufferHandler)block;
 - (void)addCompletedHandler:(MTLCommandBufferHandler)block;
+- (void)pushDebugGroup:(NSString *)string;
+- (void)popDebugGroup;
+/* Adapter diagnostic annotations; these are CPU encoding metadata, not GPU capture. */
+- (NSArray *)maliDebugAnnotations;
 - (id<MTLRenderCommandEncoder>)renderCommandEncoderWithDescriptor:
     (MTLRenderPassDescriptor *)descriptor;
 - (id<MTLComputeCommandEncoder>)computeCommandEncoder;

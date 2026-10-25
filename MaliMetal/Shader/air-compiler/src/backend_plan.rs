@@ -163,7 +163,6 @@ pub fn build(
         "fragment_writes_memory",
         "declares_layer",
         "writes_viewport_index",
-        "writes_point_size",
         "reads_barycentric_coord",
         "reads_position_depth",
         "snapshot_reads",
@@ -171,6 +170,16 @@ pub fn build(
         if graphics[name] != false {
             return Err(refuse(name));
         }
+    }
+    // The native consumer independently checks triangle-list fill rasterization
+    // and the enabled PointSize feature against the emitted vertex module.
+    // Other topologies retain the refusal; this does not implement point draws.
+    if graphics["writes_point_size"] != false
+        && (graphics["writes_point_size"] != true || number(&graphics["topology"])? != 3)
+    {
+        return Err(refuse(
+            "point-size output outside triangle-list rasterization",
+        ));
     }
     for name in [
         "tessellation",
@@ -300,15 +309,18 @@ pub fn build(
             if !binding["source"]["Synthetic"].is_null() {
                 let source = &binding["source"]["Synthetic"];
                 let (metal_stage, vulkan_stage) = stage(&source["stage"])?;
-                if source["binding"] != "ConstantBlob" || vulkan_type != 7 {
-                    return Err(refuse("this synthetic shader resource"));
-                }
-                let bytes = constant_blobs
-                    .iter()
-                    .find(|(s, _)| *s == vulkan_stage)
-                    .map(|(_, b)| *b)
-                    .filter(|b| !b.is_empty())
-                    .ok_or_else(|| refuse("a missing compiler constant blob"))?;
+                let bytes = match source["binding"].as_str() {
+                    Some("ConstantBlob") if vulkan_type == 7 => constant_blobs
+                        .iter()
+                        .find(|(s, _)| *s == vulkan_stage)
+                        .map(|(_, b)| *b)
+                        .filter(|b| !b.is_empty())
+                        .ok_or_else(|| refuse("a missing compiler constant blob"))?,
+                    Some("ColorWriteTable") if metal_stage == 1 && matches!(vulkan_type, 6 | 7) => {
+                        metal2vulkan::bind::color_write_table()
+                    }
+                    _ => return Err(refuse("this synthetic shader resource")),
+                };
                 plan.bindings[index] = Binding {
                     set: number(&set["set"])?,
                     binding: number(&binding["binding"])?,
@@ -317,7 +329,11 @@ pub fn build(
                     metal_stage,
                     metal_index: u32::MAX,
                     minimum_size: (bytes.len() as u64 + 15) & !15,
-                    alignment: storage_alignment.max(16),
+                    alignment: if vulkan_type == 6 {
+                        uniform_alignment.max(16)
+                    } else {
+                        storage_alignment.max(16)
+                    },
                     sampler_index: u32::MAX,
                     constant_bytes: bytes.as_ptr(),
                     constant_size: bytes.len(),

@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: MIT */
 #import "MaliMetalSynchronization.h"
+#import "MaliMetalResources.h"
 #include <string.h>
 #include <stdlib.h>
 #include <mach/vm_region.h>
@@ -420,6 +421,19 @@ MMVKResult MaliMetalWaitForEvent(MaliMetalDevice *device, MaliMetalEvent *event,
 }
 
 typedef struct {id resource;uint64_t generation,published;} MMExecutedWrite;
+/* IOSurface publication always delegates to the allocation owner, including
+ * for nested views. Keep one generation for that actual root, while the queue
+ * continues retaining every frontend resource used by encoded operations. */
+static MMVKImage *publicationImageRoot(id resource) {
+    if(![resource respondsToSelector:@selector(maliReadbackImage:)]||
+       ![resource respondsToSelector:@selector(maliImage)])return NULL;
+    return mmvk_image_root([resource maliImage]);
+}
+static BOOL samePublicationResource(id first,id second) {
+    if(first==second)return YES;
+    MMVKImage *root=publicationImageRoot(first);
+    return root&&root==publicationImageRoot(second);
+}
 @implementation MaliMetalExecutedResources
 - (void)dealloc {
     MMExecutedWrite *writes=_writes;
@@ -431,7 +445,7 @@ typedef struct {id resource;uint64_t generation,published;} MMExecutedWrite;
     if(!resource)return sharedError(error,MMVK_ERROR_ARGUMENT,0,"Missing executed resource write");
     if(_generation==UINT64_MAX)return sharedError(error,MMVK_ERROR_STATE,0,"Executed resource generation overflow");
     MMExecutedWrite *writes=_writes;
-    for(NSUInteger i=0;i<_writeCount;i++)if(writes[i].resource==resource){
+    for(NSUInteger i=0;i<_writeCount;i++)if(samePublicationResource(writes[i].resource,resource)){
         writes[i].generation=++_generation;return MMVK_OK;
     }
     if(_writeCount==SIZE_MAX/sizeof(*writes))return sharedError(error,MMVK_ERROR_MEMORY,0,"Executed resource capacity overflow");
@@ -480,6 +494,10 @@ typedef struct {id resource;uint64_t generation,published;} MMExecutedWrite;
             if(buffer){MMVKResult r=mmvk_buffer_flush(buffer,0,mmvk_buffer_size(buffer),error);if(r)return r;}
         }else if([resource respondsToSelector:@selector(iosurface)]&&[resource iosurface]&&
                  [resource respondsToSelector:@selector(maliPrepareImage:error:)]){
+            BOOL prepared=NO;
+            for(NSUInteger previous=0;previous<i;previous++)
+                if(samePublicationResource(resources[previous],resource)){prepared=YES;break;}
+            if(prepared)continue;
             if(![resource maliPrepareImage:YES error:error])return error&&error->code?error->code:
                 sharedError(error,MMVK_ERROR_IO,0,"Shared consumer IOSurface refresh failed");
         }

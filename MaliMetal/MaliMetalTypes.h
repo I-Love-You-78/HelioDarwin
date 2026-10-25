@@ -341,6 +341,8 @@ extern void dispatch_set_target_queue(void *, dispatch_queue_t);
 - (MTLStorageMode)storageMode;
 - (MTLCPUCacheMode)cpuCacheMode;
 - (MTLHazardTrackingMode)hazardTrackingMode;
+/* Native iOS resource SPI queried directly by QuartzCore. */
+- (NSUInteger)protectionOptions;
 @end
 @protocol NSObject
 - (BOOL)respondsToSelector:(SEL)aSelector;
@@ -409,6 +411,7 @@ typedef void (^MTLCommandBufferHandler)(id<MTLCommandBuffer>);
 @property(nonatomic) MTLStorageMode storageMode;
 @property(nonatomic) MTLCPUCacheMode cpuCacheMode;
 @property(nonatomic) MTLResourceOptions resourceOptions;
+- (NSUInteger)protectionOptions;
 + (MTLTextureDescriptor *)texture2DDescriptorWithPixelFormat:(MTLPixelFormat)pixelFormat
                                                        width:(NSUInteger)width
                                                       height:(NSUInteger)height

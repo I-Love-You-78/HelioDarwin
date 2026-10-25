@@ -105,8 +105,9 @@ MMVKResult MMShaderVulkanDescribe(const MMShaderRenderOutput *output,
             native->type = MMVK_BIND_STORAGE_IMAGE;
         else if (binding->vulkan_type == 0)
             native->type = MMVK_BIND_SAMPLER;
-        else if (binding->constant_bytes && binding->constant_size && binding->vulkan_type == 7)
-            native->type = MMVK_BIND_STORAGE_BUFFER;
+        else if (binding->constant_bytes && binding->constant_size &&
+                 (binding->vulkan_type == 6 || binding->vulkan_type == 7))
+            native->type = binding->vulkan_type == 6 ? MMVK_BIND_UNIFORM_BUFFER : MMVK_BIND_STORAGE_BUFFER;
         else if (binding->vulkan_type == 6 && binding->metal_index < 31)
             native->type = MMVK_BIND_UNIFORM_BUFFER;
         else if (binding->vulkan_type == 7 && binding->metal_index < 31)
@@ -149,12 +150,13 @@ MMVKResult MMShaderVulkanCreateConstants(MMVKDevice *device, const MMShaderRende
         const MMShaderBackendBinding *binding = plan->bindings + i;
         if (!binding->constant_bytes)
             continue;
-        if (binding->vulkan_type != 7 || !binding->constant_size ||
+        if ((binding->vulkan_type != 6 && binding->vulkan_type != 7) || !binding->constant_size ||
             binding->constant_size > binding->minimum_size || binding->minimum_size > SIZE_MAX) {
             MMShaderVulkanDestroyConstants(constants);
             return unsupported(error, "Invalid compiler constant blob span");
         }
-        MMVKResult result = mmvk_buffer_create(device, binding->minimum_size, MMVK_BUFFER_STORAGE,
+        uint32_t usage = binding->vulkan_type == 6 ? MMVK_BUFFER_UNIFORM : MMVK_BUFFER_STORAGE;
+        MMVKResult result = mmvk_buffer_create(device, binding->minimum_size, usage,
                                                &constants->buffers[i], error);
         if (result != MMVK_OK) {
             MMShaderVulkanDestroyConstants(constants);
@@ -214,7 +216,7 @@ MMVKResult MMShaderVulkanBindResources(MMVKCommands *commands, const MMShaderRen
         }
         if (binding->constant_bytes) {
             MMVKBuffer *buffer = resources->constant_buffers[i];
-            if (!buffer || binding->vulkan_type != 7 || !binding->minimum_size ||
+            if (!buffer || (binding->vulkan_type != 6 && binding->vulkan_type != 7) || !binding->minimum_size ||
                 binding->minimum_size > mmvk_buffer_size(buffer))
                 return unsupported(error, "A compiler constant buffer is missing or too short");
             continue;

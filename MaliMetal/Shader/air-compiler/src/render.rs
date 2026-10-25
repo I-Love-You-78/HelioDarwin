@@ -651,6 +651,16 @@ fn prepare(owner: &OwnedOutput, input: &Bindings, request: &DrawRequest) -> Resu
                 d.byte_count = blob.len();
                 d.range = (blob.len() as u64 + 15) & !15;
             }
+            WriteSource::ColorWriteTable => {
+                if !matches!(d.vulkan_type, 6 | 7) || d.array_element != 0 {
+                    return Err(invalid("Invalid canonical color-table descriptor"));
+                }
+                let bytes = metal2vulkan::bind::color_write_table();
+                d.source_kind = 6;
+                d.bytes = bytes.as_ptr().cast();
+                d.byte_count = bytes.len();
+                d.range = bytes.len() as u64;
+            }
             WriteSource::Neutral(NeutralResource::ZeroBuffer { min_bytes }) => {
                 d.source_kind = 7;
                 d.range = u64::from(*min_bytes);

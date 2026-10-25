@@ -19,7 +19,7 @@ from package_icd import package
 
 def run(args,**kwargs): subprocess.run([str(a) for a in args],check=True,**kwargs)
 
-def build(work,sysroot,darwin_headers,libcxx_headers,jobs,configure_only):
+def build(work,sysroot,darwin_headers,libcxx_headers,jobs,configure_only,qualify_g57_fp16=False):
     work=work.resolve();mesa=work/'mesa-v9'
     repository=Path(__file__).resolve().parents[2]
     if work==repository or repository in work.parents:
@@ -50,6 +50,7 @@ def build(work,sysroot,darwin_headers,libcxx_headers,jobs,configure_only):
     def quoted(x): return repr(str(x))
     args=['--target=arm64-apple-ios16.7','-mcpu=cortex-a55','-isysroot',str(sysroot),
           '-isystem',str(darwin_headers),'-I',str(tools),'-DMESA_XNU=1']
+    if qualify_g57_fp16:args+=['-DPANVK_XNU_QUALIFY_G57_FP16=1']
     cpp_args=['-nostdinc++','-isystem',str(libcxx_headers),*args]
     cross=tools/'clang-ios.ini'
     lines=['# SweetMali clang cross configuration 2','[binaries]',
@@ -108,5 +109,7 @@ if __name__=='__main__':
     p.add_argument('--libcxx-headers',type=Path,required=True)
     p.add_argument('--jobs',type=int,default=6)
     p.add_argument('--configure-only',action='store_true')
+    p.add_argument('--qualify-g57-fp16',action='store_true',
+                   help='experimental exact-G57 FP16 availability; numeric correctness remains unqualified')
     a=p.parse_args()
-    build(a.work,a.sysroot,a.darwin_headers,a.libcxx_headers,a.jobs,a.configure_only)
+    build(a.work,a.sysroot,a.darwin_headers,a.libcxx_headers,a.jobs,a.configure_only,a.qualify_g57_fp16)

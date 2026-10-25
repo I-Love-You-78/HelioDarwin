@@ -182,6 +182,15 @@ def apply(work):
         edit('src/panfrost/vulkan/panvk_vX_physical_device.c',
              f'      .{field} = true,',
              f'      .{field} = MESA_SYSTEM_HAS_KMS_DRM,')
+    # Explicit qualification build only. This does not qualify numeric FP16
+    # behavior: default builds retain the upstream gate, including G52.
+    edit('src/panfrost/vulkan/panvk_vX_physical_device.c',
+         '      .shaderFloat16 = PAN_ARCH >= 10,',
+         '#if defined(MESA_XNU) && PAN_ARCH == 9 && defined(PANVK_XNU_QUALIFY_G57_FP16) && PANVK_XNU_QUALIFY_G57_FP16\n'
+         '      .shaderFloat16 = device->kmod.dev->props.gpu_id == 0x90930010ull,\n'
+         '#else\n'
+         '      .shaderFloat16 = PAN_ARCH >= 10,\n'
+         '#endif')
     for name in ('src/vulkan/runtime/vk_image.h','src/vulkan/runtime/vk_image.c'):
         edit(name,'#if DETECT_OS_LINUX || DETECT_OS_BSD',
              '#if DETECT_OS_LINUX || DETECT_OS_BSD || defined(MESA_XNU)',all_occurrences=True)

@@ -16,6 +16,70 @@
 #include <limits.h>
 #include <time.h>
 #include <float.h>
+#include <stdio.h>
+
+@interface NSMutableArray : NSArray
+- (void)addObject:(id)object;
+- (void)removeLastObject;
+- (id)lastObject;
+@end
+@interface NSObject (MaliMetalVisibilityDescriptor)
+- (id<MTLBuffer>)visibilityResultBuffer;
+@end
+
+/* Encoding annotations are retained as real diagnostic data. They neither
+ * issue GPU commands nor claim a native capture/debug-utils facility. */
+@interface MaliMetalDebugAnnotations : NSObject {
+    NSMutableArray *_groups, *_records;
+    NSString *_scope;
+    BOOL _ended;
+}
+- (instancetype)initWithScope:(NSString *)scope;
+- (void)push:(NSString *)string operation:(NSUInteger)operation;
+- (void)popAtOperation:(NSUInteger)operation;
+- (void)signpost:(NSString *)string operation:(NSUInteger)operation;
+- (void)finishAtOperation:(NSUInteger)operation;
+- (NSArray *)records;
+@end
+@implementation MaliMetalDebugAnnotations
+- (instancetype)initWithScope:(NSString *)scope {
+    self=[super init];if(!self)return nil;
+    _scope=[scope copy];_groups=[[NSMutableArray alloc] init];_records=[[NSMutableArray alloc] init];
+    if(!_scope||!_groups||!_records){[self release];return nil;}return self;
+}
+- (void)dealloc {[_scope release];[_groups release];[_records release];[super dealloc];}
+- (void)validateString:(NSString *)string {
+    if(_ended||!string||![(id)string isKindOfClass:[NSString class]])
+        [NSException raise:@"NSInvalidArgumentException" format:@"Debug annotation needs an active scope and an NSString"];
+}
+- (void)recordAction:(NSString *)action string:(NSString *)string operation:(NSUInteger)operation {
+    char position[32];snprintf(position,sizeof(position),"%lu",(unsigned long)operation);
+    /* This is the count observed at API encoding time; later fence insertion
+     * may change native command indices, which these annotations do not claim. */
+    const id keys[]={@"scope",@"action",@"label",@"encodingOperationCount",@"groups"};
+    const id values[]={_scope,action,string,[NSString stringWithUTF8String:position],[[_groups copy] autorelease]};
+    [_records addObject:[NSDictionary dictionaryWithObjects:values forKeys:keys count:5]];
+}
+- (void)push:(NSString *)string operation:(NSUInteger)operation {
+    [self validateString:string];NSString *copy=[string copy];
+    [_groups addObject:copy];[self recordAction:@"push" string:copy operation:operation];[copy release];
+}
+- (void)popAtOperation:(NSUInteger)operation {
+    if(_ended||![_groups count]){
+        [NSException raise:@"NSInternalInconsistencyException" format:@"Debug group stack is empty or its scope has ended"];return;
+    }
+    [self recordAction:@"pop" string:[_groups lastObject] operation:operation];[_groups removeLastObject];
+}
+- (void)signpost:(NSString *)string operation:(NSUInteger)operation {
+    [self validateString:string];NSString *copy=[string copy];
+    [self recordAction:@"signpost" string:copy operation:operation];[copy release];
+}
+- (void)finishAtOperation:(NSUInteger)operation {
+    if(_ended)return;
+    [self recordAction:@"scopeEnd" string:@"" operation:operation];_ended=YES;
+}
+- (NSArray *)records {return [[_records copy] autorelease];}
+@end
 
 extern NSString *const MTLCommandBufferErrorDomain;
 
@@ -47,6 +111,7 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
 - (void)prepareSynchronizationForSubmission;
 - (void)markNativeSubmissionScheduled;
 - (void)requireEncoding;
+- (MaliMetalDebugAnnotations *)newDebugAnnotationsForScope:(NSString *)scope;
 @end
 
 @interface MaliMetalRenderCommandEncoder : MaliMetalObject <MTLRenderCommandEncoder> {
@@ -56,6 +121,9 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     MaliMetalCommandBuffer *_buffer;
     BOOL _ended;
     MaliMetalEncoderSynchronization *_synchronization;
+    MaliMetalDebugAnnotations *_debugAnnotations;
+    NSUInteger _visibilityResultMode, _visibilityResultOffset;
+    id<MTLBuffer> _visibilityResultBuffer;
     id _pipeline;
     MTLPixelFormat _colorFormats[8];
     id<MTLTexture> _targetTextures[8];
@@ -73,6 +141,7 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     MaliMetalCommandBuffer *_buffer;
     BOOL _ended;
     MaliMetalEncoderSynchronization *_synchronization;
+    MaliMetalDebugAnnotations *_debugAnnotations;
 }
 - (instancetype)initWithBuffer:(MaliMetalCommandBuffer *)buffer;
 - (BOOL)copySource:(id<MTLTexture>)source destination:(id<MTLTexture>)destination
@@ -88,6 +157,7 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     id _pipeline;
     BOOL _ended;
     MaliMetalEncoderSynchronization *_synchronization;
+    MaliMetalDebugAnnotations *_debugAnnotations;
     id<MTLBuffer> _buffers[31];
     NSUInteger _offsets[31];
     id<MTLTexture> _textures[128];
@@ -284,6 +354,8 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     MMVKSyncStream *_syncStream;
     MaliMetalFenceSubmission *_fenceSubmission;
     MaliMetalExecutedResources *_visibility;
+    MaliMetalDebugAnnotations *_debugAnnotations;
+    NSMutableArray *_debugScopes;
     NSError *_error;
     MTLCommandBufferStatus _status;
     BOOL _retainedReferences, _activeEncoder, _slotReleased;
@@ -353,6 +425,8 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
         [_queue releaseCommandBuffer];
     [_error release];
     [_visibility release];
+    [_debugAnnotations release];
+    [_debugScopes release];
     [_fenceSubmission release];
     [_queue release];
     pthread_cond_destroy(&_changed);
@@ -384,6 +458,29 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     if ([self status] >= MTLCommandBufferStatusCommitted)
         [NSException raise:@"NSInternalInconsistencyException"
                     format:@"Command buffer has already been committed"];
+}
+- (MaliMetalDebugAnnotations *)newDebugAnnotationsForScope:(NSString *)scope {
+    [self requireEncoding];
+    MaliMetalDebugAnnotations *state=[[MaliMetalDebugAnnotations alloc] initWithScope:scope];
+    if(!_debugScopes)_debugScopes=[[NSMutableArray alloc] init];
+    if(!state||!_debugScopes){[state release];[self recordBackendResult:MMVK_ERROR_MEMORY error:NULL];return nil;}
+    [_debugScopes addObject:state];return state;
+}
+- (void)pushDebugGroup:(NSString *)string {
+    [self requireEncoding];
+    if(!_debugAnnotations)_debugAnnotations=[self newDebugAnnotationsForScope:@"commandBuffer"];
+    [_debugAnnotations push:string operation:_operationCount];
+}
+- (void)popDebugGroup {
+    [self requireEncoding];
+    if(!_debugAnnotations){[NSException raise:@"NSInternalInconsistencyException" format:@"Command buffer debug group stack is empty"];return;}
+    [_debugAnnotations popAtOperation:_operationCount];
+}
+- (NSArray *)maliDebugAnnotations {
+    NSMutableArray *scopes=[[NSMutableArray alloc] init];
+    for(NSUInteger i=0;i<[_debugScopes count];i++)
+        [scopes addObject:[[_debugScopes objectAtIndex:i] records]];
+    NSArray *snapshot=[[scopes copy] autorelease];[scopes release];return snapshot;
 }
 - (BOOL)appendOperation:(MMVKResult (^)(MMVKCommands *, MMVKError *))operation {
     [self requireEncoding];
@@ -810,7 +907,11 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
     if (!_error)
         [self recordBackendResult:mmvk_commands_submit(_commands, &_fence, &error) error:&error];
     if (!_error) {
+        /* Match segmented submission: a Scheduled handler may submit work on
+         * another Metal queue, whose worker needs the device execution lock. */
+        [device unlockExecution];
         [self markNativeSubmissionScheduled];
+        [device lockExecution];
         MMVKResult result;
         /* Pending timeouts keep ownership. Other failures are reported now;
          * this transport cannot infer physical retirement from its loss latch. */
@@ -824,33 +925,12 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
         if(!_error)[self recordBackendResult:MMVK_ERROR_DEVICE_LOST error:&error];
         if(_fence||_submitted||(_syncStream&&mmvk_sync_stream_has_submissions(_syncStream)))[self quarantineNativeOwners];
     }
-    if (!_error) {
-        for (NSUInteger i=0;i<_ownedResourceCount;i++) {
-            id resource=_ownedResources[i];
-            if([resource respondsToSelector:@selector(maliCompleteComputeExecution:)]) {
-                [self recordBackendResult:[resource maliCompleteComputeExecution:&error] error:&error];
-                if(_error)break;
-            }
-        }
-    }
-    if (!_error) {
-        for (NSUInteger i = 0; i < _writtenBufferCount; i++) {
-            MMVKBuffer *buffer = [(id)_writtenBuffers[i] maliBuffer];
-            [self recordBackendResult:mmvk_buffer_invalidate(buffer, 0, mmvk_buffer_size(buffer),
-                                                             &error)
-                                error:&error];
-            if (_error)
-                break;
-        }
-    }
-    if (!_error) {
-        for (NSUInteger i = 0; i < _outputCount; i++) {
-            if (![(id)_outputs[i] maliReadbackImage:&error]) {
-                [self recordBackendResult:error.code ? error.code : MMVK_ERROR_IO error:&error];
-                break;
-            }
-        }
-    }
+    /* The final fence retires this queue's earlier submitted segments too.
+     * Reuse the executed-prefix generations: an unchanged root published at a
+     * shared-event boundary needs no second full IOSurface readback here, and
+     * multiple frontend views publish their common allocation only once. */
+    if (!_error)
+        [self recordBackendResult:[_visibility publishExecutedPrefix:&error] error:&error];
     /* Every segment retains its command storage/fence until native retirement,
      * including earlier successful submits when later encoding/submission fails. */
     if(_syncStream){
@@ -994,6 +1074,39 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
 @end
 
 @implementation MaliMetalRenderCommandEncoder
+- (void)pushDebugGroup:(NSString *)string {
+    [self requireActive];
+    if(!_debugAnnotations)_debugAnnotations=[_buffer newDebugAnnotationsForScope:@"render"];
+    [_debugAnnotations push:string operation:[_buffer synchronizationOperationCount]];
+}
+- (void)popDebugGroup {
+    [self requireActive];
+    if(!_debugAnnotations){[NSException raise:@"NSInternalInconsistencyException" format:@"Render debug group stack is empty"];return;}
+    [_debugAnnotations popAtOperation:[_buffer synchronizationOperationCount]];
+}
+- (void)insertDebugSignpost:(NSString *)string {
+    [self requireActive];
+    if(!_debugAnnotations)_debugAnnotations=[_buffer newDebugAnnotationsForScope:@"render"];
+    [_debugAnnotations signpost:string operation:[_buffer synchronizationOperationCount]];
+}
+- (void)setVisibilityResultMode:(NSUInteger)mode offset:(NSUInteger)offset {
+    [self requireActive];
+    if(mode>2||(offset&7u)){
+        [NSException raise:@"NSInvalidArgumentException" format:@"Invalid visibility mode or non-eight-byte-aligned offset"];return;
+    }
+    if(_visibilityResultBuffer&&offset>[_visibilityResultBuffer length]){
+        [NSException raise:@"NSInvalidArgumentException" format:@"Visibility result offset exceeds its buffer"];return;
+    }
+    if(mode){
+        if(!_visibilityResultBuffer||[_visibilityResultBuffer length]-offset<8){
+            [NSException raise:@"NSInvalidArgumentException" format:@"Enabled visibility testing needs an eight-byte result slot"];return;
+        }
+        [_buffer recordUnsupported:"Visibility queries require native query-pool recording and result resolution"];return;
+    }
+    /* Every native pass currently has no active query. Disabled is real state,
+     * and neither writes the result buffer nor invents a visibility count. */
+    _visibilityResultMode=mode;_visibilityResultOffset=offset;
+}
 - (void)updateFence:(id<MTLFence>)fence afterStages:(NSUInteger)stages {
     [self requireActive];
     if(!stages || (stages & ~3ul)) {[_buffer recordUnsupported:"Fence stage mask is unsupported"];return;}
@@ -1008,6 +1121,15 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
                     descriptor:(MTLRenderPassDescriptor *)descriptor {
     self=[super init];if(!self)return nil;
     _buffer=[buffer retain];
+    if([(id)descriptor respondsToSelector:@selector(visibilityResultBuffer)]){
+        _visibilityResultBuffer=[(id)descriptor visibilityResultBuffer];
+        if(_visibilityResultBuffer&&(![buffer useResource:(id)_visibilityResultBuffer]||
+           ![(id)_visibilityResultBuffer respondsToSelector:@selector(maliBuffer)]||
+           ![(id)_visibilityResultBuffer maliBuffer])){
+            [buffer recordUnsupported:"Visibility result buffer has no supported native allocation"];
+            [self release];return nil;
+        }
+    }
     _synchronization=[[MaliMetalEncoderSynchronization alloc] initWithBuffer:buffer];
     if(!_synchronization){[buffer recordBackendResult:MMVK_ERROR_MEMORY error:NULL];[self release];return nil;}
     mmvk_graphics_state_default(&_graphicsState);
@@ -1053,6 +1175,7 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
 - (const MMVKRenderPassDescriptor *)maliGraphicsPass {return &_graphicsPass.native;}
 - (const float *)maliBlendColor {return _blendColor;}
 - (void)dealloc {
+    [_debugAnnotations release];
     [_synchronization release];
     [_buffer release];
     [super dealloc];
@@ -1596,6 +1719,7 @@ static NSError *MaliMetalCommandError(MMVKResult result, const char *message) {
         return mmvk_commands_end_render(commands, error);
     }];
     [_synchronization endEncoding];
+    [_debugAnnotations finishAtOperation:[_buffer synchronizationOperationCount]];
     _ended = YES;
     [_buffer endEncoder];
 }
@@ -1643,6 +1767,21 @@ static void MaliMetalBlitRootOffsets(id<MTLTexture> texture, NSUInteger *level,
 }
 
 @implementation MaliMetalBlitCommandEncoder
+- (void)pushDebugGroup:(NSString *)string {
+    [self requireActive];
+    if(!_debugAnnotations)_debugAnnotations=[_buffer newDebugAnnotationsForScope:@"blit"];
+    [_debugAnnotations push:string operation:[_buffer synchronizationOperationCount]];
+}
+- (void)popDebugGroup {
+    [self requireActive];
+    if(!_debugAnnotations){[NSException raise:@"NSInternalInconsistencyException" format:@"Blit debug group stack is empty"];return;}
+    [_debugAnnotations popAtOperation:[_buffer synchronizationOperationCount]];
+}
+- (void)insertDebugSignpost:(NSString *)string {
+    [self requireActive];
+    if(!_debugAnnotations)_debugAnnotations=[_buffer newDebugAnnotationsForScope:@"blit"];
+    [_debugAnnotations signpost:string operation:[_buffer synchronizationOperationCount]];
+}
 - (void)synchronizeTexture:(id<MTLTexture>)texture slice:(NSUInteger)slice level:(NSUInteger)level {
     [self requireActive];
     if(slice || level) {[_buffer recordUnsupported:"Non-base texture host synchronization needs a subresource readback contract"];return;}
@@ -1680,6 +1819,7 @@ static void MaliMetalBlitRootOffsets(id<MTLTexture> texture, NSUInteger *level,
     return self;
 }
 - (void)dealloc {
+    [_debugAnnotations release];
     [_synchronization release];
     [_buffer release];
     [super dealloc];
@@ -1938,12 +2078,28 @@ static void MaliMetalBlitRootOffsets(id<MTLTexture> texture, NSUInteger *level,
 - (void)endEncoding {
     [self requireActive];
     [_synchronization endEncoding];
+    [_debugAnnotations finishAtOperation:[_buffer synchronizationOperationCount]];
     _ended = YES;
     [_buffer endEncoder];
 }
 @end
 
 @implementation MaliMetalComputeCommandEncoder
+- (void)pushDebugGroup:(NSString *)string {
+    [self requireActive];
+    if(!_debugAnnotations)_debugAnnotations=[_buffer newDebugAnnotationsForScope:@"compute"];
+    [_debugAnnotations push:string operation:[_buffer synchronizationOperationCount]];
+}
+- (void)popDebugGroup {
+    [self requireActive];
+    if(!_debugAnnotations){[NSException raise:@"NSInternalInconsistencyException" format:@"Compute debug group stack is empty"];return;}
+    [_debugAnnotations popAtOperation:[_buffer synchronizationOperationCount]];
+}
+- (void)insertDebugSignpost:(NSString *)string {
+    [self requireActive];
+    if(!_debugAnnotations)_debugAnnotations=[_buffer newDebugAnnotationsForScope:@"compute"];
+    [_debugAnnotations signpost:string operation:[_buffer synchronizationOperationCount]];
+}
 - (void)updateFence:(id<MTLFence>)fence { [self requireActive];[_synchronization updateFence:fence]; }
 - (void)waitForFence:(id<MTLFence>)fence { [self requireActive];[_synchronization waitForFence:fence]; }
 - (instancetype)initWithBuffer:(MaliMetalCommandBuffer *)buffer {
@@ -1956,6 +2112,7 @@ static void MaliMetalBlitRootOffsets(id<MTLTexture> texture, NSUInteger *level,
     return self;
 }
 - (void)dealloc {
+    [_debugAnnotations release];
     [_synchronization release];
     [_buffer release];
     [super dealloc];
@@ -2259,6 +2416,7 @@ static void MaliMetalBlitRootOffsets(id<MTLTexture> texture, NSUInteger *level,
 - (void)endEncoding {
     [self requireActive];
     [_synchronization endEncoding];
+    [_debugAnnotations finishAtOperation:[_buffer synchronizationOperationCount]];
     _ended = YES;
     [_buffer endEncoder];
 }

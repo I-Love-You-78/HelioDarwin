@@ -27,6 +27,8 @@ def main():
     p.add_argument('--distribution',default='Ubuntu')
     p.add_argument('--jobs',type=int,default=6)
     p.add_argument('--configure-only',action='store_true')
+    p.add_argument('--qualify-g57-fp16',action='store_true',
+                   help='experimental exact-G57 FP16 availability for qualification; numeric correctness unqualified')
     a=p.parse_args()
     if not a.darwin_headers:
         import ziglang
@@ -41,9 +43,10 @@ def main():
             '--darwin-headers',wsl_path(a.darwin_headers),'--libcxx-headers',a.libcxx_headers,
             '--jobs',str(a.jobs)]
         if a.configure_only:command+=['--configure-only']
+        if a.qualify_g57_fp16:command+=['--qualify-g57-fp16']
         subprocess.run(command,check=True)
     else:
         from build_mesa_wsl import build
-        build(a.work,a.sysroot,a.darwin_headers,Path(a.libcxx_headers),a.jobs,a.configure_only)
+        build(a.work,a.sysroot,a.darwin_headers,Path(a.libcxx_headers),a.jobs,a.configure_only,a.qualify_g57_fp16)
 
 if __name__=='__main__':main()

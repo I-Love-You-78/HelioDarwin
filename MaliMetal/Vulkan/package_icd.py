@@ -109,6 +109,18 @@ def package(work):
           'transport':{'abi':1,'frontend':'Valhall v9 Job Manager','gpu_id':'0x90930010',
                        'submission':'synchronous hardware completion','cpu_mapping':'Normal non-cacheable',
                        'dma_buf_import':False,'iosurface_import':False,'grow_on_fault':False}}
+    # Derive the qualification marker from the actual v9 compile command,
+    # rather than from an invocation flag that packaging might not receive.
+    compiles=json.loads((build/'compile_commands.json').read_text())
+    v9_commands=[row.get('command',' '.join(row.get('arguments',[]))) for row in compiles
+                 if row['file'].endswith('panvk_vX_physical_device.c') and
+                 '-DPAN_ARCH=9' in row.get('command',' '.join(row.get('arguments',[])))]
+    if len(v9_commands)!=1:raise ValueError('expected exactly one v9 feature compile command')
+    qualification='-DPANVK_XNU_QUALIFY_G57_FP16=1' in v9_commands[0]
+    data['qualification_candidates']={'g57_fp16':{
+        'enabled':qualification,'gpu_id':'0x90930010','production_default':False,
+        'native_numeric_qualification':'not performed',
+        'contract':'experimental native availability on this exact G57 ID; upstream older-generation gates retained'}}
     licences=output/'LICENSES';licences.mkdir(exist_ok=True)
     shutil.copytree(mesa/'licenses',licences/'Mesa',dirs_exist_ok=True)
     shutil.copytree(source/'LICENSES',licences/'PanVK-RC3',dirs_exist_ok=True)

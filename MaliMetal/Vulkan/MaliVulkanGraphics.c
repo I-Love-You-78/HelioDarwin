@@ -215,12 +215,33 @@ static MMVKResult specialization(const MMVKGraphicsSpecialization *s,VkSpecializ
     }
     *out=(VkSpecializationInfo){s->count,*owned,s->size,s->data};return MMVK_OK;
 }
+static MMVKResult validate_point_size(MMVKDevice *d,const MMVKShader *shader,const MMVKGraphicsState *state,MMVKError *e)
+{
+    if(!shader->words||shader->size<20||(shader->size&3)||shader->words[0]!=0x07230203u)
+        return mmvk_errorf(e,MMVK_ERROR_SHADER,0,"invalid vertex SPIR-V module");
+    size_t words=shader->size/4;uint32_t point_size=0;
+    for(size_t n=5;n<words;){
+        uint32_t count=shader->words[n]>>16,opcode=shader->words[n]&0xffffu;
+        if(!count||count>words-n)return mmvk_errorf(e,MMVK_ERROR_SHADER,0,"malformed vertex SPIR-V instruction");
+        /* OpDecorate/OpMemberDecorate BuiltIn PointSize. Conservatively qualify
+         * every declaration, including grouped or unused interface members. */
+        if((opcode==71&&count==4&&shader->words[n+2]==11&&shader->words[n+3]==1)||
+           (opcode==72&&count==5&&shader->words[n+3]==11&&shader->words[n+4]==1))point_size=1;
+        n+=count;
+    }
+    if(point_size&&(state->topology!=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST||state->polygon_mode!=VK_POLYGON_MODE_FILL))
+        return mmvk_errorf(e,MMVK_ERROR_UNSUPPORTED,0,"PointSize output requires qualified triangle-list fill rasterization");
+    if(point_size&&!d->enabled_features.largePoints)
+        return mmvk_errorf(e,MMVK_ERROR_UNSUPPORTED,0,"PointSize output requires the actual enabled largePoints feature");
+    return MMVK_OK;
+}
 MMVKResult mmvk_graphics_pipeline_create(MMVKDevice *d,const MMVKGraphicsPipelineDescriptor *desc,MMVKPipeline **out,MMVKError *e)
 {
     if(out)*out=NULL;
     if(!d||!desc||!out)return mmvk_errorf(e,MMVK_ERROR_ARGUMENT,0,"missing graphics pipeline descriptor");
     const MMVKGraphicsState *s=&desc->state;const MMVKRenderPipelineDescriptor *b=&desc->base;
     MMVKResult result=validate_layout(d,&desc->pass,e);if(result)return result;
+    result=validate_point_size(d,&b->vertex,s,e);if(result)return result;
     if(s->tile_image_color_reads){
         result=mmvk_graphics_require_ordered_fetch(d,s->tile_image_color_reads,e);if(result)return result;
         for(uint32_t n=0;n<MMVK_GRAPHICS_COLOR_SLOTS;n++)if((s->tile_image_color_reads&(1u<<n))&&

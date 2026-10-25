@@ -11,6 +11,7 @@
 - (MTLStorageMode)storageMode;
 - (MTLCPUCacheMode)cpuCacheMode;
 - (MTLHazardTrackingMode)hazardTrackingMode;
+- (NSUInteger)protectionOptions;
 - (MMVKHeap *)maliHeap;
 @end
 extern void *IOSurfaceGetBaseAddress(void *) __attribute__((weak_import));
@@ -44,6 +45,12 @@ static BOOL surfaceXRPlanes(void *surface,NSUInteger width,NSUInteger height,MMV
 }
 static void resourceException(const char *message){[NSException raise:@"NSInvalidArgumentException" format:@"%s",message];}
 static void backendException(const MMVKError *error){[NSException raise:@"NSInternalInconsistencyException" format:@"%s",error->message];}
+/* The backend allocates ordinary Vulkan memory only. Reject native descriptor
+ * protection requests rather than silently returning an unprotected resource.
+ * Texture views retain this invariant through their validated parent. */
+static BOOL hasUnprotectedOptions(id object){
+    return object&&[object respondsToSelector:@selector(protectionOptions)]&&[object protectionOptions]==0;
+}
 BOOL MaliMetalResourceOptions(MTLResourceOptions o,MTLStorageMode *storage,MTLCPUCacheMode *cache,MTLHazardTrackingMode *hazard){
     NSUInteger s=(o>>4)&3,c=o&15,h=(o>>8)&3;
     if((o&~0x33ful)||c>1||h>2||(s!=MTLStorageModeShared&&s!=MTLStorageModePrivate&&s!=MTLStorageModeMemoryless))return NO;
@@ -57,7 +64,7 @@ static uint32_t bufferUsage(void){return MMVK_BUFFER_VERTEX|MMVK_BUFFER_INDEX|MM
 }
 - (instancetype)initWithLength:(NSUInteger)n device:(MaliMetalDevice *)device options:(MTLResourceOptions)o heap:(id)heap {
     self=[super init];if(!self)return nil;
-    if(!device||!n||n>[device maxBufferLength]||n>SIZE_MAX-15||!MaliMetalResourceOptions(o,&_storageMode,&_cpuCacheMode,&_hazardMode)){[self release];return nil;}
+    if(!device||!n||n>[device maxBufferLength]||n>SIZE_MAX-15||!MaliMetalResourceOptions(o,&_storageMode,&_cpuCacheMode,&_hazardMode)||(heap&&!hasUnprotectedOptions(heap))){[self release];return nil;}
     _device=[device retain];_length=n;_purgeableState=2;
     MMVKError error={0};uint64_t nativeLength=(n+15)&~15ul;
     if(mmvk_buffer_create_storage([device backendDevice],nativeLength,bufferUsage(),(MMVKStorage)_storageMode,heap?[heap maliHeap]:NULL,&_buffer,&error)!=MMVK_OK){[self release];return nil;}
@@ -84,6 +91,7 @@ static uint32_t bufferUsage(void){return MMVK_BUFFER_VERTEX|MMVK_BUFFER_INDEX|MM
 - (MTLStorageMode)storageMode{return _storageMode;}
 - (MTLCPUCacheMode)cpuCacheMode{return _cpuCacheMode;}
 - (MTLHazardTrackingMode)hazardTrackingMode{return _hazardMode;}
+- (NSUInteger)protectionOptions{return 0;}
 - (NSUInteger)allocatedSize{return (NSUInteger)mmvk_buffer_allocation_size(_buffer);}
 - (id)heap{return _heap;}
 - (NSUInteger)heapOffset{return (NSUInteger)mmvk_buffer_heap_offset(_buffer);}
@@ -97,7 +105,7 @@ static BOOL linearSRGBPair(NSUInteger a,NSUInteger b){
     return (a==10||a==11||a==30||a==31||a==70||a==71||a==80||a==81||a==550||a==551||a==552||a==553||a==554||a==555)&&((a^b)==1);
 }
 BOOL MaliMetalTextureDescriptorNative(MTLTextureDescriptor *d,MMVKImageDescriptorEx *x){
-    if(!d||!x)return NO;MTLStorageMode storage;MTLCPUCacheMode cache;MTLHazardTrackingMode hazard;
+    if(!d||!x||!hasUnprotectedOptions(d))return NO;MTLStorageMode storage;MTLCPUCacheMode cache;MTLHazardTrackingMode hazard;
     if(!MaliMetalResourceOptions([d resourceOptions],&storage,&cache,&hazard)||[d storageMode]!=storage||[d cpuCacheMode]!=cache)return NO;
     NSUInteger w=[d width],h=[d height],z=[d depth],levels=[d mipmapLevelCount],layers=[d arrayLength],samples=[d sampleCount],type=[d textureType],usage=[d usage];
     if(!w||!h||!z||!levels||!layers||w>UINT32_MAX||h>UINT32_MAX||z>UINT32_MAX||levels>UINT32_MAX||layers>UINT32_MAX||samples>UINT32_MAX||type>8||(usage&~0x17ul))return NO;
@@ -119,7 +127,7 @@ BOOL MaliMetalTextureDescriptorNative(MTLTextureDescriptor *d,MMVKImageDescripto
 - (instancetype)initWithDescriptor:(MTLTextureDescriptor *)d device:(id<MTLDevice>)device{return [self initWithDescriptor:d device:(MaliMetalDevice *)device heap:nil];}
 - (instancetype)initWithDescriptor:(MTLTextureDescriptor *)d device:(MaliMetalDevice *)device heap:(id)heap {
     self=[super init];if(!self)return nil;MMVKImageDescriptorEx native;
-    if(!device||!MaliMetalTextureDescriptorNative(d,&native)){[self release];return nil;}
+    if(!device||!MaliMetalTextureDescriptorNative(d,&native)||(heap&&!hasUnprotectedOptions(heap))){[self release];return nil;}
     _device=[device retain];_pixelFormat=[d pixelFormat];_textureType=[d textureType];_usage=[d usage];_storageMode=[d storageMode];_cpuCacheMode=[d cpuCacheMode];_purgeableState=2;
     _swizzle[0]=2;_swizzle[1]=3;_swizzle[2]=4;_swizzle[3]=5;
     MaliMetalResourceOptions([d resourceOptions],NULL,NULL,&_hazardMode);
@@ -160,6 +168,7 @@ BOOL MaliMetalTextureDescriptorNative(MTLTextureDescriptor *d,MMVKImageDescripto
 - (MTLStorageMode)storageMode{return _storageMode;}
 - (MTLCPUCacheMode)cpuCacheMode{return _cpuCacheMode;}
 - (MTLHazardTrackingMode)hazardTrackingMode{return _hazardMode;}
+- (NSUInteger)protectionOptions{return 0;}
 - (BOOL)isFramebufferOnly{return NO;}
 - (BOOL)isSparse{return NO;}
 - (BOOL)allowGPUOptimizedContents{return YES;}
@@ -279,7 +288,7 @@ BOOL MaliMetalTextureDescriptorNative(MTLTextureDescriptor *d,MMVKImageDescripto
 @implementation MaliMetalHeap
 - (instancetype)initWithDevice:(MaliMetalDevice *)device descriptor:(id)d {
     self=[super init];if(!self)return nil;
-    if(!device||!d||![d respondsToSelector:@selector(size)]||![d respondsToSelector:@selector(storageMode)]||![d respondsToSelector:@selector(cpuCacheMode)]||![d respondsToSelector:@selector(hazardTrackingMode)]||([d respondsToSelector:@selector(type)]&&[d type]!=0)){[self release];return nil;}
+    if(!device||!hasUnprotectedOptions(d)||![d respondsToSelector:@selector(size)]||![d respondsToSelector:@selector(storageMode)]||![d respondsToSelector:@selector(cpuCacheMode)]||![d respondsToSelector:@selector(hazardTrackingMode)]||([d respondsToSelector:@selector(type)]&&[d type]!=0)){[self release];return nil;}
     MTLResourceOptions options=([d storageMode]<<4)|[d cpuCacheMode]|([d hazardTrackingMode]<<8);
     if(!MaliMetalResourceOptions(options,&_storageMode,&_cpuCacheMode,&_hazardMode)){[self release];return nil;}
     MMVKError error={0};if(mmvk_heap_create([device backendDevice],[d size],(MMVKStorage)_storageMode,&_heap,&error)){[self release];return nil;}
@@ -297,6 +306,7 @@ BOOL MaliMetalTextureDescriptorNative(MTLTextureDescriptor *d,MMVKImageDescripto
 - (MTLStorageMode)storageMode{return _storageMode;}
 - (MTLCPUCacheMode)cpuCacheMode{return _cpuCacheMode;}
 - (MTLHazardTrackingMode)hazardTrackingMode{return _hazardMode;}
+- (NSUInteger)protectionOptions{return 0;}
 - (id<MTLBuffer>)newBufferWithLength:(NSUInteger)n options:(MTLResourceOptions)o {
     MTLStorageMode storage;MTLCPUCacheMode cache;MTLHazardTrackingMode hazard;
     if(!MaliMetalResourceOptions(o,&storage,&cache,&hazard)||storage!=_storageMode||cache!=_cpuCacheMode)return nil;

@@ -18,6 +18,7 @@
 - (uint64_t)gpuAddress;
 - (uint64_t)maliDeviceAddress;
 - (uint64_t)maliResourceID;
+- (NSUInteger)protectionOptions;
 @end
 typedef struct { uint8_t red,green,blue,alpha; } MaliMetalTextureSwizzleChannels;
 
@@ -34,6 +35,7 @@ typedef struct { uint8_t red,green,blue,alpha; } MaliMetalTextureSwizzleChannels
 - (instancetype)initWithDescriptor:(MTLTextureDescriptor *)descriptor device:(MaliMetalDevice *)device heap:(id)heap;
 - (MMVKImage *)maliImage;
 - (uint64_t)maliResourceID;
+- (NSUInteger)protectionOptions;
 - (BOOL)maliPrepareImage:(BOOL)preserve error:(MMVKError *)error;
 - (BOOL)maliReadbackImage:(MMVKError *)error;
 - (MMShaderRenderTexture)maliRenderTextureFacts;
@@ -60,6 +62,7 @@ typedef struct { uint8_t red,green,blue,alpha; } MaliMetalTextureSwizzleChannels
 }
 - (instancetype)initWithDevice:(MaliMetalDevice *)device descriptor:(id)descriptor;
 - (MMVKHeap *)maliHeap;
+- (NSUInteger)protectionOptions;
 - (id<MTLBuffer>)newBufferWithLength:(NSUInteger)length options:(MTLResourceOptions)options;
 - (id<MTLTexture>)newTextureWithDescriptor:(MTLTextureDescriptor *)descriptor;
 @end

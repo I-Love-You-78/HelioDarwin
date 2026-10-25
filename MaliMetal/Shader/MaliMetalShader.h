@@ -113,7 +113,7 @@ typedef struct MMShaderBackendBinding {
     uint32_t metal_stage, metal_index;
     uint64_t minimum_size, alignment;
     uint32_t sampler_index;        /* For Vulkan combined-image-sampler bindings. */
-    const uint8_t *constant_bytes; /* Compiler-owned immutable ConstantBlob, otherwise NULL. */
+    const uint8_t *constant_bytes; /* Immutable compiler blob/table bytes, otherwise NULL. */
     size_t constant_size;
 } MMShaderBackendBinding;
 enum { MM_SHADER_PUSH_BUFFER_OFFSET = 1, MM_SHADER_PUSH_COLOR_WRITE_RULE = 2 };
