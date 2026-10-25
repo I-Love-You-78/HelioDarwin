@@ -128,6 +128,30 @@ supplies verified private Wi-Fi and Bluetooth metadata without creating a networ
 driver or changing identity-version policy. The resulting seeding/query/provider
 delivery is a new runtime check, not yet a completed wallpaper milestone.
 
+Patch 0201 answers `F_GETPROTECTIONCLASS` with class 0 only for a regular,
+known-unprotected file on a consistent, non-CoreStorage, non-protected HFS mount.
+It checks both volume and file protection keys, including orphaned attribute
+extents; unavailable or malformed metadata keeps the operation unsupported.
+Attribute-key decoding now validates the exact canonical length before any
+B-tree iterator copy. This targets Foundation's observed whole-file read fallback
+and driverkitd per-process-limit kills; it does not enable encrypted storage,
+raise memory limits or establish that the next run avoids those kills.
+
+The 21:10:55 run returned from the ExtensionKit query with zero providers;
+both built-in poster-provider registrations returned false. The inspected native
+registration path validates the signed extension cache, then queries the missing
+`AppleMobileFileIntegrity` service for static-trust-cache membership.
+
+Patch 0202 supplies that specific service and selector-6 membership contract.
+It requires the caller's existing `com.apple.private.amfi.can-check-trust-cache`
+entitlement and task binding. The kernel independently pins the original 20H392
+static trust cache by SHA256, validates its framing, and owns an immutable copy.
+Absent/invalid data, unauthorized callers and nonmembers fail closed. Existing
+signature validation and global MAC policy remain unchanged. This is a bounded
+software compatibility service, not authenticated Apple boot or a general AMFI
+implementation. Runtime cache admission, provider registration and wallpaper
+delivery still require the assembled candidate.
+
 ## Remaining contracts
 
 Persistent AppleKeyStore key wrapping/unwrapping, bag lifecycle and access control remain missing prerequisites for real keychain persistence. SEP-backed protection, biometric/NFC/secure-element interfaces, modem transport, Wi-Fi/Bluetooth controllers and the USB PTP function require separate implementations. Search, ScreenTime and pass services also retain storage, account and keybag dependencies. These changes do not establish blanket daemon or hardware functionality.

@@ -239,6 +239,15 @@ The native build preserves upstream license notices. Prior related work includes
 [Indium](https://github.com/darlinghq/indium); their existence does not establish
 runtime compatibility of this implementation.
 
+The 21:10:55 run reached native MPS Common registration in SpringBoard and
+the real `D8F18H` compute pipeline request. The native compute descriptor lazily
+creates a nonnil, empty stage-input descriptor; rejecting its mere presence
+aborted pipeline construction. The frontend now accepts the verified empty
+public defaults and rejects configured stage input. Other unsupported controls
+report their individual reason. Both observed D8F18H specializations pass offline
+compilation and SPIR-V validation; GPU dispatch, pixels and performance still
+require a new device run.
+
 ## Remaining coverage and validation
 
 Patched coherent color tile reads, native depth/stencil/MSAA helpers, views and

@@ -7,6 +7,7 @@ nodes and optional verified factory metadata are provided here; peripheral
 service nodes depend on their ported drivers. Usage:
 
   mkadt.py OUT.adt [--dump] [--d22ap PATH] [--device-identity PRIVATE_JSON]
+           [--static-trust-cache PRIVATE_RAW_PAYLOAD]
 
 The kernel still matches the topaz class names (SweetPlatformExpert matches
 'xiaomi,sweet', CPU nubs 'qcom,kryo470'), so those compatible strings stay
@@ -52,6 +53,12 @@ BOOT_MANIFEST_HASH = hashlib.sha384(b'x676c boot manifest').digest()
 CPU_MPIDRS = [0x000, 0x100, 0x200, 0x300, 0x400, 0x500]
 
 D22AP_ADT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../research/d22ap.adt')
+
+# Original 20H392 StaticTrustCache IM4P payload, verified against its d22ap
+# BuildManifest digest. This pins packaged software, not Apple boot authority.
+STATIC_TRUST_CACHE_SHA256 = 'b7ab28e0009900326ae685a88748008a9653e6bcbd70674135dac4eb5231ad64'
+STATIC_TRUST_CACHE_COUNT = 2760
+STATIC_TRUST_CACHE_SIZE = 24 + STATIC_TRUST_CACHE_COUNT * 24
 
 u32 = lambda *v: struct.pack('<%dI' % len(v), *v)
 u64 = lambda *v: struct.pack('<%dQ' % len(v), *v)
@@ -118,8 +125,37 @@ def factory_wifi_identity(path):
     return factory_device_identity(path)['mac-address-wifi0']
 
 
-def build(seed=None, d22ap=D22AP_ADT, device_identity=None):
+def verified_static_trust_cache(path):
+    """Accept only the exact original packaged trust-cache payload."""
+    try:
+        with open(path, 'rb') as stream:
+            payload = stream.read(STATIC_TRUST_CACHE_SIZE + 1)
+    except OSError as error:
+        raise ValueError('Cannot read private static trust-cache payload') from error
+    if (len(payload) != STATIC_TRUST_CACHE_SIZE or
+            hashlib.sha256(payload).hexdigest() != STATIC_TRUST_CACHE_SHA256):
+        raise ValueError('Static trust-cache payload does not match pinned 20H392 software')
+    version, = struct.unpack_from('<I', payload)
+    count, = struct.unpack_from('<I', payload, 20)
+    if version != 2 or count != STATIC_TRUST_CACHE_COUNT:
+        raise ValueError('Unsupported static trust-cache version or entry count')
+    previous = None
+    for offset in range(24, len(payload), 24):
+        cdhash = payload[offset:offset + 20]
+        hash_type, flags, category, reserved = payload[offset + 20:offset + 24]
+        # These are the values present in the pinned original set; category
+        # values are preserved as metadata, not interpreted as authorization.
+        if (hash_type not in (1, 2) or flags not in (0, 1) or
+                category not in (0, 1, 2, 3, 4, 5, 18) or reserved != 0 or
+                (previous is not None and cdhash < previous)):
+            raise ValueError('Invalid static trust-cache entry or hash ordering')
+        previous = cdhash
+    return payload
+
+
+def build(seed=None, d22ap=D22AP_ADT, device_identity=None, static_trust_cache=None):
     factory_identity = factory_device_identity(device_identity) if device_identity is not None else {}
+    trust_cache = verified_static_trust_cache(static_trust_cache) if static_trust_cache is not None else None
     seed = seed if seed is not None else os.urandom(64)
     phandle = iter(range(1, 1000))
     ph = lambda: ('AAPL,phandle', u32(next(phandle)))
@@ -148,6 +184,8 @@ def build(seed=None, d22ap=D22AP_ADT, device_identity=None):
         # MobileGestalt reads factory addresses directly from /chosen, before
         # probing drivers. Hardware metadata is independent of radio services.
         chosen.props.append((name, 0, value))
+    if trust_cache is not None:
+        chosen.props.append(('sweet-static-trust-cache', 0, trust_cache))
 
     cpu_nodes = []
     for i, mpidr in enumerate(CPU_MPIDRS):
@@ -253,17 +291,25 @@ if __name__ == '__main__':
     ap.add_argument('--dump', action='store_true')
     ap.add_argument('--d22ap', default=D22AP_ADT, help='iPhone X DeviceTree (for /product)')
     ap.add_argument('--device-identity', help='private JSON containing Android factory hardware metadata')
+    ap.add_argument('--static-trust-cache', help='private raw payload of the pinned 20H392 static trust cache')
     a = ap.parse_args()
     try:
-        blob = adt.serialize(build(d22ap=a.d22ap, device_identity=a.device_identity))
+        blob = adt.serialize(build(d22ap=a.d22ap, device_identity=a.device_identity,
+                                   static_trust_cache=a.static_trust_cache))
     except ValueError as error:
         ap.error(str(error))
     open(a.out, 'wb').write(blob)
     if a.dump:
         displayed = adt.parse(blob)[0]
-        if a.device_identity is not None:
+        if a.device_identity is not None or a.static_trust_cache is not None:
             chosen = next(child for child in displayed.children if child.name == 'chosen')
-            chosen.props = [(name, flags, b'<private factory identity>\0' if name in ('mac-address-wifi0', 'mac-address-bluetooth0') else value)
-                            for name, flags, value in chosen.props]
+            redacted = []
+            for name, flags, value in chosen.props:
+                if name in ('mac-address-wifi0', 'mac-address-bluetooth0'):
+                    value = cstr('<private factory identity>')
+                elif name == 'sweet-static-trust-cache':
+                    value = cstr(f'<pinned static trust cache: {len(value)} bytes, SHA256 {hashlib.sha256(value).hexdigest()}>')
+                redacted.append((name, flags, value))
+            chosen.props = redacted
         adt.dump(displayed)
     print(f'{a.out}: {len(blob)} bytes', file=sys.stderr)

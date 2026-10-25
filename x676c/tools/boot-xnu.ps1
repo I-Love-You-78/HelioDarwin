@@ -11,6 +11,7 @@ param(
     [string]$Adb = "adb",
     [string]$Serial = "",
     [string]$DeviceIdentity = "",
+    [string]$StaticTrustCache = "",
     [ValidatePattern('^(?:/[A-Za-z0-9_.-]+)+$|^[A-Za-z0-9_.-]+$')] [string]$Su = "su",
     [ValidateRange(1, 120)] [int]$ReturnWaitMinutes = 20,
     [string]$BootArgs = "debug=0xc serial=3 cpus=6 keepsyms=1 -v -enable_kprintf_spam wdt=-1 wdt_test=no_user_checkin rd=ufs ufsroot=iosroot ufsrw=iosroot unentitled_ios_sim_launch=1 ignition_level=1 launchd_unsecure_cache=1 sweetsample=- ufsbeat=64 sweetscan=backboardd,SpringBoard,PosterBoard sweetnull=launchd,dyld,init,backboardd,SpringBoard,lsd,containermanagerd sweetfb_noconsole=1 sweetfb_native=1 sweetfb_stayon=1"
@@ -70,7 +71,13 @@ $connectedIdentitySerial = & $adb @adbArguments get-serialno
 if ($LASTEXITCODE -or $connectedIdentitySerial.Trim() -ne $identityData.device_serial) {
     throw "Private identity belongs to another device; no boot image flashed"
 }
-python -I (Join-Path $x676c "tools\mkadt.py") "$out\x676c.adt" --device-identity $DeviceIdentity
+if (-not $StaticTrustCache) {
+    $StaticTrustCache = Join-Path $x676c 'research\20H392-static.trustcache'
+}
+if (-not (Test-Path -LiteralPath $StaticTrustCache -PathType Leaf)) {
+    throw "Verified 20H392 static trust cache required; supply -StaticTrustCache before deployment"
+}
+python -I (Join-Path $x676c "tools\mkadt.py") "$out\x676c.adt" --device-identity $DeviceIdentity --static-trust-cache $StaticTrustCache
 if ($LASTEXITCODE) { throw "ADT build failed" }
 python -I (Join-Path $x676c "tools\mkpayload.py") "$k\kernel.development.sweet" "$out\x676c.adt" "$out\payload.bin" --cmdline $BootArgs
 if ($LASTEXITCODE) { throw "payload build failed" }

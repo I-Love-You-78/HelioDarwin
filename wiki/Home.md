@@ -30,8 +30,9 @@ The integrated ABI 4/compute ABI 2 candidate now uses canonical per-draw and
 dispatch planning, with native graphics/resource/synchronization modules and
 declared compiler patches. Strict linking/static review pass; target GPU execution
 and expanded API behavior still require validation.
-A separate shared-cache metadata failure affecting SpringBoard and several
-services is under investigation. Touch interaction was confirmed and kernel HID
+Later diagnostics identified MPS compute-descriptor, signed extension-cache
+registration and HFS file-protection query gaps. The current candidate addresses
+those bounded contracts; runtime acceptance remains pending. Touch interaction was confirmed and kernel HID
 logs include physical power/volume-key events. GPU jobs, multi-touch, volume and
 sleep/wake behavior, and the installed PosterBoard/native display adapters still
 require runtime validation.

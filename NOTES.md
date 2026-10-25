@@ -44,8 +44,8 @@ a function-descriptor API gap passed a phone check, exposing missing MRT/blendin
 support, followed by native-profile schema and buffer-window failures. The
 integrated ABI 4/compute ABI 2 candidate now passes strict native linking and
 structural planning for both observed pipelines. GPU execution and the expanded
-API/helper paths still require device validation. A separate shared-cache
-metadata failure affecting SpringBoard and several services is under investigation.
+API/helper paths still require device validation. Later diagnostics below
+identify additional MPS, registration and file-mapping contracts.
 
 The 2026-10-25 integrated boot selected Vulkan 1.3, buffer device addresses,
 dynamic rendering and color tile reads on the native device. It exposed a
@@ -84,6 +84,39 @@ for missing Wi-Fi metadata. Private provisioned Wi-Fi/Bluetooth inputs now feed
 the ADT; runtime identity lookup, seeding, rendered frames and wallpaper delivery
 remain the next checks. No wireless-driver or authentic Apple hardware identity
 claim is implied.
+
+The 21:10:55 run reached native MPS Common registration in SpringBoard and
+the real `D8F18H` compute pipeline request. The native compute descriptor lazily
+creates a nonnil, empty stage-input descriptor; rejecting its mere presence
+aborted pipeline construction. The frontend now accepts the verified empty
+public defaults and rejects configured stage input. Other unsupported controls
+report their individual reason. Both observed D8F18H specializations pass offline
+compilation and SPIR-V validation; GPU dispatch, pixels and performance still
+require a new device run.
+
+Patch 0201 answers `F_GETPROTECTIONCLASS` with class 0 only for a regular,
+known-unprotected file on a consistent, non-CoreStorage, non-protected HFS mount.
+It checks both volume and file protection keys, including orphaned attribute
+extents; unavailable or malformed metadata keeps the operation unsupported.
+Attribute-key decoding now validates the exact canonical length before any
+B-tree iterator copy. This targets Foundation's observed whole-file read fallback
+and driverkitd per-process-limit kills; it does not enable encrypted storage,
+raise memory limits or establish that the next run avoids those kills.
+
+The 21:10:55 run returned from the ExtensionKit query with zero providers;
+both built-in poster-provider registrations returned false. The inspected native
+registration path validates the signed extension cache, then queries the missing
+`AppleMobileFileIntegrity` service for static-trust-cache membership.
+
+Patch 0202 supplies that specific service and selector-6 membership contract.
+It requires the caller's existing `com.apple.private.amfi.can-check-trust-cache`
+entitlement and task binding. The kernel independently pins the original 20H392
+static trust cache by SHA256, validates its framing, and owns an immutable copy.
+Absent/invalid data, unauthorized callers and nonmembers fail closed. Existing
+signature validation and global MAC policy remain unchanged. This is a bounded
+software compatibility service, not authenticated Apple boot or a general AMFI
+implementation. Runtime cache admission, provider registration and wallpaper
+delivery still require the assembled candidate.
 
 ## Priorities
 

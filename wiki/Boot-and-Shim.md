@@ -11,7 +11,22 @@ The Bluetooth reader validates the reviewed MediaTek vendor libraries, record
 layout, checksum and byte order. This is provisioned controller metadata, not an
 independent eFuse read. No Wi-Fi/Bluetooth driver, ECID/version change or Apple
 authentication follows from these properties. This closes a demonstrated missing
-MobileGestalt input; runtime LaunchServices recovery remains to be validated.
+MobileGestalt input; the next run returned from the previously blocked
+query, while provider registration exposed a separate signed-cache contract.
+
+`boot-xnu.ps1` also requires `-StaticTrustCache PRIVATE_FILE`, defaulting to
+the ignored `x676c/research/20H392-static.trustcache`. Supply the original raw
+payload from the D22AP 20H392 restore archive's
+`Firmware/087-86698-044.dmg.trustcache` IM4P container. The payload is 66,264 bytes,
+version 2 with 2,760 entries; its SHA256 is
+`b7ab28e0009900326ae685a88748008a9653e6bcbd70674135dac4eb5231ad64`.
+The host validates that exact payload before publishing
+`/chosen/sweet-static-trust-cache`; the kernel checks it independently.
+Offline construction uses `mkadt.py --static-trust-cache PRIVATE_FILE`.
+Without this optional offline argument the prior tree is unchanged. The firmware
+payload and generated ADT stay outside Git; dumps summarize the cache instead
+of printing its entries. Payload validation does not prove runtime admission.
+
 
 HelioDarwin boots XNU on the Infinix Note 12 2023 (X676C / MT6789) through the stock MediaTek boot chain. The shim is packaged as an Android boot image v4; it supplies the Apple Device Tree (ADT), boot arguments and kernel entry state that this XNU port expects.
 

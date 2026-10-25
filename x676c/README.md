@@ -10,8 +10,8 @@ Physical boots execute launchd, SpringBoard and backboardd. The corrected DSI
 sequence has displayed the clock/interface, using system software rendering.
 The native Vulkan device has initialized, and physical touch/key events have
 reached kernel HID. GPU rendering and the native UIKit metadata adapter still
-need device validation; SpringBoard and several services currently encounter a
-shared-cache metadata failure under investigation.
+need further device validation. Current blockers include native MPS pipeline
+construction, signed extension-cache registration and driverkitd memory limits.
 See [engineering status](../NOTES.md) and the [wiki](../wiki/Home.md).
 
 The latest diagnostic completed its 600-second window and returned to Android.
@@ -31,7 +31,22 @@ the connected device serial; root and slot B are checked for both routes.
 `mkadt.py --device-identity PRIVATE_JSON` can also build an ADT offline; without
 that option its prior tree is unchanged. Dumps redact the private properties.
 Keep identity files and generated ADTs out of Git; the default `shim/out/` is
-ignored. Runtime identity lookup and database seeding still require a device run.
+ignored. The 21:10:55 run returned from the previously blocked query;
+provider registration still failed at the signed-cache membership contract.
+
+`boot-xnu.ps1` also requires `-StaticTrustCache PRIVATE_FILE`, defaulting to
+the ignored `x676c/research/20H392-static.trustcache`. Supply the original raw
+payload from the D22AP 20H392 restore archive's
+`Firmware/087-86698-044.dmg.trustcache` IM4P container. The payload is 66,264 bytes,
+version 2 with 2,760 entries; its SHA256 is
+`b7ab28e0009900326ae685a88748008a9653e6bcbd70674135dac4eb5231ad64`.
+The host validates that exact payload before publishing
+`/chosen/sweet-static-trust-cache`; the kernel checks it independently.
+Offline construction uses `mkadt.py --static-trust-cache PRIVATE_FILE`.
+Without this optional offline argument the prior tree is unchanged. The firmware
+payload and generated ADT stay outside Git; dumps summarize the cache instead
+of printing its entries. Payload validation does not prove runtime admission.
+
 
 ## Boot layout
 
