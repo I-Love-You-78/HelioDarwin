@@ -95,6 +95,20 @@ copy reached Vulkan. A separate kernel panic was traced to diagnostic stack
 sampling. These observations establish the selected native configuration;
 they do not establish successful GPU execution or complete encoder coverage.
 
+The 01:01:09 retry then reached a different failure: QuartzCore requested absent
+`fixed_frag_lpf_cpf` because native FP16 was reported unavailable. The real
+library index is intact. A default-off `--qualify-g57-fp16` PanVK build option
+limits experimental availability to exact GPU ID `0x90930010` on arch 9;
+other targets retain the upstream policy. Native numerical FP16 and actual
+frame output still require candidate validation, not a profile edit or name alias.
+
+The declared compiler series now includes patch 0003 for sRGB tile-read metadata,
+with actual color-table data forwarding and a triangle/fill-only PointSize
+qualification. In the unchanged 1304-request corpus, 511 requests compile and
+form structural model draws; existing successful stage bytes remain unchanged.
+These models are not captured runtime bindings or GPU results. XR semantics
+and remaining unsupported format/texture paths stay guarded.
+
 ## Execution layers
 
 | Layer | Implementation |

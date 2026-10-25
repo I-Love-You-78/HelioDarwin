@@ -1,6 +1,16 @@
 # Device boot logs
 
-The latest [integrated ABI 4 capture](boot-0198-run-40121803596-abi4.log) started
+The latest [texture-copy/mipmap retry](boot-0199-run-40127381401-blit-sampler.log)
+started at 01:01:09 on 2026-10-25, Asia/Yekaterinburg (UTC+5), with kernel
+[40127381401](https://github.com/squeeeezy/HelioDarwin/actions/runs/40127381401)
+and userspace `3323928`. Its original 106,442-byte console ends at the user's
+manual return. The former missing texture-copy selector did not recur;
+backboardd aborted while selecting `fixed_frag_lpf_cpf`, absent from the actual
+library. The crash report identifies that name; binary analysis traces its
+selection to the unavailable native FP16 branch. No kernel panic is recorded in this short capture; it does
+not validate the delayed sampler or establish GPU output.
+
+The preceding [integrated ABI 4 capture](boot-0198-run-40121803596-abi4.log) started
 at 00:31:52 on 2026-10-25, Asia/Yekaterinburg (UTC+5). It used kernel artifact
 [40121803596](https://github.com/squeeeezy/HelioDarwin/actions/runs/40121803596)
 from `6ab5ae8` and userspace `015515c`. The original 217,245-byte console was

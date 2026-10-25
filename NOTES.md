@@ -53,6 +53,15 @@ missing blit texture-copy selector, causing repeated backboardd aborts and
 dependent display-query failures. The eventual kernel panic was localized to
 an unsafe diagnostic stack read. This run does not establish GPU rendering.
 
+The following 01:01:09 boot stopped at the absent `fixed_frag_lpf_cpf` shader
+selected when FP16 was reported unavailable. A default-off, exact-G57 native
+qualification build and an sRGB/color-table compiler correction are prepared;
+FP16 arithmetic and the resulting frames remain unverified on the device.
+PosterBoard and native geometry preparation now use guarded dependencies in
+the two pinned root executables, preserving their existing entitlement blobs
+and providing exact rollback. Installed components still require runtime
+constructor, provider-delivery and UIKit-context evidence.
+
 ## Priorities
 
 1. Validate the assembled native display/input/MaliMetal candidate, recording
