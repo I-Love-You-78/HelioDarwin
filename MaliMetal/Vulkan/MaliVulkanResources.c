@@ -39,6 +39,11 @@ MMVKFormat mmvk_format_from_metal(uint32_t f) {
     F(110,R16G16B16A16_UNORM);F(112,R16G16B16A16_SNORM);F(113,R16G16B16A16_UINT);
     F(114,R16G16B16A16_SINT);F(115,R16G16B16A16_SFLOAT);
     F(123,R32G32B32A32_UINT);F(124,R32G32B32A32_SINT);F(125,R32G32B32A32_SFLOAT);
+#define ASTC(m,s) F(m,ASTC_##s##_SRGB_BLOCK);F(m+18,ASTC_##s##_UNORM_BLOCK)
+    ASTC(186,4x4);ASTC(187,5x4);ASTC(188,5x5);ASTC(189,6x5);ASTC(190,6x6);
+    ASTC(192,8x5);ASTC(193,8x6);ASTC(194,8x8);ASTC(195,10x5);ASTC(196,10x6);
+    ASTC(197,10x8);ASTC(198,10x10);ASTC(199,12x10);ASTC(200,12x12);
+#undef ASTC
     F(250,D16_UNORM);F(252,D32_SFLOAT);F(253,S8_UINT);F(255,D24_UNORM_S8_UINT);F(260,D32_SFLOAT_S8_UINT);
     default:return 0;
     }
@@ -67,6 +72,53 @@ uint32_t mmvk_format_texel_size(MMVKFormat f) {
     case VK_FORMAT_D16_UNORM:return 2;case VK_FORMAT_D32_SFLOAT:return 4;case VK_FORMAT_S8_UINT:return 1;default:return 0;}
 }
 uint32_t mmvk_format_host_texel_size(MMVKFormat f){return mmvk_format_is_two_plane(f)?4:mmvk_format_texel_size(f);}
+int mmvk_format_block_info(MMVKFormat f, uint32_t *w, uint32_t *h, uint32_t *bytes) {
+    VkFormat v = resource_format(f);
+    uint32_t bw = 1, bh = 1, n = mmvk_format_host_texel_size(f);
+    if (v >= VK_FORMAT_ASTC_4x4_UNORM_BLOCK && v <= VK_FORMAT_ASTC_12x12_SRGB_BLOCK) {
+        static const uint8_t dims[14][2] = {{4, 4},
+                                            {5, 4},
+                                            {5, 5},
+                                            {6, 5},
+                                            {6, 6},
+                                            {8, 5},
+                                            {8, 6},
+                                            {8, 8},
+                                            {10, 5},
+                                            {10, 6},
+                                            {10, 8},
+                                            {10, 10},
+                                            {12, 10},
+                                            {12, 12}};
+        unsigned index = ((unsigned)v - VK_FORMAT_ASTC_4x4_UNORM_BLOCK) / 2;
+        bw = dims[index][0];
+        bh = dims[index][1];
+        n = 16;
+    }
+    if (!n)
+        return 0;
+    if (w)
+        *w = bw;
+    if (h)
+        *h = bh;
+    if (bytes)
+        *bytes = n;
+    return 1;
+}
+int mmvk_device_supports_astc_ldr(MMVKDevice *d) {
+    if (!d || !d->enabled_features.textureCompressionASTC_LDR)
+        return 0;
+    VkFormatFeatureFlags required =
+        VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT |
+        VK_FORMAT_FEATURE_TRANSFER_SRC_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+    for (unsigned v = VK_FORMAT_ASTC_4x4_UNORM_BLOCK; v <= VK_FORMAT_ASTC_12x12_SRGB_BLOCK; v++) {
+        VkFormatProperties p;
+        d->GetPhysicalDeviceFormatProperties(d->physical, (VkFormat)v, &p);
+        if ((p.optimalTilingFeatures & required) != required)
+            return 0;
+    }
+    return 1;
+}
 MMVKResult mmvk_format_representation(MMVKFormat f,MMVKFormatRepresentation *out,MMVKError *e){
     if(!out||!resource_format(f))return FAIL(MMVK_ERROR_ARGUMENT,"invalid logical format representation");
     *out=(MMVKFormatRepresentation){.kind=f==MMVK_FORMAT_ALPHA8?MMVK_REPR_ALPHA_IN_RED:MMVK_REPR_NATIVE,.native_format=(uint32_t)resource_format(f),.host_texel_bytes=mmvk_format_host_texel_size(f),.native_texel_bytes=mmvk_format_texel_size(f),.plane_count=1};
@@ -81,6 +133,11 @@ MMVKResult mmvk_format_representation(MMVKFormat f,MMVKFormatRepresentation *out
 MMVKResult mmvk_image_require_native_color_semantics(const MMVKImage *i,MMVKError *e){
     if(!i)return FAIL(MMVK_ERROR_ARGUMENT,"missing native color image");
     if(mmvk_format_is_extended(i->desc.format))return FAIL(MMVK_ERROR_UNSUPPORTED,"logical XR color needs canonical raw-code clear/write conversion and ordered half-shadow blend semantics");
+    uint32_t bw, bh, bytes;
+    if (mmvk_format_block_info(i->desc.format, &bw, &bh, &bytes) && (bw > 1 || bh > 1))
+        return FAIL(
+            MMVK_ERROR_UNSUPPORTED,
+            "block-compressed images do not support native color attachment/clear operations");
     return MMVK_OK;
 }
 static int add64(uint64_t a,uint64_t b,uint64_t *o){if(b>UINT64_MAX-a)return 0;*o=a+b;return 1;}
@@ -257,10 +314,15 @@ MMVKResult mmvk_buffer_create_storage(MMVKDevice *d,uint64_t size,uint32_t usage
         if(type<0){result=FAIL(MMVK_ERROR_UNSUPPORTED,"no suitable native memory for buffer storage mode");goto fail;}
         b->coherent=(d->memory.memoryTypes[type].propertyFlags&VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)!=0;
         VkMemoryAllocateInfo ai={.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,.pNext=d->enabled12.bufferDeviceAddress?(const void *)&addressFlags:dedicated?(const void *)&dedicatedInfo:NULL,.allocationSize=req.size,.memoryTypeIndex=(uint32_t)type};
-        r=d->AllocateMemory(d->device,&ai,NULL,&b->memory);if(r)goto vkfail;
-        if(storage==MMVK_STORAGE_SHARED){r=d->MapMemory(d->device,b->memory,0,VK_WHOLE_SIZE,0,&b->map);if(r)goto vkfail;}
+        r=d->AllocateMemory(d->device,&ai,NULL,&b->memory);
+        if(r){result=mmvk_vkresult(e,r,"buffer memory allocation");goto fail;}
+        if(storage==MMVK_STORAGE_SHARED){
+            r=d->MapMemory(d->device,b->memory,0,VK_WHOLE_SIZE,0,&b->map);
+            if(r){result=mmvk_vkresult(e,r,"buffer host mapping");goto fail;}
+        }
     }
-    r=d->BindBufferMemory(d->device,b->buffer,b->memory,b->heap_offset);if(r)goto vkfail;
+    r=d->BindBufferMemory(d->device,b->buffer,b->memory,b->heap_offset);
+    if(r){result=mmvk_vkresult(e,r,"buffer memory binding");goto fail;}
     if(d->enabled12.bufferDeviceAddress){
         PFN_vkGetBufferDeviceAddress query=(PFN_vkGetBufferDeviceAddress)d->GetDeviceProcAddr(d->device,"vkGetBufferDeviceAddress");
         if(!query){result=FAIL(MMVK_ERROR_DRIVER_UNAVAILABLE,"enabled buffer address query unavailable");goto fail;}
@@ -268,7 +330,6 @@ MMVKResult mmvk_buffer_create_storage(MMVKDevice *d,uint64_t size,uint32_t usage
         if(!b->device_address||b->device_address>UINT64_MAX-b->size){result=FAIL(MMVK_ERROR_STATE,"native buffer address is zero or overflows its allocation");goto fail;}
     }
     result=identity_add(d,b,MMVK_RESOURCE_BUFFER,&b->identity,e);if(result)goto fail;*out=b;return MMVK_OK;
-vkfail:result=mmvk_vkresult(e,r,"buffer memory binding");
 fail:mmvk_buffer_destroy(b);return result;
 }
 MMVKResult mmvk_buffer_create(MMVKDevice *d,uint64_t n,uint32_t u,MMVKBuffer **b,MMVKError *e){return mmvk_buffer_create_storage(d,n,u,MMVK_STORAGE_SHARED,NULL,b,e);}
@@ -316,6 +377,15 @@ static MMVKResult validate_image(MMVKDevice *d,const MMVKImageDescriptorEx *x,MM
     uint32_t maxdim=x->width>x->height?x->width:x->height;if(x->depth>maxdim)maxdim=x->depth;uint32_t levels=1;while(maxdim>1){maxdim>>=1;levels++;}
     if(x->mip_levels>levels)return FAIL(MMVK_ERROR_ARGUMENT,"image mip count exceeds complete mip chain");
     if(x->format==MMVK_FORMAT_ALPHA8&&(x->usage&(MMVK_IMAGE_RENDER_TARGET|MMVK_IMAGE_STORAGE)))return FAIL(MMVK_ERROR_UNSUPPORTED,"alpha-only native image supports sampling and transfers only");
+    VkFormat native_format = resource_format(x->format);
+    if (native_format >= VK_FORMAT_ASTC_4x4_UNORM_BLOCK &&
+        native_format <= VK_FORMAT_ASTC_12x12_SRGB_BLOCK) {
+        if (!d->enabled_features.textureCompressionASTC_LDR || x->type != 2 ||
+            x->array_layers != 1 || x->samples != 1 ||
+            (x->usage & (MMVK_IMAGE_STORAGE | MMVK_IMAGE_RENDER_TARGET)))
+            return FAIL(MMVK_ERROR_UNSUPPORTED,
+                        "ASTC requires enabled LDR compression and a sampled 2D image");
+    }
     VkFormatProperties props;d->GetPhysicalDeviceFormatProperties(d->physical,resource_format(x->format),&props);
     VkFormatFeatureFlags required=0;
     if(x->usage&MMVK_IMAGE_SAMPLED)required|=VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
@@ -330,6 +400,10 @@ static MMVKResult validate_image(MMVKDevice *d,const MMVKImageDescriptorEx *x,MM
     VkImageFormatProperties *p=&out.imageFormatProperties;
     if(x->width>p->maxExtent.width||x->height>p->maxExtent.height||x->depth>p->maxExtent.depth||x->mip_levels>p->maxMipLevels||x->array_layers>p->maxArrayLayers||!(p->sampleCounts&x->samples))return FAIL(MMVK_ERROR_UNSUPPORTED,"image dimensions/layers/mips/samples exceed exact native format limits");
     return MMVK_OK;
+}
+MMVKResult
+mmvk_image_validate_descriptor(MMVKDevice *d, const MMVKImageDescriptorEx *x, MMVKError *e) {
+    return validate_image(d, x, e);
 }
 static MMVKResult image_object(MMVKDevice *d,const MMVKImageDescriptorEx *x,int heap,VkImage *out,MMVKError *e){
     MMVKResult r=validate_image(d,x,e);if(r)return r;
@@ -379,10 +453,32 @@ uint64_t mmvk_image_allocation_size(const MMVKImage *i){return i?i->allocation_s
 MMVKFormat mmvk_image_format(const MMVKImage *i){return i?i->desc.format:0;}
 uint64_t mmvk_image_heap_offset(const MMVKImage *i){return i?(i->parent?i->parent:i)->heap_offset:0;}
 int mmvk_image_is_aliasable(const MMVKImage *i){return i?(int)__atomic_load_n(&(i->parent?i->parent:i)->aliasable,__ATOMIC_ACQUIRE):0;}
-void mmvk_image_destroy(MMVKImage *i){if(!i||mmvk_device_is_quarantined(i->dev)||__atomic_sub_fetch(&i->references,1,__ATOMIC_ACQ_REL))return;
-    identity_remove(i->identity);MMVKDevice *d=i->dev;if(i->view)d->DestroyImageView(d->device,i->view,NULL);
-    if(i->parent)mmvk_image_destroy(i->parent);
-    else{if(i->image)d->DestroyImage(d->device,i->image,NULL);if(i->heap){heap_release_block(i->heap,i->heap_block);mmvk_heap_destroy(i->heap);}else if(i->memory)d->FreeMemory(d->device,i->memory,NULL);}free(i);
+void mmvk_image_set_host_readonly_backing(MMVKImage *i, void *context, void (*release)(void *)) {
+    i->host_readonly_backing = context;
+    i->release_host_backing = release;
+}
+void mmvk_image_destroy(MMVKImage *i) {
+    if (!i || mmvk_device_is_quarantined(i->dev) ||
+        __atomic_sub_fetch(&i->references, 1, __ATOMIC_ACQ_REL))
+        return;
+    identity_remove(i->identity);
+    MMVKDevice *d = i->dev;
+    if (i->view)
+        d->DestroyImageView(d->device, i->view, NULL);
+    if (i->parent)
+        mmvk_image_destroy(i->parent);
+    else {
+        if (i->image)
+            d->DestroyImage(d->device, i->image, NULL);
+        if (i->heap) {
+            heap_release_block(i->heap, i->heap_block);
+            mmvk_heap_destroy(i->heap);
+        } else if (i->memory)
+            d->FreeMemory(d->device, i->memory, NULL);
+        if (i->release_host_backing)
+            i->release_host_backing(i->host_readonly_backing);
+    }
+    free(i);
 }
 MMVKResult mmvk_image_make_aliasable(MMVKImage *i,MMVKError *e){if(i&&mmvk_device_is_quarantined(i->dev))return FAIL(MMVK_ERROR_STATE,"quarantined GPU storage cannot be reused");if(!i||i->parent||!i->heap)return FAIL(MMVK_ERROR_ARGUMENT,"only root heap textures may become aliasable");if(!__atomic_exchange_n(&i->aliasable,1,__ATOMIC_ACQ_REL)){heap_release_block(i->heap,i->heap_block);i->heap_block=NULL;}return MMVK_OK;}
 static int format_compatible(MMVKFormat a,MMVKFormat b){if(a==b)return 1;if(mmvk_format_is_extended(a)||mmvk_format_is_extended(b))return mmvk_format_is_extended(a)&&mmvk_format_is_extended(b)&&(((uint32_t)a^(uint32_t)b)==1u)&&resource_format(a)==resource_format(b);if(a==MMVK_FORMAT_ALPHA8||b==MMVK_FORMAT_ALPHA8)return 0;
@@ -423,6 +519,12 @@ static MMVKResult region_validate(MMVKImage *i,const MMVKImageRegion *r,VkImageS
     if(!i||!r||mmvk_image_is_aliasable(i)||r->level>=i->extended.mip_levels||r->layer>=i->extended.array_layers||!r->width||!r->height||!r->depth)return FAIL(MMVK_ERROR_ARGUMENT,"invalid image region subresource");
     uint32_t w=mip(i->extended.width,r->level),h=mip(i->extended.height,r->level),d=mip(i->extended.depth,r->level);
     if(r->x>w||r->width>w-r->x||r->y>h||r->height>h-r->y||r->z>d||r->depth>d-r->z)return FAIL(MMVK_ERROR_ARGUMENT,"image region exceeds mip dimensions");
+    uint32_t bw, bh, unit;
+    if (mmvk_format_block_info(i->desc.format, &bw, &bh, &unit) && (bw > 1 || bh > 1) &&
+        (r->x % bw || r->y % bh || (r->width % bw && r->x + r->width != w) ||
+         (r->height % bh && r->y + r->height != h)))
+        return FAIL(MMVK_ERROR_ARGUMENT,
+                    "compressed image region must be block aligned or reach the mip edge");
     uint32_t aspect=r->aspect?r->aspect:i->range.aspectMask;
     if(!aspect||(aspect&(aspect-1))||(aspect&~i->range.aspectMask))return FAIL(MMVK_ERROR_ARGUMENT,"copy requires one valid image aspect");
     if(layers)*layers=(VkImageSubresourceLayers){aspect,i->range.baseMipLevel+r->level,i->range.baseArrayLayer+r->layer,1};return MMVK_OK;
@@ -434,6 +536,10 @@ static uint32_t aspect_texel_size(MMVKImage *i,uint32_t aspect){
 }
 MMVKResult mmvk_commands_copy_image_region(MMVKCommands *c,MMVKImage *src,const MMVKImageRegion *s,MMVKImage *dst,const MMVKImageRegion *t,MMVKError *e){
     if(mmvk_recording(c,e))return MMVK_ERROR_STATE;
+    if ((src && mmvk_image_root(src)->host_readonly_backing) ||
+        (dst && mmvk_image_root(dst)->host_readonly_backing))
+        return FAIL(MMVK_ERROR_UNSUPPORTED,
+                    "host-layout imports currently support sampled consumption only");
     if((src&&mmvk_format_is_two_plane(src->desc.format))||(dst&&mmvk_format_is_two_plane(dst->desc.format)))return FAIL(MMVK_ERROR_UNSUPPORTED,"two-plane XR texture copies require the canonical plane-copy module and layout contract");
     if(!src||!dst||src->dev!=c->dev||dst->dev!=c->dev||!(src->desc.usage&MMVK_IMAGE_TRANSFER_SRC)||!(dst->desc.usage&MMVK_IMAGE_TRANSFER_DST)||!s||!t||s->width!=t->width||s->height!=t->height||s->depth!=t->depth||src->extended.samples!=dst->extended.samples||image_type(src->extended.type)!=image_type(dst->extended.type)||!format_compatible(src->desc.format,dst->desc.format))return FAIL(MMVK_ERROR_ARGUMENT,"incompatible image copy resources/extents");
     VkImageCopy copy={0};MMVKResult r=region_validate(src,s,&copy.srcSubresource,e);if(r)return r;r=region_validate(dst,t,&copy.dstSubresource,e);if(r)return r;
@@ -445,14 +551,39 @@ MMVKResult mmvk_commands_copy_image_region(MMVKCommands *c,MMVKImage *src,const 
     copy.srcOffset=(VkOffset3D){(int32_t)s->x,(int32_t)s->y,(int32_t)s->z};copy.dstOffset=(VkOffset3D){(int32_t)t->x,(int32_t)t->y,(int32_t)t->z};copy.extent=(VkExtent3D){s->width,s->height,s->depth};
     c->dev->CmdCopyImage(c->cmd,src->image,VK_IMAGE_LAYOUT_GENERAL,dst->image,VK_IMAGE_LAYOUT_GENERAL,1,&copy);return MMVK_OK;
 }
-static MMVKResult host_layout_unit(MMVKImage *i,const MMVKImageRegion *r,uint64_t row,uint64_t image,uint64_t texel,uint64_t *needed,uint64_t *tight,MMVKError *e){
-    VkImageSubresourceLayers l;MMVKResult result=region_validate(i,r,&l,e);if(result)return result;
-    uint64_t line,plane,tail,total;
-    if(!texel||!mul64(r->width,texel,&line))return FAIL(MMVK_ERROR_UNSUPPORTED,"format has no supported transfer texel layout");
-    if(!row)row=line;if(row<line||!mul64(row,r->height,&plane))return FAIL(MMVK_ERROR_ARGUMENT,"image row stride is too small or overflows");
-    if(!image)image=plane;
-    if(image<plane||!mul64(image,r->depth-1,&total)||!mul64(row,r->height-1,&tail)||!add64(total,tail,&total)||!add64(total,line,&total)||!mul64(line,r->height,&plane)||!mul64(plane,r->depth,tight))return FAIL(MMVK_ERROR_ARGUMENT,"image stride/size overflow");
-    *needed=total;return MMVK_OK;
+static MMVKResult host_layout_unit(MMVKImage *i,
+                                   const MMVKImageRegion *r,
+                                   uint64_t row,
+                                   uint64_t image,
+                                   uint64_t texel,
+                                   uint64_t *needed,
+                                   uint64_t *tight,
+                                   MMVKError *e) {
+    VkImageSubresourceLayers l;
+    MMVKResult result = region_validate(i, r, &l, e);
+    if (result)
+        return result;
+    uint64_t line, plane, tail, total, width = r->width, height = r->height;
+    uint32_t bw, bh, unit;
+    if (mmvk_format_block_info(i->desc.format, &bw, &bh, &unit) && (bw > 1 || bh > 1)) {
+        width = (width + bw - 1) / bw;
+        height = (height + bh - 1) / bh;
+        texel = unit;
+    }
+    if (!texel || !mul64(width, texel, &line))
+        return FAIL(MMVK_ERROR_UNSUPPORTED, "format has no supported transfer block layout");
+    if (!row)
+        row = line;
+    if (row < line || !mul64(row, height, &plane))
+        return FAIL(MMVK_ERROR_ARGUMENT, "image row stride is too small or overflows");
+    if (!image)
+        image = plane;
+    if (image < plane || !mul64(image, r->depth - 1, &total) || !mul64(row, height - 1, &tail) ||
+        !add64(total, tail, &total) || !add64(total, line, &total) ||
+        !mul64(line, height, &plane) || !mul64(plane, r->depth, tight))
+        return FAIL(MMVK_ERROR_ARGUMENT, "image stride/size overflow");
+    *needed = total;
+    return MMVK_OK;
 }
 static MMVKResult host_layout(MMVKImage *i,const MMVKImageRegion *r,uint64_t row,uint64_t image,uint64_t *needed,uint64_t *tight,MMVKError *e){
     if(!i||!r)return FAIL(MMVK_ERROR_ARGUMENT,"missing image host layout");uint32_t aspect=r->aspect?r->aspect:i->range.aspectMask;
@@ -463,26 +594,77 @@ static MMVKResult metal_host_layout(MMVKImage *i,const MMVKImageRegion *r,uint64
     uint32_t unit=mmvk_format_is_two_plane(i->desc.format)?4:aspect_texel_size(i,aspect);
     return host_layout_unit(i,r,row,image,unit,needed,tight,e);
 }
-static MMVKResult commands_copy_buffer_image_raw(MMVKCommands *c,MMVKBuffer *b,uint64_t offset,uint64_t row,uint64_t image,MMVKImage *i,const MMVKImageRegion *r,int to_image,MMVKError *e){
-    if(mmvk_recording(c,e))return MMVK_ERROR_STATE;
-    if(!b||!i||b->dev!=c->dev||i->dev!=c->dev||b->aliasable||i->extended.samples!=1||!(b->usage&(to_image?MMVK_BUFFER_TRANSFER_SRC:MMVK_BUFFER_TRANSFER_DST))||!(i->desc.usage&(to_image?MMVK_IMAGE_TRANSFER_DST:MMVK_IMAGE_TRANSFER_SRC)))return FAIL(MMVK_ERROR_ARGUMENT,"invalid buffer/image transfer resources");
-    VkBufferImageCopy copy={0};MMVKResult result=region_validate(i,r,&copy.imageSubresource,e);if(result)return result;
-    uint32_t texel=aspect_texel_size(i,copy.imageSubresource.aspectMask);uint64_t needed,tight;
-    result=host_layout(i,r,row,image,&needed,&tight,e);if(result)return result;
-    uint64_t line=(uint64_t)r->width*texel;if(!row)row=line;if(!image)image=row*r->height;
-    if(offset>b->size||needed>b->size-offset||(offset&3)||offset%texel||row%texel||image%row||row>INT32_MAX||row/texel>UINT32_MAX||image/row>UINT32_MAX)return FAIL(MMVK_ERROR_ARGUMENT,"buffer/image transfer alignment/range is invalid");
-    copy.bufferOffset=offset;copy.bufferRowLength=(uint32_t)(row/texel);copy.bufferImageHeight=(uint32_t)(image/row);copy.imageOffset=(VkOffset3D){(int32_t)r->x,(int32_t)r->y,(int32_t)r->z};copy.imageExtent=(VkExtent3D){r->width,r->height,r->depth};
-    result=mmvk_image_access(c,i,e);if(result)return result;
-    result=to_image?mmvk_commands_mark_image_written(c,i,e):mmvk_commands_mark_buffer_written(c,b,e);if(result)return result;mmvk_memory_barrier(c);
-    if(to_image)c->dev->CmdCopyBufferToImage(c->cmd,b->buffer,i->image,VK_IMAGE_LAYOUT_GENERAL,1,&copy);
-    else c->dev->CmdCopyImageToBuffer(c->cmd,i->image,VK_IMAGE_LAYOUT_GENERAL,b->buffer,1,&copy);return MMVK_OK;
+static MMVKResult commands_copy_buffer_image_raw(MMVKCommands *c,
+                                                 MMVKBuffer *b,
+                                                 uint64_t offset,
+                                                 uint64_t row,
+                                                 uint64_t image,
+                                                 MMVKImage *i,
+                                                 const MMVKImageRegion *r,
+                                                 int to_image,
+                                                 MMVKError *e) {
+    if (mmvk_recording(c, e))
+        return MMVK_ERROR_STATE;
+    if (!b || !i || b->dev != c->dev || i->dev != c->dev || b->aliasable ||
+        i->extended.samples != 1 ||
+        !(b->usage & (to_image ? MMVK_BUFFER_TRANSFER_SRC : MMVK_BUFFER_TRANSFER_DST)) ||
+        !(i->desc.usage & (to_image ? MMVK_IMAGE_TRANSFER_DST : MMVK_IMAGE_TRANSFER_SRC)))
+        return FAIL(MMVK_ERROR_ARGUMENT, "invalid buffer/image transfer resources");
+    VkBufferImageCopy copy = {0};
+    MMVKResult result = region_validate(i, r, &copy.imageSubresource, e);
+    if (result)
+        return result;
+    uint32_t texel = aspect_texel_size(i, copy.imageSubresource.aspectMask), bw = 1, bh = 1, unit;
+    if (mmvk_format_block_info(i->desc.format, &bw, &bh, &unit) && (bw > 1 || bh > 1))
+        texel = unit;
+    uint64_t needed, tight;
+    result = host_layout(i, r, row, image, &needed, &tight, e);
+    if (result)
+        return result;
+    uint64_t line = ((uint64_t)r->width + bw - 1) / bw * texel,
+             rows = ((uint64_t)r->height + bh - 1) / bh;
+    if (!row)
+        row = line;
+    if (!image)
+        image = row * rows;
+    if (offset > b->size || needed > b->size - offset || (offset & 3) || offset % texel ||
+        row % texel || image % row || row > INT32_MAX || row / texel > UINT32_MAX / bw ||
+        image / row > UINT32_MAX / bh)
+        return FAIL(MMVK_ERROR_ARGUMENT, "buffer/image transfer alignment/range is invalid");
+    copy.bufferOffset = offset;
+    copy.bufferRowLength = (uint32_t)(row / texel) * bw;
+    copy.bufferImageHeight = (uint32_t)(image / row) * bh;
+    copy.imageOffset = (VkOffset3D){(int32_t)r->x, (int32_t)r->y, (int32_t)r->z};
+    copy.imageExtent = (VkExtent3D){r->width, r->height, r->depth};
+    result = mmvk_image_access(c, i, e);
+    if (result)
+        return result;
+    result = to_image ? mmvk_commands_mark_image_written(c, i, e)
+                      : mmvk_commands_mark_buffer_written(c, b, e);
+    if (result)
+        return result;
+    mmvk_memory_barrier(c);
+    if (to_image)
+        c->dev->CmdCopyBufferToImage(
+            c->cmd, b->buffer, i->image, VK_IMAGE_LAYOUT_GENERAL, 1, &copy);
+    else
+        c->dev->CmdCopyImageToBuffer(
+            c->cmd, i->image, VK_IMAGE_LAYOUT_GENERAL, b->buffer, 1, &copy);
+    return MMVK_OK;
 }
 MMVKResult mmvk_commands_copy_buffer_image(MMVKCommands *c,MMVKBuffer *b,uint64_t offset,uint64_t row,uint64_t image,MMVKImage *i,const MMVKImageRegion *r,int to_image,MMVKError *e){
+    if (i && mmvk_image_root(i)->host_readonly_backing)
+        return FAIL(MMVK_ERROR_UNSUPPORTED,
+                    "host-layout imports currently support sampled consumption only");
     if(i&&mmvk_format_is_two_plane(i->desc.format))return FAIL(MMVK_ERROR_UNSUPPORTED,"two-plane XR buffer blits require the canonical plane-word packing module");
     return commands_copy_buffer_image_raw(c,b,offset,row,image,i,r,to_image,e);
 }
 MMVKResult mmvk_commands_generate_mipmaps(MMVKCommands *c,MMVKImage *i,MMVKError *e){
     if(mmvk_recording(c,e))return MMVK_ERROR_STATE;
+    uint32_t bw, bh, bytes;
+    if (i && mmvk_format_block_info(i->desc.format, &bw, &bh, &bytes) && (bw > 1 || bh > 1))
+        return FAIL(MMVK_ERROR_UNSUPPORTED,
+                    "compressed mipmap generation requires an explicit encoder");
     if(!i||i->dev!=c->dev||i->extended.samples!=1||i->range.aspectMask!=VK_IMAGE_ASPECT_COLOR_BIT||(i->desc.usage&(MMVK_IMAGE_TRANSFER_SRC|MMVK_IMAGE_TRANSFER_DST))!=(MMVK_IMAGE_TRANSFER_SRC|MMVK_IMAGE_TRANSFER_DST)||mmvk_image_is_aliasable(i))return FAIL(MMVK_ERROR_ARGUMENT,"image cannot generate mipmaps");
     if(mmvk_format_is_extended(i->desc.format)){if(i->extended.mip_levels==1)return MMVK_OK;return FAIL(MMVK_ERROR_UNSUPPORTED,"logical XR mip generation requires the canonical decoded filter module");}
     VkFormatProperties p;c->dev->GetPhysicalDeviceFormatProperties(c->dev->physical,resource_format(i->desc.format),&p);
@@ -563,22 +745,81 @@ MMVKResult mmvk_buffer_initialize_zero(MMVKBuffer *b,MMVKError *e){
     result=retirement_wait(&owner,UINT64_MAX,e);
 done:retirement_destroy(owner);return result;
 }
-static MMVKResult image_host_copy_raw(MMVKImage *i,const MMVKImageRegion *r,void *p,size_t capacity,size_t row,size_t plane,uint64_t timeout,int download,MMVKError *e){
-    if(!i||!p||i->extended.samples!=1)return FAIL(MMVK_ERROR_ARGUMENT,"invalid image host transfer");uint64_t needed,tight;
-    MMVKResult result=host_layout(i,r,row,plane,&needed,&tight,e);if(result)return result;
-    if(needed>capacity||tight>SIZE_MAX)return FAIL(MMVK_ERROR_ARGUMENT,"image host transfer exceeds supplied capacity");
-    uint32_t aspect=r->aspect?r->aspect:i->range.aspectMask;uint64_t line=(uint64_t)r->width*aspect_texel_size(i,aspect);
-    if(!row)row=(size_t)line;if(!plane)plane=row*r->height;
-    MMVKResourceRetirement *owner=NULL;result=retirement_create(i->dev,NULL,i,&owner,e);if(result)return result;
-    result=mmvk_buffer_create(i->dev,tight,download?MMVK_BUFFER_TRANSFER_DST:MMVK_BUFFER_TRANSFER_SRC,&owner->buffer,e);if(result)goto done;
-    MMVKBuffer *b=owner->buffer;
-    if(!download){for(uint32_t z=0;z<r->depth;z++)for(uint32_t y=0;y<r->height;y++)memcpy((char *)b->map+((uint64_t)z*r->height+y)*line,(char *)p+(size_t)z*plane+(size_t)y*row,(size_t)line);result=mmvk_buffer_flush(b,0,tight,e);if(result)goto done;}
-    result=mmvk_commands_create(i->dev,&owner->commands,e);if(result)goto done;
-    result=commands_copy_buffer_image_raw(owner->commands,b,0,line,line*r->height,i,r,!download,e);if(result)goto done;
-    result=retirement_submit(&owner,e);if(result)goto done;
-    result=retirement_wait(&owner,timeout,e);if(result)goto done;
-    if(download){result=mmvk_buffer_invalidate(b,0,tight,e);if(result)goto done;for(uint32_t z=0;z<r->depth;z++)for(uint32_t y=0;y<r->height;y++)memcpy((char *)p+(size_t)z*plane+(size_t)y*row,(char *)b->map+((uint64_t)z*r->height+y)*line,(size_t)line);}
-done:retirement_destroy(owner);return result;
+static MMVKResult image_host_copy_raw(MMVKImage *i,
+                                      const MMVKImageRegion *r,
+                                      void *p,
+                                      size_t capacity,
+                                      size_t row,
+                                      size_t plane,
+                                      uint64_t timeout,
+                                      int download,
+                                      MMVKError *e) {
+    if (!i || !p || i->extended.samples != 1)
+        return FAIL(MMVK_ERROR_ARGUMENT, "invalid image host transfer");
+    uint64_t needed, tight;
+    MMVKResult result = host_layout(i, r, row, plane, &needed, &tight, e);
+    if (result)
+        return result;
+    if (needed > capacity || tight > SIZE_MAX)
+        return FAIL(MMVK_ERROR_ARGUMENT, "image host transfer exceeds supplied capacity");
+    uint32_t aspect = r->aspect ? r->aspect : i->range.aspectMask, bw = 1, bh = 1,
+             unit = aspect_texel_size(i, aspect), block_unit;
+    if (mmvk_format_block_info(i->desc.format, &bw, &bh, &block_unit) && (bw > 1 || bh > 1))
+        unit = block_unit;
+    uint64_t line = ((uint64_t)r->width + bw - 1) / bw * unit;
+    uint32_t rows = (r->height + bh - 1) / bh;
+    if (!row)
+        row = (size_t)line;
+    if (!plane)
+        plane = row * rows;
+    MMVKResourceRetirement *owner = NULL;
+    result = retirement_create(i->dev, NULL, i, &owner, e);
+    if (result)
+        return result;
+    result = mmvk_buffer_create(i->dev,
+                                tight,
+                                download ? MMVK_BUFFER_TRANSFER_DST : MMVK_BUFFER_TRANSFER_SRC,
+                                &owner->buffer,
+                                e);
+    if (result)
+        goto done;
+    MMVKBuffer *b = owner->buffer;
+    if (!download) {
+        for (uint32_t z = 0; z < r->depth; z++)
+            for (uint32_t y = 0; y < rows; y++)
+                memcpy((char *)b->map + ((uint64_t)z * rows + y) * line,
+                       (char *)p + (size_t)z * plane + (size_t)y * row,
+                       (size_t)line);
+        result = mmvk_buffer_flush(b, 0, tight, e);
+        if (result)
+            goto done;
+    }
+    result = mmvk_commands_create(i->dev, &owner->commands, e);
+    if (result)
+        goto done;
+    result = commands_copy_buffer_image_raw(
+        owner->commands, b, 0, line, line * rows, i, r, !download, e);
+    if (result)
+        goto done;
+    result = retirement_submit(&owner, e);
+    if (result)
+        goto done;
+    result = retirement_wait(&owner, timeout, e);
+    if (result)
+        goto done;
+    if (download) {
+        result = mmvk_buffer_invalidate(b, 0, tight, e);
+        if (result)
+            goto done;
+        for (uint32_t z = 0; z < r->depth; z++)
+            for (uint32_t y = 0; y < rows; y++)
+                memcpy((char *)p + (size_t)z * plane + (size_t)y * row,
+                       (char *)b->map + ((uint64_t)z * rows + y) * line,
+                       (size_t)line);
+    }
+done:
+    retirement_destroy(owner);
+    return result;
 }
 static MMVKResult image_host_copy(MMVKImage *i,const MMVKImageRegion *r,void *pixels,size_t capacity,size_t row,size_t plane,uint64_t timeout,int download,MMVKError *e){
     if(!i||!mmvk_format_is_two_plane(i->desc.format))return image_host_copy_raw(i,r,pixels,capacity,row,plane,timeout,download,e);

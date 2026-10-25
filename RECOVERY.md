@@ -63,6 +63,11 @@ does not complete boot; host waiting itself cannot reset the phone.
 If the root executable is outside Android's `PATH`, pass its path with `-Su`
 to either PowerShell helper, or `--su` to the root-image flasher.
 
+Patch 0205 follows the inspected MT6789 vendor restart loop: repeat the
+SWRST command every 5 ms without returning. It preserves MODE, LENGTH and the
+independent watchdog heartbeat. Compilation, patch composition and instruction
+checks pass; hardware return with this retry remains unvalidated.
+
 ## Logs
 
 Capture `/sys/fs/pstore/console-ramoops-0` as raw bytes after Android returns and

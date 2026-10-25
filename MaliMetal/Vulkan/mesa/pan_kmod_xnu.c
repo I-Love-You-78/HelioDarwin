@@ -143,16 +143,33 @@ xnu_alloc(struct pan_kmod_dev *base,struct pan_kmod_vm *vm,uint64_t size,uint32_
    /* Grow-on-fault is implemented as full physical commitment on this ABI.
     * Mesa may request its normal large tiler heap; allocation failure is real. */
    uint32_t allowed=base->props.supported_bo_flags|PAN_KMOD_BO_FLAG_ALLOC_ON_FAULT;
-   if(!size||size>d->query.max_bo_size||(flags&~allowed)){errno=ENOTSUP;return NULL;}
+   if(!size||size>d->query.max_bo_size||(flags&~allowed)){
+      mesa_loge("SweetMali: BO request unsupported size=%"PRIu64" flags=%#x allowed=%#x max=%"PRIu64,
+                size,flags,allowed,d->query.max_bo_size);
+      errno=ENOTSUP;return NULL;
+   }
    struct xnu_bo *b=pan_kmod_dev_alloc(base,sizeof(*b));if(!b)return NULL;
    uint32_t bits=MMK_BO_READ|MMK_BO_WRITE;
    if(flags&PAN_KMOD_BO_FLAG_EXECUTABLE)bits|=MMK_BO_EXEC;
    simple_mtx_lock(&d->lock);
-   int32_t kr=d->lost?EIO:d->bo_count>=MIN2(d->query.max_submit_bos,MMK_MAX_SUBMIT_BOS)?ENOSPC:
-       mmk_darwin_alloc(d->connection,size,bits,&b->memory);
+   unsigned live=d->bo_count;
+   unsigned limit=MIN2(d->query.max_submit_bos,MMK_MAX_SUBMIT_BOS);
+   const char *stage="kernel-allocation-or-map";
+   int32_t kr;
+   if(d->lost){
+      stage="device-lost";kr=EIO;
+   }else if(live>=limit){
+      stage="live-BO-limit";kr=ENOSPC;
+   }else{
+      kr=mmk_darwin_alloc(d->connection,size,bits,&b->memory);
+   }
    if(!kr){pan_kmod_bo_init(&b->base,base,vm,b->memory.info.size,flags,b->memory.info.handle);d->bos[d->bo_count++]=b;}
    simple_mtx_unlock(&d->lock);
-   if(kr){pan_kmod_dev_free(base,b);errno=kr==ENOSPC?ENOSPC:ENOMEM;return NULL;}
+   if(kr){
+      mesa_loge("SweetMali: BO allocation failed stage=%s size=%"PRIu64" flags=%#x live=%u limit=%u result=%#x",
+                stage,size,flags,live,limit,(uint32_t)kr);
+      pan_kmod_dev_free(base,b);errno=kr==ENOSPC?ENOSPC:ENOMEM;return NULL;
+   }
    return &b->base;
 }
 static void xnu_free(struct pan_kmod_bo *base)

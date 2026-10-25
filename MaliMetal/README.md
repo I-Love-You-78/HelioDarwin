@@ -68,6 +68,22 @@ selector in SpringBoard/PosterBoard. The old shared error label does not
 distinguish allocation from mapping or binding. Hardware job-completion
 logging and image correctness remain separate acceptance gates.
 
+The next candidate implements the inspected 20H392 texture-layout protocol
+for sampled 2D ASTC LDR textures. Its versioned host block representation has its
+own watermark and checked mip/region bounds. Shared, shader-read-only
+`newTextureWithBytesNoCopy:length:descriptor:deallocator:` imports retain the
+caller's backing and deallocator until final native-reference retirement;
+properly synchronized host changes are uploaded at queue consumption. Vulkan
+images remain optimal-tiled allocations. This is an explicit upload path, not
+GPU zero-copy. Apple-family reports remain unchanged; ASTC capability reporting
+requires the enabled native feature and all 28 LDR format queries.
+
+Heap/buffer-backed layouts, imported GPU writes/blits, HDR, PVRTC and general
+compressed-format coverage are unsupported. Strict compilation, native method
+encodings, source/component checks and independent static review pass. Actual
+ASTC upload/sampling, host-update pixels, wallpaper and performance remain device
+acceptance checks.
+
 The current compiler series also fixes sRGB tile-read metadata and forwards the
 actual canonical color-write table. PointSize output is accepted only for the
 qualified triangle/fill path with native feature checks; this does not add a

@@ -50,6 +50,7 @@
 - (BOOL)supportsFeatureSet:(MTLFeatureSet)featureSet;
 - (BOOL)supportsFamily:(MTLGPUFamily)gpuFamily;
 - (BOOL)supports32BitFloatFiltering;
+- (BOOL)supportsASTCTextureCompression;
 - (BOOL)supportsArrayOfTextures;
 - (BOOL)supportsQuadShufflesAndBroadcast;
 - (BOOL)supportsSIMDShufflesAndBroadcast;
@@ -75,6 +76,12 @@
                                   options:(MTLResourceOptions)options
                               deallocator:(void (^)(void *, NSUInteger))deallocator;
 - (id<MTLTexture>)newTextureWithDescriptor:(MTLTextureDescriptor *)descriptor;
+- (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)descriptor
+                isHeapOrBufferBacked:(BOOL)backed;
+- (id<MTLTexture>)newTextureWithBytesNoCopy:(void *)bytes
+                                     length:(NSUInteger)length
+                                 descriptor:(MTLTextureDescriptor *)descriptor
+                                deallocator:(void (^)(void *, NSUInteger))deallocator;
 - (id<MTLTexture>)newTextureWithDescriptor:(MTLTextureDescriptor *)descriptor
                                  iosurface:(void *)iosurface
                                      plane:(NSUInteger)plane;

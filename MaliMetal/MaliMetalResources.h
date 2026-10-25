@@ -3,6 +3,7 @@
 #import "MaliMetalDevice.h"
 #include "Vulkan/MaliVulkanResources.h"
 #include "Shader/MaliMetalRender.h"
+@class MaliMetalTextureLayout;
 
 @interface MaliMetalBuffer : MaliMetalObject <MTLBuffer> {
     MaliMetalDevice *_device; MMVKBuffer *_buffer; NSUInteger _length,_allocatedSize,_purgeableState;
@@ -29,10 +30,12 @@ typedef struct { uint8_t red,green,blue,alpha; } MaliMetalTextureSwizzleChannels
     NSUInteger _allocatedSize,_purgeableState,_bytesPerRow,_parentLevel,_parentSlice;
     uint32_t _swizzle[4];
     void *_pixels,*_iosurface; NSUInteger _iosurfacePlane; BOOL _surfaceTwoPlanes;
+    MaliMetalTextureLayout *_hostLayout; void *_hostLayoutBytes;
 }
 - (instancetype)initWithDescriptor:(MTLTextureDescriptor *)descriptor device:(id<MTLDevice>)device;
 - (instancetype)initWithDescriptor:(MTLTextureDescriptor *)descriptor iosurface:(void *)surface plane:(NSUInteger)plane device:(id<MTLDevice>)device;
 - (instancetype)initWithDescriptor:(MTLTextureDescriptor *)descriptor device:(MaliMetalDevice *)device heap:(id)heap;
+- (instancetype)initWithBytesNoCopy:(void *)bytes length:(NSUInteger)length descriptor:(MTLTextureDescriptor *)descriptor device:(MaliMetalDevice *)device deallocator:(void (^)(void *,NSUInteger))deallocator;
 - (MMVKImage *)maliImage;
 - (uint64_t)maliResourceID;
 - (NSUInteger)protectionOptions;
@@ -70,6 +73,46 @@ typedef struct { uint8_t red,green,blue,alpha; } MaliMetalTextureSwizzleChannels
 BOOL MaliMetalResourceOptions(MTLResourceOptions,MTLStorageMode *,MTLCPUCacheMode *,MTLHazardTrackingMode *);
 BOOL MaliMetalTextureDescriptorNative(MTLTextureDescriptor *,MMVKImageDescriptorEx *);
 
+typedef struct {
+    uint64_t words[2];
+} MaliMetalTextureLayoutWatermark;
+@protocol MTLTextureLayout
+- (NSUInteger)size;
+- (NSUInteger)alignment;
+- (MTLSize)copyGranularity;
+- (MaliMetalTextureLayoutWatermark)watermark;
+- (void)finalizeTextureMemory:(void *)memory;
+- (void)copyFromLinearBytes:(const void *)bytes
+               linearOffset:(NSUInteger)offset
+          linearBytesPerRow:(NSUInteger)row
+        linearBytesPerImage:(NSUInteger)image
+            toTextureMemory:(void *)memory
+               textureSlice:(NSUInteger)slice
+               textureLevel:(NSUInteger)level
+              textureRegion:(MTLRegion)region;
+- (void)copyFromTextureMemory:(const void *)memory
+                 textureSlice:(NSUInteger)slice
+                 textureLevel:(NSUInteger)level
+                textureRegion:(MTLRegion)region
+                toLinearBytes:(void *)bytes
+                 linearOffset:(NSUInteger)offset
+            linearBytesPerRow:(NSUInteger)row
+          linearBytesPerImage:(NSUInteger)image;
+@optional
+- (void)initializeTextureMemory:(void *)memory;
+@end
+/* Host block layout. This is not a Vulkan optimal-image memory layout. */
+@interface MaliMetalTextureLayout : MaliMetalObject <MTLTextureLayout> {
+    MaliMetalDevice *_device;
+    NSUInteger _width, _height, _levels, _payload, _unit, _blockWidth, _blockHeight;
+    NSUInteger _offsets[32], _rows[32], _heights[32];
+}
+- (instancetype)initWithDevice:(MaliMetalDevice *)device
+                    descriptor:(MTLTextureDescriptor *)descriptor
+            heapOrBufferBacked:(BOOL)backed;
+- (BOOL)validateMemory:(const void *)memory length:(NSUInteger)length;
+- (MMVKResult)uploadMemory:(const void *)memory image:(MMVKImage *)image error:(MMVKError *)error;
+@end
 typedef struct { NSUInteger size,align; } MaliMetalResourceSizeAndAlign;
 @interface MaliMetalDevice (MaliMetalHeapCreation)
 - (id)newHeapWithDescriptor:(id)descriptor;

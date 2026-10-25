@@ -51,6 +51,236 @@ static void backendException(const MMVKError *error){[NSException raise:@"NSInte
 static BOOL hasUnprotectedOptions(id object){
     return object&&[object respondsToSelector:@selector(protectionOptions)]&&[object protectionOptions]==0;
 }
+@implementation MaliMetalTextureLayout
+- (instancetype)initWithDevice:(MaliMetalDevice *)device
+                    descriptor:(MTLTextureDescriptor *)d
+            heapOrBufferBacked:(BOOL)backed {
+    self = [super init];
+    if (!self)
+        return nil;
+    MMVKImageDescriptorEx native;
+    MMVKError error = {0};
+    if (!device || backed || !MaliMetalTextureDescriptorNative(d, &native) || native.type != 2 ||
+        native.depth != 1 || native.array_layers != 1 || native.samples != 1 ||
+        native.mip_levels > 32 ||
+        (native.usage & (MMVK_IMAGE_STORAGE | MMVK_IMAGE_RENDER_TARGET)) ||
+        mmvk_image_validate_descriptor([device backendDevice], &native, &error)) {
+        [self release];
+        return nil;
+    }
+    uint32_t bw, bh, unit;
+    if (!mmvk_format_block_info(native.format, &bw, &bh, &unit)) {
+        [self release];
+        return nil;
+    }
+    _width = native.width;
+    _height = native.height;
+    _levels = native.mip_levels;
+    _blockWidth = bw;
+    _blockHeight = bh;
+    _unit = unit;
+    NSUInteger w = _width, h = _height, total = 0;
+    for (NSUInteger l = 0; l < _levels; l++) {
+        NSUInteger blocks = (w + bw - 1) / bw, rows = (h + bh - 1) / bh;
+        if (blocks > SIZE_MAX / unit || rows > SIZE_MAX / (blocks * unit) ||
+            total > SIZE_MAX - 15) {
+            [self release];
+            return nil;
+        }
+        total = (total + 15) & ~15ul;
+        _offsets[l] = total;
+        _rows[l] = blocks * unit;
+        _heights[l] = rows;
+        NSUInteger n = _rows[l] * rows;
+        if (n > SIZE_MAX - total) {
+            [self release];
+            return nil;
+        }
+        total += n;
+        w = w > 1 ? w / 2 : 1;
+        h = h > 1 ? h / 2 : 1;
+    }
+    if (total > SIZE_MAX - 16) {
+        [self release];
+        return nil;
+    }
+    _payload = total;
+    _device = [device retain];
+    return self;
+}
+- (void)dealloc {
+    [_device release];
+    [super dealloc];
+}
+- (NSUInteger)size {
+    return _payload + 16;
+}
+- (NSUInteger)alignment {
+    return 16;
+}
+- (MTLSize)copyGranularity {
+    return (MTLSize){_blockWidth, _blockHeight, 1};
+}
+- (MaliMetalTextureLayoutWatermark)watermark {
+    /* Versioned identity for this driver's host block representation. Never
+     * identify these bytes as an Apple tiled texture or native Vulkan memory. */
+    return (MaliMetalTextureLayoutWatermark){{0x4d4d544c424c4b31ull, 0x5f484f53545f5631ull}};
+}
+- (void)initializeTextureMemory:(void *)memory {
+    if (!memory) {
+        resourceException("Missing texture layout memory");
+        return;
+    }
+    memset(memory, 0, [self size]);
+}
+- (void)finalizeTextureMemory:(void *)memory {
+    if (!memory) {
+        resourceException("Missing texture layout memory");
+        return;
+    }
+    MaliMetalTextureLayoutWatermark mark = [self watermark];
+    memcpy((char *)memory + _payload, &mark, sizeof(mark));
+}
+- (BOOL)validateMemory:(const void *)memory length:(NSUInteger)length {
+    if (!memory || ((uintptr_t)memory & 15) || length < [self size] ||
+        length > UINTPTR_MAX - (uintptr_t)memory)
+        return NO;
+    MaliMetalTextureLayoutWatermark mark = [self watermark];
+    return memcmp((const char *)memory + _payload, &mark, sizeof(mark)) == 0;
+}
+- (MMVKResult)uploadMemory:(const void *)memory image:(MMVKImage *)image error:(MMVKError *)error {
+    NSUInteger w = _width, h = _height;
+    for (NSUInteger l = 0; l < _levels; l++) {
+        MMVKImageRegion region = {
+            .level = (uint32_t)l, .width = (uint32_t)w, .height = (uint32_t)h, .depth = 1};
+        MMVKResult result = mmvk_image_upload_region(image,
+                                                     &region,
+                                                     (const char *)memory + _offsets[l],
+                                                     _rows[l] * _heights[l],
+                                                     _rows[l],
+                                                     0,
+                                                     error);
+        if (result)
+            return result;
+        w = w > 1 ? w / 2 : 1;
+        h = h > 1 ? h / 2 : 1;
+    }
+    return MMVK_OK;
+}
+- (void)copyLayoutMemory:(void *)memory
+             linearBytes:(void *)bytes
+                  offset:(NSUInteger)offset
+                     row:(NSUInteger)row
+                   image:(NSUInteger)image
+                   slice:(NSUInteger)slice
+                   level:(NSUInteger)level
+                  region:(MTLRegion)r
+                download:(BOOL)download {
+    if (!memory || !bytes || slice || level >= _levels) {
+        resourceException("Invalid texture layout subresource");
+        return;
+    }
+    NSUInteger w = _width >> level, h = _height >> level;
+    if (!w)
+        w = 1;
+    if (!h)
+        h = 1;
+    /* CoreUI streams a complete final ASTC block row, including the physical
+     * padding beyond a nonmultiple logical image height. */
+    NSUInteger physicalWidth = ((w + _blockWidth - 1) / _blockWidth) * _blockWidth;
+    NSUInteger physicalHeight = ((h + _blockHeight - 1) / _blockHeight) * _blockHeight;
+    if (r.origin.z || r.size.depth != 1 || r.origin.x > w ||
+        r.size.width > physicalWidth - r.origin.x || r.origin.y > h ||
+        r.size.height > physicalHeight - r.origin.y || r.origin.x % _blockWidth ||
+        r.origin.y % _blockHeight ||
+        (r.size.width % _blockWidth && r.origin.x + r.size.width != w) ||
+        (r.size.height % _blockHeight && r.origin.y + r.size.height != h)) {
+        resourceException(
+            "Texture layout region must contain complete blocks or reach the mip edge");
+        return;
+    }
+    if (!r.size.width || !r.size.height)
+        return;
+    NSUInteger line = ((r.size.width + _blockWidth - 1) / _blockWidth) * _unit,
+               rows = (r.size.height + _blockHeight - 1) / _blockHeight;
+    if (!row)
+        row = line;
+    if (row < line || row % _unit || rows > SIZE_MAX / row || (image && image < row * rows) ||
+        offset > SIZE_MAX - line || (rows - 1) > (SIZE_MAX - offset - line) / row) {
+        resourceException("Texture layout linear stride overflows");
+        return;
+    }
+    NSUInteger span = offset + (rows - 1) * row + line;
+    if ((uintptr_t)bytes > UINTPTR_MAX - span || (uintptr_t)memory > UINTPTR_MAX - [self size]) {
+        resourceException("Texture layout address overflows");
+        return;
+    }
+    if ((uintptr_t)bytes < (uintptr_t)memory + [self size] &&
+        (uintptr_t)memory < (uintptr_t)bytes + span) {
+        resourceException("Texture layout source and destination allocations overlap");
+        return;
+    }
+    char *texture = (char *)memory + _offsets[level] + r.origin.y / _blockHeight * _rows[level] +
+                    r.origin.x / _blockWidth * _unit;
+    char *linear = (char *)bytes + offset;
+    for (NSUInteger y = 0; y < rows; y++) {
+        if (download)
+            memmove(linear + y * row, texture + y * _rows[level], line);
+        else
+            memmove(texture + y * _rows[level], linear + y * row, line);
+    }
+}
+- (void)copyFromLinearBytes:(const void *)bytes
+               linearOffset:(NSUInteger)offset
+          linearBytesPerRow:(NSUInteger)row
+        linearBytesPerImage:(NSUInteger)image
+            toTextureMemory:(void *)memory
+               textureSlice:(NSUInteger)slice
+               textureLevel:(NSUInteger)level
+              textureRegion:(MTLRegion)region {
+    [self copyLayoutMemory:memory
+               linearBytes:(void *)bytes
+                    offset:offset
+                       row:row
+                     image:image
+                     slice:slice
+                     level:level
+                    region:region
+                  download:NO];
+}
+- (void)copyFromTextureMemory:(const void *)memory
+                 textureSlice:(NSUInteger)slice
+                 textureLevel:(NSUInteger)level
+                textureRegion:(MTLRegion)region
+                toLinearBytes:(void *)bytes
+                 linearOffset:(NSUInteger)offset
+            linearBytesPerRow:(NSUInteger)row
+          linearBytesPerImage:(NSUInteger)image {
+    [self copyLayoutMemory:(void *)memory
+               linearBytes:bytes
+                    offset:offset
+                       row:row
+                     image:image
+                     slice:slice
+                     level:level
+                    region:region
+                  download:YES];
+}
+@end
+typedef struct {
+    MaliMetalTextureLayout *layout;
+    void *bytes;
+    NSUInteger length;
+    void (^deallocator)(void *, NSUInteger);
+} MaliMetalHostTextureBacking;
+static void releaseHostTextureBacking(void *context) {
+    MaliMetalHostTextureBacking *backing = context;
+    if (backing->deallocator)
+        backing->deallocator(backing->bytes, backing->length);
+    [(id)backing->deallocator release];
+    [backing->layout release];
+    free(backing);
+}
 BOOL MaliMetalResourceOptions(MTLResourceOptions o,MTLStorageMode *storage,MTLCPUCacheMode *cache,MTLHazardTrackingMode *hazard){
     NSUInteger s=(o>>4)&3,c=o&15,h=(o>>8)&3;
     if((o&~0x33ful)||c>1||h>2||(s!=MTLStorageModeShared&&s!=MTLStorageModePrivate&&s!=MTLStorageModeMemoryless))return NO;
@@ -124,17 +354,92 @@ BOOL MaliMetalTextureDescriptorNative(MTLTextureDescriptor *d,MMVKImageDescripto
     return YES;
 }
 @implementation MaliMetalTexture
+- (instancetype)initWithBytesNoCopy:(void *)bytes
+                             length:(NSUInteger)length
+                         descriptor:(MTLTextureDescriptor *)d
+                             device:(MaliMetalDevice *)device
+                        deallocator:(void (^)(void *, NSUInteger))deallocator {
+    MaliMetalTextureLayout *layout = [[MaliMetalTextureLayout alloc] initWithDevice:device
+                                                                         descriptor:d
+                                                                 heapOrBufferBacked:NO];
+    uint32_t bw = 1, bh = 1, unit = 0;
+    mmvk_format_block_info(mmvk_format_from_metal((uint32_t)[d pixelFormat]), &bw, &bh, &unit);
+    if (!layout || bw == 1 || bh == 1 || [d storageMode] != MTLStorageModeShared ||
+        [d usage] != MTLTextureUsageShaderRead || ![layout validateMemory:bytes length:length]) {
+        [layout release];
+        [self release];
+        return nil;
+    }
+    self = [self initWithDescriptor:d device:device];
+    if (!self) {
+        [layout release];
+        return nil;
+    }
+    MaliMetalHostTextureBacking *backing = calloc(1, sizeof(*backing));
+    if (!backing) {
+        [layout release];
+        [self release];
+        return nil;
+    }
+    backing->layout = layout;
+    backing->bytes = bytes;
+    backing->length = length;
+    backing->deallocator = [(id)deallocator copy];
+    if (deallocator && !backing->deallocator) {
+        free(backing);
+        [layout release];
+        [self release];
+        return nil;
+    }
+    _hostLayout = layout;
+    _hostLayoutBytes = bytes;
+    /* The native image owns the anchor, including after the ObjC wrapper dies.
+     * Staging/command references release it only after physical retirement. */
+    mmvk_image_set_host_readonly_backing(_image, backing, releaseHostTextureBacking);
+    return self;
+}
 - (instancetype)initWithDescriptor:(MTLTextureDescriptor *)d device:(id<MTLDevice>)device{return [self initWithDescriptor:d device:(MaliMetalDevice *)device heap:nil];}
-- (instancetype)initWithDescriptor:(MTLTextureDescriptor *)d device:(MaliMetalDevice *)device heap:(id)heap {
-    self=[super init];if(!self)return nil;MMVKImageDescriptorEx native;
-    if(!device||!MaliMetalTextureDescriptorNative(d,&native)||(heap&&!hasUnprotectedOptions(heap))){[self release];return nil;}
-    _device=[device retain];_pixelFormat=[d pixelFormat];_textureType=[d textureType];_usage=[d usage];_storageMode=[d storageMode];_cpuCacheMode=[d cpuCacheMode];_purgeableState=2;
-    _swizzle[0]=2;_swizzle[1]=3;_swizzle[2]=4;_swizzle[3]=5;
-    MaliMetalResourceOptions([d resourceOptions],NULL,NULL,&_hazardMode);
-    MMVKError error={0};if(mmvk_image_create_extended([device backendDevice],&native,heap?[heap maliHeap]:NULL,&_image,&error)){[self release];return nil;}
-    _heap=[heap retain];_allocatedSize=heap?0:(NSUInteger)mmvk_image_allocation_size(_image);
-    if(_allocatedSize)[device accountAllocation:_allocatedSize release:NO];
-    uint32_t bpp=mmvk_format_host_texel_size(native.format);if(bpp&&native.width<=SIZE_MAX/bpp)_bytesPerRow=(NSUInteger)native.width*bpp;return self;
+- (instancetype)initWithDescriptor:(MTLTextureDescriptor *)d
+                            device:(MaliMetalDevice *)device
+                              heap:(id)heap {
+    self = [super init];
+    if (!self)
+        return nil;
+    MMVKImageDescriptorEx native;
+    if (!device || !MaliMetalTextureDescriptorNative(d, &native) ||
+        (heap && !hasUnprotectedOptions(heap))) {
+        [self release];
+        return nil;
+    }
+    _device = [device retain];
+    _pixelFormat = [d pixelFormat];
+    _textureType = [d textureType];
+    _usage = [d usage];
+    _storageMode = [d storageMode];
+    _cpuCacheMode = [d cpuCacheMode];
+    _purgeableState = 2;
+    _swizzle[0] = 2;
+    _swizzle[1] = 3;
+    _swizzle[2] = 4;
+    _swizzle[3] = 5;
+    MaliMetalResourceOptions([d resourceOptions], NULL, NULL, &_hazardMode);
+    MMVKError error = {0};
+    if (mmvk_image_create_extended(
+            [device backendDevice], &native, heap ? [heap maliHeap] : NULL, &_image, &error)) {
+        [self release];
+        return nil;
+    }
+    _heap = [heap retain];
+    _allocatedSize = heap ? 0 : (NSUInteger)mmvk_image_allocation_size(_image);
+    if (_allocatedSize)
+        [device accountAllocation:_allocatedSize release:NO];
+    uint32_t bw, bh, bpp;
+    if (mmvk_format_block_info(native.format, &bw, &bh, &bpp)) {
+        NSUInteger blocks = ((NSUInteger)native.width + bw - 1) / bw;
+        if (blocks <= SIZE_MAX / bpp)
+            _bytesPerRow = blocks * bpp;
+    }
+    return self;
 }
 - (instancetype)initWithDescriptor:(MTLTextureDescriptor *)d iosurface:(void *)surface plane:(NSUInteger)plane device:(id<MTLDevice>)device {
     self=[self initWithDescriptor:d device:device];if(!self)return nil;
@@ -193,6 +498,16 @@ BOOL MaliMetalTextureDescriptorNative(MTLTextureDescriptor *d,MMVKImageDescripto
     if(preserve&&mmvk_image_is_transient(_image)){if(e){e->code=MMVK_ERROR_ARGUMENT;strcpy(e->message,"Memoryless texture cannot preserve earlier pass contents");}return NO;}
     if(mmvk_image_is_aliasable(_image)){if(e){e->code=MMVK_ERROR_STATE;strcpy(e->message,"Aliasable texture cannot be used");}return NO;}
     if(_parent)return [_parent maliPrepareImage:preserve error:e];
+    if (preserve && _hostLayout) {
+        if (![_hostLayout validateMemory:_hostLayoutBytes length:[_hostLayout size]]) {
+            if (e) {
+                e->code = MMVK_ERROR_ARGUMENT;
+                strcpy(e->message, "Host texture layout watermark changed");
+            }
+            return NO;
+        }
+        return [_hostLayout uploadMemory:_hostLayoutBytes image:_image error:e] == MMVK_OK;
+    }
     if(!preserve||!_iosurface)return YES;
     if(IOSurfaceLock(_iosurface,1,NULL)!=KERN_SUCCESS){if(e){e->code=MMVK_ERROR_IO;strcpy(e->message,"IOSurface read lock failed");}return NO;}
     MMVKResult r;
@@ -213,17 +528,43 @@ BOOL MaliMetalTextureDescriptorNative(MTLTextureDescriptor *d,MMVKImageDescripto
     if(r&&e&&!e->code){e->code=r;strcpy(e->message,"IOSurface staging readback failed");}return r==MMVK_OK;
 }
 - (void)hostTransfer:(void *)bytes row:(NSUInteger)row image:(NSUInteger)plane region:(MTLRegion)region level:(NSUInteger)level slice:(NSUInteger)slice download:(BOOL)download {
+    if (((MaliMetalTexture *)[self rootResource])->_hostLayout) {
+        resourceException("Host-layout imports currently support sampled consumption and direct "
+                          "backing access only");
+        return;
+    }
     if(_storageMode!=MTLStorageModeShared){resourceException("Private textures require GPU blits for host access");return;}
     if(level>UINT32_MAX||slice>UINT32_MAX||region.origin.x>UINT32_MAX||region.origin.y>UINT32_MAX||region.origin.z>UINT32_MAX||region.size.width>UINT32_MAX||region.size.height>UINT32_MAX||region.size.depth>UINT32_MAX||!bytes){resourceException("Texture region exceeds native address bounds");return;}
     if(!region.size.width||!region.size.height||!region.size.depth)return;
     MMVKImageRegion r={(uint32_t)level,(uint32_t)slice,(uint32_t)region.origin.x,(uint32_t)region.origin.y,(uint32_t)region.origin.z,(uint32_t)region.size.width,(uint32_t)region.size.height,(uint32_t)region.size.depth,0};
-    uint32_t texel=mmvk_format_host_texel_size(mmvk_image_format(_image));
-    if(!texel){resourceException("Host transfer requires a single-aspect uncompressed format");return;}
-    NSUInteger line=region.size.width*texel;if(!row)row=line;
-    if(row<line||row>SIZE_MAX/region.size.height){resourceException("Invalid texture row stride");return;}
-    NSUInteger packedPlane=row*region.size.height;if(!plane)plane=packedPlane;
-    if(plane<packedPlane||(region.size.depth-1&&plane>(SIZE_MAX-packedPlane)/(region.size.depth-1))){resourceException("Invalid texture image stride");return;}
-    NSUInteger capacity=(region.size.depth-1)*plane+(region.size.height-1)*row+line;MMVKError error={0};
+    uint32_t bw, bh, texel;
+    if (!mmvk_format_block_info(mmvk_image_format(_image), &bw, &bh, &texel)) {
+        resourceException("Host transfer requires a supported transfer block format");
+        return;
+    }
+    NSUInteger blocks = (region.size.width + bw - 1) / bw,
+               rows = (region.size.height + bh - 1) / bh;
+    if (blocks > SIZE_MAX / texel) {
+        resourceException("Texture row size overflows");
+        return;
+    }
+    NSUInteger line = blocks * texel;
+    if (!row)
+        row = line;
+    if (row < line || row > SIZE_MAX / rows) {
+        resourceException("Invalid texture row stride");
+        return;
+    }
+    NSUInteger packedPlane = row * rows;
+    if (!plane)
+        plane = packedPlane;
+    if (plane < packedPlane ||
+        (region.size.depth - 1 && plane > (SIZE_MAX - packedPlane) / (region.size.depth - 1))) {
+        resourceException("Invalid texture image stride");
+        return;
+    }
+    NSUInteger capacity = (region.size.depth - 1) * plane + (rows - 1) * row + line;
+    MMVKError error = {0};
     [_device lockExecution];MMVKResult result;
     if([self iosurface]&&![self maliPrepareImage:YES error:&error])result=error.code?error.code:MMVK_ERROR_IO;
     else result=download?mmvk_image_readback_region(_image,&r,bytes,capacity,row,plane,5000000000ull,&error):mmvk_image_upload_region(_image,&r,bytes,capacity,row,plane,&error);

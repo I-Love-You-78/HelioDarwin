@@ -47,7 +47,14 @@ MMVKResult mmvk_image_require_native_color_semantics(const MMVKImage *,MMVKError
 MMVKFormat mmvk_format_from_metal(uint32_t metal_format);
 uint32_t mmvk_format_native_code(MMVKFormat);
 uint32_t mmvk_format_texel_size(MMVKFormat);
+/* Transfer blocks; uncompressed formats have a 1x1 block. */
+int mmvk_format_block_info(MMVKFormat,uint32_t *width,uint32_t *height,uint32_t *bytes);
+int mmvk_device_supports_astc_ldr(MMVKDevice *);
 uint32_t mmvk_format_aspects(MMVKFormat);
+/* Adopt a successfully constructed sampled host import. The anchor follows the
+ * root image's native references, including quarantined submissions. */
+void mmvk_image_set_host_readonly_backing(MMVKImage *,void *,void (*release)(void *));
+MMVKResult mmvk_image_validate_descriptor(MMVKDevice *,const MMVKImageDescriptorEx *,MMVKError *);
 typedef enum { MMVK_RESOURCE_BUFFER=1, MMVK_RESOURCE_TEXTURE=2, MMVK_RESOURCE_SAMPLER=3 } MMVKResourceKind;
 /* IDs are monotonic typed identities, not GPU descriptor handles. Registry
  * acquisition verifies device/kind/liveness and retains the native object.

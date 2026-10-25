@@ -171,6 +171,13 @@ automatic-return captures, so it does not identify the reset failure by itself.
 Successful GPU job completions were not individually logged in this build.
 Buffer swaps and a visible spinner alone do not identify the frame producer.
 
+Separate failures remain outside this texture candidate: the inspected
+VideoToolbox alignment reader expects a dictionary for
+`DisplayPipePlaneBaseAlignment`, while the framebuffer currently publishes
+a number. Other captured extension/daemon aborts still need their own
+contract analysis. These services are not considered repaired by AMFI
+membership or the texture-layout implementation.
+
 ## Remaining contracts
 
 Persistent AppleKeyStore key wrapping/unwrapping, bag lifecycle and access control remain missing prerequisites for real keychain persistence. SEP-backed protection, biometric/NFC/secure-element interfaces, modem transport, Wi-Fi/Bluetooth controllers and the USB PTP function require separate implementations. Search, ScreenTime and pass services also retain storage, account and keybag dependencies. These changes do not establish blanket daemon or hardware functionality.

@@ -1025,6 +1025,25 @@ static void MaliMetalComputeSetError(MMVKError *error, MMVKResult code, const ch
 }
 
 /* Texture Allocation */
+- (BOOL)supportsASTCTextureCompression {
+    return mmvk_device_supports_astc_ldr([self backendDevice]) ? YES : NO;
+}
+- (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)descriptor
+                isHeapOrBufferBacked:(BOOL)backed {
+    return [[MaliMetalTextureLayout alloc] initWithDevice:self
+                                               descriptor:descriptor
+                                       heapOrBufferBacked:backed];
+}
+- (id<MTLTexture>)newTextureWithBytesNoCopy:(void *)bytes
+                                     length:(NSUInteger)length
+                                 descriptor:(MTLTextureDescriptor *)descriptor
+                                deallocator:(void (^)(void *, NSUInteger))deallocator {
+    return (id<MTLTexture>)[[MaliMetalTexture alloc] initWithBytesNoCopy:bytes
+                                                                  length:length
+                                                              descriptor:descriptor
+                                                                  device:self
+                                                             deallocator:deallocator];
+}
 - (id<MTLTexture>)newTextureWithDescriptor:(MTLTextureDescriptor *)descriptor {
     return (id<MTLTexture>)[[MaliMetalTexture alloc] initWithDescriptor:descriptor device:self];
 }

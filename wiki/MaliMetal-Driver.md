@@ -253,6 +253,35 @@ creation and a missing texture-layout API are now observed blockers.
 Successful hardware completion was not separately logged; buffer swaps
 alone do not establish that a particular frame was GPU-rendered.
 
+The next candidate implements the inspected 20H392 texture-layout protocol
+for sampled 2D ASTC LDR textures. Its versioned host block representation has its
+own watermark and checked mip/region bounds. Shared, shader-read-only
+`newTextureWithBytesNoCopy:length:descriptor:deallocator:` imports retain the
+caller's backing and deallocator until final native-reference retirement;
+properly synchronized host changes are uploaded at queue consumption. Vulkan
+images remain optimal-tiled allocations. This is an explicit upload path, not
+GPU zero-copy. Apple-family reports remain unchanged; ASTC capability reporting
+requires the enabled native feature and all 28 LDR format queries.
+
+Heap/buffer-backed layouts, imported GPU writes/blits, HDR, PVRTC and general
+compressed-format coverage are unsupported. Strict compilation, native method
+encodings, source/component checks and independent static review pass. Actual
+ASTC upload/sampling, host-update pixels, wallpaper and performance remain device
+acceptance checks.
+
+Kernel patch 0203 retires a released IOSurface view's obsolete pixel owner
+while retaining its independently mapped state page and genuine peer, port and
+framebuffer owners. The wired cap is unchanged. The recorded early Vulkan error
+is not attributed to this defect without further evidence.
+
+Patch 0204 separates bounded allocation-stage diagnostics and records the first
+four terminal JM results per client after existing completion/cache handling.
+Only `MMK_JOB_COMPLETE` from the hardware completion path counts as successful
+execution; cancellation, fault or timeout records do not. A successful job alone
+does not establish correct pixels or identify the spinner's frame producer.
+The Vulkan/Darwin transport also distinguishes allocation, host mapping and
+buffer binding errors without changing allocation policy.
+
 ## Remaining coverage and validation
 
 Patched coherent color tile reads, native depth/stencil/MSAA helpers, views and

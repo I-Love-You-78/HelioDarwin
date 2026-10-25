@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: MIT */
 #include "MaliKmodDarwin.h"
+#include <stdio.h>
 #include <string.h>
 #include <mach/mach.h>
 
@@ -68,6 +69,8 @@ static int32_t map_bo(uint32_t connection,MMKDarwinBO *out)
         kr=MMK_BAD_REPLY;
     }
     if (kr) {
+        fprintf(stderr, "SweetMali: BO host mapping failed size=%llu result=%#x\n",
+                (unsigned long long)out->info.size, (uint32_t)kr);
         MMKBORelease request={ .hdr=MMK_HDR(MMKBORelease),.handle=out->info.handle };
         call(connection,MMK_BO_RELEASE,&request,sizeof(request),NULL,0);
         memset(out,0,sizeof(*out));
@@ -85,6 +88,10 @@ int32_t mmk_darwin_alloc(uint32_t connection,uint64_t size,uint32_t flags,MMKDar
     MMKBOAlloc request={ .hdr=MMK_HDR(MMKBOAlloc),.size=size,.flags=flags };
     memset(out,0,sizeof(*out));
     int32_t kr=call(connection,MMK_BO_ALLOC,&request,sizeof(request),&out->info,sizeof(out->info));
+    if (kr) {
+        fprintf(stderr, "SweetMali: BO kernel allocation failed size=%llu flags=%#x result=%#x\n",
+                (unsigned long long)size, flags, (uint32_t)kr);
+    }
     return kr ? kr : map_bo(connection,out);
 }
 

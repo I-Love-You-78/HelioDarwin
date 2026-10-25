@@ -21,6 +21,7 @@ struct MMVKImage {
     VkImageSubresourceRange range; VkComponentMapping components; uint32_t metal_swizzle[4];
     MMVKHeap *heap; MMVKHeapBlock *heap_block; uint64_t heap_offset;
     uint32_t aliasable; MMVKResourceIdentity *identity;
+    void *host_readonly_backing; void (*release_host_backing)(void *);
 };
 struct MMVKSampler { MMVKDevice *dev; VkSampler sampler; MMVKSamplerDescriptor desc; uint32_t references; MMVKResourceIdentity *identity; MMVKMetalSamplerDescriptor metal; uint32_t has_metal_descriptor; };
 #endif
