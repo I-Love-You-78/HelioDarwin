@@ -28,6 +28,13 @@ qualification ICD for exactly `GPU_ID=0x90930010` on arch 9. It is off by defaul
 leaves other devices' policy unchanged, and does not establish native numeric
 FP16 correctness. The enabled profile must be captured from the candidate itself.
 
+The 17:39:02 trial captured FP16 enabled in the actual native profile and reached
+the internal render-draw ownership check, where `MaliMetalRenderDraw` lacked a
+device getter. Draws now expose their retained program's actual device and
+validate the pipeline/program/device identity. The former shader-name rejection
+did not recur. Native pipeline preparation precedes this ownership check;
+successful command execution, pixel correctness and numerical FP16 remain unverified.
+
 The current compiler series also fixes sRGB tile-read metadata and forwards the
 actual canonical color-write table. PointSize output is accepted only for the
 qualified triangle/fill path with native feature checks; this does not add a

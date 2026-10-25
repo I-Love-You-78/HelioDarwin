@@ -9,6 +9,7 @@
     MMShaderVulkanRenderCache *_cache;
 }
 - (instancetype)initWithDevice:(MaliMetalDevice *)device error:(MMVKError *)error;
+- (id<MTLDevice>)device;
 - (MMShaderVulkanRenderCache *)cache;
 @end
 @interface MaliMetalRenderDraw : NSObject {
@@ -22,6 +23,8 @@
                          request:(const MMShaderRenderDrawRequest *)request
                            state:(const MMVKGraphicsState *)state
                             pass:(const MMVKPassLayout *)pass error:(MMVKError *)error;
+/* Internal command-buffer ownership checks use the retained program's device. */
+- (id<MTLDevice>)device;
 - (MMVKResult)record:(MMVKCommands *)commands indices:(MMVKBuffer *)indices error:(MMVKError *)error;
 @end
 #endif

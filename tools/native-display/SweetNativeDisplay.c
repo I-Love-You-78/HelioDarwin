@@ -123,14 +123,17 @@ stock_edge_contract(Object old)
     Object portrait = object_get(old, "safeAreaInsetsPortrait");
     Object periphery = object_get(old, "peripheryInsets");
     Object allowance = object_get(old, "homeAffordanceOverlayAllowance");
-    /* These are the inspected stock full-screen phone contracts. Other
-     * display classes and user overrides retain their original metadata. */
+    /* Stock full-screen phone contracts include the iPhone X Display Zoom
+     * screen type, whose portrait insets are 38/0/29/0. Other display classes
+     * and user overrides retain their original metadata. */
     if (!portrait || !periphery || !allowance)
         return 0;
     double top = double_get(portrait, "topInset");
-    if (!(near(top, 44) || near(top, 47) || near(top, 50)) ||
+    double bottom = double_get(portrait, "bottomInset");
+    int standard = (near(top, 44) || near(top, 47) || near(top, 50)) && near(bottom, 34);
+    int zoomed = near(top, 38) && near(bottom, 29);
+    if (!(standard || zoomed) ||
         !near(double_get(portrait, "leftInset"), 0) || !near(double_get(portrait, "rightInset"), 0) ||
-        !near(double_get(portrait, "bottomInset"), 34) ||
         !near(double_get(periphery, "topInset"), 32) || !near(double_get(allowance, "doubleValue"), 21))
         return 0;
     return 1;

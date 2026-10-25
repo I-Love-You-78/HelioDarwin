@@ -62,6 +62,13 @@ the two pinned root executables, preserving their existing entitlement blobs
 and providing exact rollback. Installed components still require runtime
 constructor, provider-delivery and UIKit-context evidence.
 
+The 17:39:02 trial confirmed enabled FP16 and native-display constructor loading.
+It exposed a draw-owner device contract gap and an exact stock donor inset pair
+rejected by the geometry input guard. Both bounded fixes compile and preserve
+native validation. The poster registration call was still pending when the user
+returned manually; that capture ended before the phase timeout. Rendered output,
+native context matching, wallpaper delivery and performance remain unverified.
+
 ## Priorities
 
 1. Validate the assembled native display/input/MaliMetal candidate, recording

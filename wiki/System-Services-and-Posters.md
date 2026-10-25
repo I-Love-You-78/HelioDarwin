@@ -95,6 +95,20 @@ For Windows/WSL linking, add `--wsl --linker /usr/bin/ld64.lld-18` to the build 
 
 The artifact compiles for arm64 iOS with strict warnings. Earlier installation through DYLD environment injection did not establish activation: launchd removed the variable and dyld's AMFI policy query was unavailable. The guarded dependency installers pass offline installation/removal checks; runtime activation and the visible result remain unvalidated. Captured diagnostics also include SpringBoard and service failures while reading shared-cache Objective-C metadata; this common failure is under investigation. Startup loading, feature-table regeneration, context propagation to applications, actual provider selection, orientation handling and visible wallpaper still need assembled-boot evidence. Successful compilation is not a claim that the red status area or every UIKit layout issue is fixed.
 
+The 17:39:02 trial confirmed native-display constructor installation. Its context
+readback still had the stock 38/29-point donor insets and cutout, so the adapter
+correctly rejected that result. The guard now recognizes the exact screen-type-4
+donor selected by the native 360×800 bounds; this does not imply that the user
+enabled Display Zoom. Required native outputs remain unchanged and still need
+successful readback.
+
+The poster helper's real query returned zero providers and entered the first
+LaunchServices registration call. `lsd` was running. The manual capture ended
+less than 125 seconds after helper creation, before even the earliest phase
+timeout; no registration hang or missing entitlement was established. A longer
+capture must show its actual return, timeout or sampled blocking stack before
+changing that path. PosterBoard had not spawned in the retained launchd segment.
+
 ## Remaining contracts
 
 Persistent AppleKeyStore key wrapping/unwrapping, bag lifecycle and access control remain missing prerequisites for real keychain persistence. SEP-backed protection, biometric/NFC/secure-element interfaces, modem transport, Wi-Fi/Bluetooth controllers and the USB PTP function require separate implementations. Search, ScreenTime and pass services also retain storage, account and keybag dependencies. These changes do not establish blanket daemon or hardware functionality.

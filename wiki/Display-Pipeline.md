@@ -55,6 +55,12 @@ Its offline installer now adds a guarded normal dependency to the exact supporte
 SpringBoard executable. It preserves the existing entitlement blobs and signature
 metadata, updates ad-hoc page hashes, and retains an exact executable backup;
 it does not depend on a DYLD environment variable reaching the process.
+The 17:39:02 boot confirmed adapter loading, but full context validation retained
+the original donor geometry. UIKit selects its screen-type-4 donor for native
+360×800 reference bounds below 375×812. The input guard now accepts that exact
+38/29-point inset pair alongside its other verified stock pairs; requested native
+outputs and the full context matcher are unchanged. A successful native context,
+normal status-bar provider and visible geometry remain runtime checks.
 Loading, policy selection, application contexts, orientation and the visible
 status bar must be checked together. See [System Services and Posters](System-Services-and-Posters.md)
 for exact geometry, API guards, installation and rollback, and [Input and HID](Input-and-HID.md)

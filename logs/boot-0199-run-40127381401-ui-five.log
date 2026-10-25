@@ -1,0 +1,1376 @@
+x676c shim: xnu loader
+CurrentEL=0x0000000000000001
+load=0x0000000040000000
+dtb=0x0000000047c80000
+cntfrq=0x0000000000c65d40
+mpidr=0x0000000081000000
+midr=0x00000000412fd050
+sctlr_el1=0x0000000030d01800
+id_aa64mmfr0=0x0000000000101122
+-- ufshci std
+11270000: 3587071f 00000000 00000200 00000000
+11270010: 00000000 00000426 00000000 00000000
+11270020: 00000004 00030e75 00000000 00000000
+11270030: 0000010f 00000001 80000010 00000000
+11270040: 00000000 00000000 00000000 0000000011270°50: 51252c0 00000000 00000000 00000000
+11270060: 00000001 00400000 00000000 00000000
+11270070: 00000000 00000000 00000000 00000000
+11270080: 00000001 00000000 00000000 00000000
+11270090: 00000002 15710000 00000000 00000000
+112700a0: 00000000 00000000 00000000 00000000
+112700b0: 00000000 00000000 00000000 00000000
+112700c0: 000a0a00 00000000 00000000 00000000
+112700d0: 20000000 00000000 00000000 00000000
+112700e0: 00000000 00000000 00000000 00000000
+112700f0: 00000800 00000000 00000000 0000010a
+-- ufshci mtk 0x140
+11270140: 00000100 00000003 00000000 00000000
+11270150: 00000000 00000000 00000000 00000000
+-- ufshci mtk 0x2100
+11272100: 00000000 00000000 00000000 00000000
+-- ufshci mtk 0x2200
+11272200: 00000007 000000cc 00800040 008000c0
+11272210: 00000000 00000000 00000000 00000000
+11272220: 00000000 00000000 00000000 00000000
+11272230: 00000000 00000000 00000000 00000000
+11272240: 20160706 00000000 00000001 00000000
+11272250: 00000000 00000000 00000000 00000000
+11272260: 00000000 00000000 00000000 00000000
+11272270: 00000000 00000000 00000000 00000000
+11272280: 00000e3b 001642fd d0160efb d0161341
+11272290: 02160e38 02160ed6 00000000 00000000
+112722a0: 02160e38 00168eb8 001693c4 00000000
+112722b0: 00000000 00000000 00000000 00000000
+112722c0: 00000000 00000000 00000000 00000000
+splash drawn
+initrd lo=0x0000000066f00000
+initrd hi=0x0000000069939072
+payload=0x00000000688b1a08
+phys base=0x0000000140000000
+mem size=0x00000000ffff0000
+virt base=0xfffffe0006000000
+entry va=0xfffffe00074c0488
+segments=0x000000000000000a
+boot_args=0x0000000142f8c000
+top=0x0000000142f90000
+jump=0x00000001414c0488
+SWEET EARLY 1: arm_init entered (MMU on)
+SWEET EARLY 2: PE_init_platform done
+SWEET EARLY 3: ml_parse_cpu_topology done
+SWEET EARLY 4: cpu_bootstrap done
+SWEET EARLY 5: kernel_startup_bootstrap done
+SWEET EARLY 6: cpu_init done
+SWEET EARLY 7: entering arm_vm_init
+SWEET EARLY 8: leaving bootstrap TTBR0
+SWEET EARLY 9: kernel framebuffer VA live
+SWEET EARLY 10: TTBR0 off; TLB flushed
+SWEET EARLY 11: physmap table pointers rebound
+SWEET EARLY 12: calling pmap_bootstrap
+SWEET EARLY 13: pmap_bootstrap done
+SWEET EARLY 14: early I/O page tables ready
+SWEET EARLY 15: arm_vm_init returned
+SWEET EARLY 16: calling serial_init
+SWEET EARLY 17: fbcon config read; mapping
+SWEET EARLY 18: fbcon mapping returned
+SWEET EARLY 19: serial_init returned
+SWEET EARLY 20: kprintf startup complete
+Darwin Kernel Version 22.6.0: Mon Aug 14 05:06:07 UTC 2023; runner:xnu-8796.141.3
+pmap_startup() init/release time: 22040 microsec
+pmap_startup() delayed init/release of 0 pages
+vm_page_bootstrap: 258064 free pagås, t076 wkred pages, (up to 0 of which are delayed free)
+VM boostrap: 97 maps, 204 entries and 512 holes available
+Maximum number of VM swap files: 100
+zones                   : 0xfffffe10001a0p00 - 0xffvffe30p01a0000 (128G)
+mb                      : 0xfffffe30001a0000 - 0xfffffe30041a0000 (64M)
+gIOKitPageableFixed1    : 0xfffffe30041a0000 - 0xfffffe300a1a0000 (96M)
+bufferhdr               : 0xfffffe300a1a0000 - 0xfffffe300a468000 (2848K)
+ipc_kernel_map          : 0xfffffe300a468000 - 0xfffffe300e468000 (64M)
+gIOKitPageableFixed2    : 0xfffffe300e468000 - 0xfffffe3014468000 (96M)
+zone_meta               : 0xfffffe3014468000 - 0xfffffe301d068000 (140M)
+kmem_ptr_range_meta     : 0xfffffe301d068000 - 0xfffffe301d7e4000 (7M)
+compressor              : 0xfffffe301d7e4000 - 0xfffffe401dd5c000 (64G)
+gIOKitPageableFixed0    : 0xfffffe401dd5c000 - 0xfffffe4023d5c000 (96M)
+ipc_kernel_copy_map     : 0xfffffe4023d5c000 - 0xfffffe402455c000 (8M)
+kmem_ptr_range          : 0xfffffe402455c000 - 0xfffffe541831c000 (79G)
+bsd_pageable            : 0xfffffe541831c000 - 0xfffffe541c624000 (67M)
+kmem_sprayqtn_range     : 0xfffffe541c624000 - 0xfffffe549ae40000 (2024M)
+gIOKitPageableFixed3    : 0xfffffe549ae40000 - 0xfffffe54a0e40000 (96M)
+kmem_data_range         : 0xfffffe54a0e40000 - 0xfffffe8fff5fc000 (237G)
+io_submap               : 0xfffffe8fff5fc000 - 0xfffffe8fffdfc000 (8M)
+kmem_large_ranges[1]    : 0 - 0 (0B)
+kmem_large_ranges[2]    : 0 - 0 (0B)
+kmem_large_ranges[3]    : 0 - 0 (0B)
+kmem_large_ranges[4]    : 0xfffffe542c327800 - 0xfffffe549ae40000 (1771M)
+kmem_large_ranges[5]    : 0xfffffe5c0cb37800 - 0xfffffe8fff5fc000 (207G)
+"vm_compressor_mode" is 4
+zone_init: pgzalloc  0xfffffe10001a0000:0xfffffe1002144000 (31M) [1012 slots]
+zone_init: map VM    0xfffffe1002144000:0xfffffe14ce950000 (19G)
+zone_init: map RO    0xfffffe14ce950000:0xfffffe1668154000 (6G)
+zone_init: map GEN0  0xfffffe1668154000:0xfffffe1b34960000 (19G)
+zone_init: map GEN1  0xfffffe1b34960000:0xfffffe200116c000 (19G)
+zone_init: map GEN2  0xfffffe200116c000:0xfffffe24cd978000 (19G)
+zone_init: map GEN3  0xfffffe24cd978000:0xfffffe299a188000 (19G)
+zone_init: map DATA  0xfffffe299a188000:0xfffffe30001a0000 (25G)
+zone_init: metadata  0xfffffe3014478000:0xfffffe301c478000 (128M)
+zone_init: metabits  0xfffffe301c478000:0xfffffe301d058000 (11M)
+zone_init: extra     0:0 (0B)
+VM bootstrap done: 85 maps, 165 entries and 501 holes left
+Long logs support configured: size: 16384
+Log queues configured: slot count: 48, per-slot size: 32768, total size: 1572864
+Firehose configured: 16 chunks, 8 io pages
+OSLog stream configured: stream: 8192 bytes, cache: 2112 bytes
+OSLog stream verification: 0
+standard timeslicing quantum is 10000 us
+standard background quantum is 2500 us
+mig_table_max_displ = 54 mach_kobj_count = 374
+debug_log_init: Error!! gPanicBase is still not initialized
+debug_log_init: Error!! gPanicBase is still not initialized
+kdp_core zlib memory 0x8000
+Serial requested, consistent debug disabled or debug boot arg not present, configuring debugging over serial
+iBoot version: x676c-shim
+"name" not a kext
+"AAPL,phandle" not a kext
+SWEET AMFI: built-in interface registered (XML entitlements)
+calling mpo_policy_init for vnguard
+Security policy loaded: Guarded vnode policy (vnguard)
+SWEET: trust caches unavailable (Image4/AMFI not installed)
+keepsyms boot arg specified; keeping linkedit segment for symbols.
+No POST boot-arg set.
+SWEET: starting device-tree platform expert
+SWEET: platform expert registered
+SWEET AKS: AppleKeyStore registered (no passcode, unlocked)
+SWEET WDT: IOWatchdog registered (accepts check-ins, never fires)
+SWEET SURF: IOCoreSurfaceRoot registered
+SWEET SCALER: AppleM2ScalerCSCDriver registered
+SWEET HID: buttons registered
+SWEET HID: touch registered
+SWEET BATTERY: static fallback, 100% 4200mV external=1 charging=0
+SWEET CPU: requested=6 selected=6 (limit=8)
+SWEET CPU: cpu=0 mpidr=0x0 came alive; SGI1 OK
+SWEET CPU: cpu=1 CPU_ON target=0x100 entry_pa=0x1414c2000 context=1
+SWEET CPU: cpu=1 PSCI CPU_ON rc=0
+SWEET FB: MT6789 DSI0 (0x14013000) and MUTEX0 (0x14001000) mapped for HW scanout
+SWEET GPU: powering on MT6789 Mali-G57 subsystem...
+SWEET CPU: cpu=1 mpidr=0x100 came alive; SGI1 OK
+SWEET CPU: cpu=2 CPU_ON target=0x200 entry_pa=0x1414c2000 context=2
+SWEET CPU: cpu=2 PSCI CPU_ON rc=0
+SWEET GPU: PMIC enables verified; inherited VGPU selector 0x38 VSRAM_GPU 0x38
+SWEET GPU: SPM PWR_STATUS pre=0xf83a1bc1/0xf83a1bc1 MFG0_CON=0x00001112
+SWEET CPU: cpu=2 mpidr=0x200 came alive; SGI1 OK
+SWEET GPU: SPM PWR_STATUS post=0xf83a1bfd/0xf83a1bfd MFG_CON[0..3]=0x0000000d 0x0000000d 0x0000000d 0x0000000d
+SWEET CPU: cpu=3 CPU_ON target=0x300 entry_pa=0x1414c2000 context=3
+SWEET CPU: cpu=3 PSCI CPU_ON rc=0
+SWEET CPU: cpu=3 mpidr=0x300 came alive; SGI1 OK
+SWEET CPU: cpu=4 CPU_ON target=0x400 entry_pa=0x1414c2000 context=4
+SWEET CPU: cpu=4 PSCI CPU_ON rc=0
+SWEET CPU: cpu=4 mpidr=0x400 came alive; SGI1 OK
+SWEET CPU: cpu=5 CPU_ON target=0x500 entry_pa=0x1414c2000 context=5
+SWEET CPU: cpu=5 PSCI CPU_ON rc=0
+SWEET CPU: cpu=5 mpidr=0x500 came alive; SGI1 OK
+SWEET CPU: 6/6 CPUs initialized, SGI1 verified
+Copyright (c) 1982, 1986, 1989, 1991, 1993
+	The Regents of the University of California. All rights reserved.
+
+MAC Framework successfully initialized
+using 5181 buffer headers and 4638 cluster IO buffer headers
+SWEET GPU: topckgen CLK_CFG_3=0x01020000 (mfg stable=0)
+SWEET GPU: Mali-G57 ID=0x90930010 (Arch 147 Rev 0) L2=0x08120206 Tiler=0x00000809 Mem=0x00000001 MMU=0x00002830 AS=0xff JS=0x7
+SWEET GPU: Mali-G57 registered as MaliMetal / MaliMetalDevice (vendor 0x13b5, device 0x9093)
+SWEET FB: AppleCLCD 1080x2400 stride 4320 at 0xfeabe000, default surface 1, presented as 1080x2400
+ktriage_register_subsystem_strings: set subsystem 8 strings
+calling mpo_policy_init for SWEET AMFI
+Security policy loaded: SWEET built-in Mobile File Integrity (SWEET AMFI)
+SWEET AMFI: platform binary policy registered (0)
+calling mpo_policy_init for Sandbox
+Security policy loaded: SWEET permissive sandbox stand-in (Sandbox)
+SWEET Sandbox: permissive policy registered (0)
+SWEET HFS: hfs-627.100.6 registered
+mcache: 6 CPU(s), 64 bytes CPU cache line size
+mbinit: done [64 MB total pool size, (42/21) split]
+dlil_init: Waiting for all the create dlil kernel threads to get scheduled at least once.
+dlil_init: All the created dlil kernel threads have been scheduled at least once. Proceeding.
+ifnet_attach: All kernel threads created for interface lo0 have been scheduled at least once. Proceeding.
+ifnet_attach: All kernel threads created for interface gif0 have been scheduled at least once. Proceeding.
+skip attaching fsw to lo0 using legacy TX modelifnet_attach: All kernel threads created for interface stf0 have been scheduled at least once. Proceeding.
+ufshci: MediaTek host, UFSHCI 2.0, 32 slots, CAP 0x3587071f, DMA at 0x145130000
+ufshci: as found: HCE 0x1 HCS 0x10f IS 0x4 DBR 0x0 RSR 0x1
+ufshci: UIC errors PA 0x0 DL 0x0 N 0x0 T 0x0 DME 0x0
+ufs_mtk: link up (probe 0x21500081), REFCLK_CTRL 0x3
+ufshci: UPIU 0x00 OCS 0x5 (try 0)
+ufshci: slot_wait spin 100000 slot 0 door=0x1 IS=0x815 now=787729375 end=828761963
+ufshci: slot 0 (UPIU 0x00 op 0x00) timed out (try 1)
+ufshci: slot_wait spin 100000 slot 0 door=0x1 IS=0x815 now=924366839 end=965343319
+ufshci: slot 0 (UPIU 0x00 op 0x00) timed out (try 2)
+ufshci: slot_wait spin 100000 slot 0 door=0x1 IS=0x815 now=1060968415 end=1101925071
+ufshci: slot 0 (UPIU 0x00 op 0x00) timed out (try 3)
+ufshci: adopted link does not carry a NOP: HCE 0x1 HCS 0x501 IS 0x815 DBR 0x1 RSR 0x0
+ufshci: UIC errors PA 0x80000010 DL 0x80002002 N 0x0 T 0x0 DME 0x0
+ufs_mtk: link up (probe 0x25500001), REFCLK_CTRL 0x3
+ufshci: HS gear tx 3 rx 3, lanes tx 2 rx 2, rate B
+ufshci: ready (full init)
+ufs_disk: LU 0: 4 MiB, 4096-byte blocks, boot LU A
+ufs_disk: LU 1: 4 MiB, 4096-byte blocks, boot LU B
+ufs_disk: LU 2: 122032 MiB, 4096-byte blocks
+ufshci: 1 data commands, last op 0x9e lba 0
+ufshci: 2 data commands, last op 0x88 lba 1
+ufshci: 3 data commands, last op 0x88 lba 2
+ufs_disk: disk0s1 boot_para               1 MiB
+ufs_disk: disk0s2 proinfo                 3 MiB
+ufs_disk: disk0s3 misc                    0 MiB
+ufs_disk: disk0s4 para                    0 MiB
+ufs_disk: disk0s5 expdb                 128 MiB
+ufs_disk: disk0s6 frp                     1 MiB
+ufs_disk: disk0s7 nvcfg                  32 MiB
+ufs_disk: disk0s8 nvdata                 64 MiB
+ufs_disk: disk0s9 tkv_a                   1 MiB
+ufs_disk: disk0s10 vbmeta_a                8 MiB
+ufs_disk: disk0s11 vbmeta_system_a         8 MiB
+ufs_disk: disk0s12 vbmeta_vendor_a         8 MiB
+ufs_disk: disk0s13 tkv_b                   1 MiB
+ufs_disk: disk0s14 vbmeta_b                8 MiB
+ufs_disk: disk0s15 vbmeta_system_b         8 MiB
+ufs_disk: disk0s16 vbmeta_vendor_b         8 MiB
+ufs_disk: disk0s17 metadata               32 MiB
+ufs_disk: disk0s18 persist                55 MiB
+ufs_disk: disk0s19 protect1                8 MiB
+ufs_disk: disk0s20 protect2                8 MiB
+ufs_disk: disk0s21 seccfg                  8 MiB
+ufs_disk: disk0s22 otp                    48 MiB
+ufs_disk: disk0s23 md1img_a              200 MiB
+ufs_disk: disk0s24 spmfw_a                 1 MiB
+ufs_disk: disk0s25 pi_img_a                1 MiB
+ufs_disk: disk0s26 dpm_a                   4 MiB
+ufs_disk: disk0s27 scp_a                   6 MiB
+ufs_disk: disk0s28 sspm_a                  1 MiB
+ufs_disk: disk0s29 mcupm_a                 1 MiB
+ufs_disk: disk0s30 gz_a                   32 MiB
+ufs_disk: disk0s31 lk_a                    4 MiB
+ufs_disk: disk0s32 logo_a                 24 MiB
+ufs_disk: disk0s33 boot_a                 64 MiB
+ufs_disk: disk0s34 vendor_boot_a          64 MiB
+ufs_disk: disk0s35 dtbo_a                  8 MiB
+ufs_disk: disk0s36 tee_a                   5 MiB
+ufs_disk: disk0s37 sec1                    2 MiB
+ufs_disk: disk0s38 efuse                   0 MiB
+ufs_disk: disk0s39 nvram                  64 MiB
+ufs_disk: disk0s40 dram_para              25 MiB
+ufs_disk: disk0s41 connsys_bt_a            8 MiB
+ufs_disk: disk0s42 connsys_wifi_a          8 MiB
+ufs_disk: disk0s43 connsys_gnss_a         13 MiB
+ufs_disk: disk0s44 md1img_b              200 MiB
+ufs_disk: disk0s45 spmfw_b                 1 MiB
+ufs_disk: disk0s46 pi_img_b                1 MiB
+ufs_disk: disk0s47 dpm_b                   4 MiB
+ufs_disk: disk0s48 scp_b                   6 MiB
+ufs_disk: disk0s49 sspm_b                  1 MiB
+ufs_disk: disk0s50 mcupm_b                 1 MiB
+ufs_disk: disk0s51 gz_b                   32 MiB
+ufs_disk: disk0s52 lk_b                    4 MiB
+ufs_disk: disk0s53 logo_b                 24 MiB
+ufs_disk: disk0s54 boot_b                 64 MiB
+ufs_disk: disk0s55 vendor_boot_b          64 MiB
+ufs_disk: disk0s56 connsys_bt_b            8 MiB
+ufs_disk: disk0s57 connsys_wifi_b          8 MiB
+ufs_disk: disk0s58 connsys_gnss_b          8 MiB
+ufs_disk: disk0s59 dtbo_b                  8 MiB
+ufs_disk: disk0s60 tee_b                   6 MiB
+ufs_disk: disk0s61 super               10546 MiB
+ufs_disk: disk0s62 tranfs                301 MiB
+ufs_disk: disk0s63 userdata            89271 MiB
+ufs_disk: disk0s64 flashinfo              16 MiB
+ufs_disk: disk0s65 iosroot             20480 MiB (read-write)
+ufs_disk: LUN 2, 122032 MiB, 65 partitions
+SWEET BOOT: diagnostic reset armed for 600 seconds
+SWEET SAMPLE: thread started
+SWEET TOUCH: starting in 5 s
+SWEET KEYS: X676C KPD volume bits 0/1; MT6366 TOPSTATUS bit1 power
+BSD root: disk0s65, major 1, minor 64
+ufshci: 4 data commands, last op 0x88 lba 25992960
+ufshci: 5 data commands, last op 0x88 lba 25992960
+ufshci: 6 data commands, last op 0x88 lba 25995138
+ufshci: 7 data commands, last op 0x88 lba 26176642
+ufshci: 8 data commands, last op 0x88 lba 26176642
+ufshci: 9 data commands, last op 0x88 lba 25996418
+ufshci: 10 data commands, last op 0x88 lba 25996418
+ufshci: 11 data commands, last op 0x88 lba 27756389
+ufshci: 12 data commands, last op 0x88 lba 26177208
+ufshci: 13 data commands, last op 0x88 lba 26176648
+ufshci: 14 data commands, last op 0x88 lba 26176644
+ufshci: 15 data commands, last op 0x88 lba 25993089
+ufshci: 16 data commands, last op 0x88 lba 25992961
+ufshci: 17 data commands, last op 0x88 lba 25993090
+jnl: b(1, 64): journal start/end pointers reset! (s 0x450000 e 0x74a000)
+ufshci: 18 data commands, last op 0x88 lba 25992961
+ufshci: 19 data commands, last op 0x88 lba 25992962
+ufshci: 20 data commands, last op 0x88 lba 25992963
+ufshci: 21 data commands, last op 0x88 lba 25992964
+ufshci: 22 data commands, last op 0x88 lba 25992965
+ufshci: 23 data commands, last op 0x88 lba 25992966
+ufshci: 24 data commands, last op 0x88 lba 25992967
+ufshci: 25 data commands, last op 0x88 lba 25992968
+ufshci: 26 data commands, last op 0x88 lba 25992969
+hfs: mounted iOSRoot on device b(1, 64)
+SWEET: root volume is not authenticated (error 25); continuing unsealed
+No POST boot-arg set.
+load_init_program: attempting tï doad /usr/appluinternal/sbin/launchd.development
+ufshci: 27 data commands, last op 0x88 lba 27755847
+VM Swap Subsystem is ON
+load_init_program: attempting to load /sbin/launchd
+ufshci: 28 data commands, last op 0x88 lba 27755809
+ufshci: 29 data commands, last op 0x88 lba 28087503
+ufshci: 30 data commands, last op 0x88 lba 28087627
+ufshci: 31 data commands, last op 0x88 lba 27756387
+ufshci: 32 data commands, last op 0x88 lba 27755927
+ufshci: 33 data commands, last op 0x88 lba 27755853
+ufshci: 34 data commands, last op 0x88 lba 28088706
+ufshci: 35 data commands, last op 0x88 lba 28088922
+ufshci: 36 data commands, last op 0x88 lba 28088722
+ufshci: 37 data commands, last op 0x88 lba 28088846
+ufshci: 38 data commands, last op 0x88 lba 28088810
+ufshci: 39 data commands, last op 0x88 lba 28088710
+ufshci: 40 data commands, last op 0x88 lba 28088782
+ufshci: 41 data commands, last op 0x88 lba 28088818
+ufshci: 42 data commands, last op 0x88 lba 28088714
+ufshci: 43 data commands, last op 0x88 lba 28088718
+ufshci: 44 data commands, last op 0x88 lba 28088822
+ufshci: 45 data commands, last op 0x88 lba 28088850
+ufshci: 46 data commands, last op 0x88 lba 28088790
+ufshci: 47 data commands, last op 0x88 lba 28088834
+ufshci: 48 data commands, last op 0x88 lba 28088838
+ufshci: 49 data commands, last op 0x88 lba 28088842
+ufshci: 50 data commands, last op 0x88 lba 28088802
+ufshci: 51 data commands, last op 0x88 lba 28088770
+ufshci: 52 data commands, last op 0x88 lba 28088794
+ufshci: 53 data commands, last op 0x88 lba 28088826
+ufshci: 54 data commands, last op 0x88 lba 28088746
+shared_region: 0x4cb9285456780db1 [1(launchd)] check_np(0x16fab7bc0) vm_shared_region_start_address() failed
+ufshci: 55 data commands, last op 0x88 lba 28088754
+ufshci: 56 data commands, last op 0x88 lba 28088758
+ufshci: 57 data commands, last op 0x88 lba 28088762
+SWEET Sandbox: launchd op 2
+Darwin Ignition Sequence Version 1.0.0: Tue Jul  2 20:41:23 PDT 2024; root:libignition-51~1974/libignition_core/RELEASE_ARM64
+libignition: 1: arguments           :
+libignition: 1:   ignition level    : 0x1
+libignition: 1:   force dylib root  : 0x0
+libignition: 1:   halt after stage  : n/a
+libignition: 1: ignition blob not available
+libignition: 1: configuration         :
+libignition: 1:   program             : launchd
+libignition: 1:   os environment      : n/a
+libignition: 1:   rd                  : ufs
+libignition: 1:   arp0                : n/a
+libignition: 1:   rp                  : n/a
+libignition: 1:   pivot src           : n/a
+libignition: 1:   root ramdisk        : 0x0
+libignition: 1:   restore             : 0x0
+libignition: 1:   root device info    : 0x0
+libignition: 1:   can haz debugger    : 0x1
+libignition: 1:   rootfs mount flags  : 0x480d001
+libignition: 1:   ecid                : 0x0
+libignition: 1:   hardware target     : d22ap
+libignition: 1:   initproc            : 0x1
+libignition: 1:   single user         : 0x0
+libignition: 1:   userspace reboot    : 0x0
+libignition: 1:   secure boot level   : 0x0
+libignition: 1:   os version          : n/a
+libignition: 1: parameters          :
+libignition: 1:   version           : 0x1
+libignition: 1:   argc              : 0x1
+libignition: 1:   log fd            : 0xffffffffffffffff
+libignition: 1:   platform          : 0x2
+libignition: 1: boot spec           :
+libignition: 1:   name              : local
+libignition: 1:   stage count       : 0x7
+libignition: 1:        hello: commence primary ignition
+libignition: 1:        hello: hello from launchd.1
+libignition: 1:      preboot: ignition level insufficient: actual = 1, required >= 2
+libignition: 1: cryptex1 sniff: ignition level insufficient: actual = 1, required >= 2
+libignition: 1:        graft: ignition level insufficient: actual = 1, required >= 3
+libignition: 1: select os cryptex path: ignition level insufficient: actual = 1, required >= 3
+libignition: 1:  dylib_cache: discovering shared library cache
+libignition: 1:  dylib_cache: finding shared cache on system volume: ignition level = 1, search root fd = 4, subpath = System/Library/Caches/com.apple.dyld/
+ufshci: 58 data commands, last op 0x88 lba 26176652
+ufshci: 59 data commands, last op 0x88 lba 26178310
+ufshci: 60 data commands, last op 0x88 lba 26178150
+ufshci: 61 data commands, last op 0x88 lba 26217703
+ufshci: 62 data commands, last op 0x88 lba 26214631
+libignition: 1:  dylib_cache: opened shared cache directory: /System/Library/Caches/com.apple.dyld
+libignition: 1:      goodbye: ignition sequence complete
+ufshci: 63 data commands, last op 0x88 lba 28088730
+shared_region: 0x4cb9285456780db1 [1(launchd)] check_np(0x16fab7150) vm_shared_region_start_address() failed
+ufshci: 64 data commands, last op 0x88 lba 27756707
+ufshci: 65 data commands, last op 0x88 lba 27756499
+ufshci: 66 data commands, last op 0x88 lba 27756485
+ufshci: 67 data commands, last op 0x88 lba 27757107
+ufshci: 68 data commands, last op 0x88 lba 28229427
+ufshci: 69 data commands, last op 0x88 lba 28229519
+ufshci: 70 data commands, last op 0x88 lba 28229467
+ufshci: 71 data commands, last op 0x88 lba 28088778
+ufshci: 72 data commands, last op 0x88 lba 27756489
+ufshci: 73 data commands, last op 0x88 lba 28229523
+ufshci: 74 data commands, last op 0x88 lba 28257455
+ufshci: 75 data commands, last op 0x88 lba 28229563
+ufshci: 76 data commands, last op 0x88 lba 28257523
+ufshci: 77 data commands, last op 0x88 lba 28257543
+ufshci: 78 data commands, last op 0x88 lba 27756487
+ufshci: 79 data commands, last op 0x88 lba 28257555
+ufshci: 80 data commands, last op 0x88 lba 28285763
+ufshci: 81 data commands, last op 0x88 lba 28257595
+ufshci: 82 data commands, last op 0x88 lba 28285827
+ufshci: 83 data commands, last op 0x88 lba 28285867
+ufshci: 84 data commands, last op 0x88 lba 28285875
+ufshci: 85 data commands, last op 0x88 lba 28313783
+ufshci: 86 data commands, last op 0x88 lba 28285915
+ufshci: 87 data commands, last op 0x88 lba 28313843
+ufshci: 88 data commands, last op 0x88 lba 28313931
+ufshci: 89 data commands, last op 0x88 lba 28313939
+ufshci: 90 data commands, last op 0x88 lba 28342059
+ufshci: 91 data commands, last op 0x88 lba 28313979
+ufshci: 92 data commands, last op 0x88 lba 28342115
+ufshci: 93 data commands, last op 0x88 lba 28342179
+ufshci: 94 data commands, last op 0x88 lba 28342195
+ufshci: 95 data commands, last op 0x88 lba 28370399
+ufshci: 96 data commands, last op 0x88 lba 28342235
+ufshci: 97 data commands, last op 0x88 lba 27757097
+ufshci: 98 data commands, last op 0x88 lba 28370467
+ufshci: 99 data commands, last op 0x88 lba 28370563
+ufshci: 100 data commands, last op 0x88 lba 28370579
+ufshci: 101 data commands, last op 0x88 lba 28398799
+ufshci: 102 data commands, last op 0x88 lba 28370619
+ufshci: 103 data commands, last op 0x88 lba 28398867
+ufshci: 104 data commands, last op 0x88 lba 28398959
+ufshci: 105 data commands, last op 0x88 lba 28398963
+ufshci: 106 data commands, last op 0x88 lba 28425271
+ufshci: 107 datá commqnds, last op 0x88 lba 28399003
+ufshci: 108 data commands, last op 0x88 lba 28425331
+ufshci: 109 data commands, last op 0x88 lba 28425427
+ufshci: 110 data commands, last op 0x88 lba 28425443
+ufshci: 111 data commands, last op 0x88 lba 28453487
+ufshci: 112 data commands, last op 0x88 lba 28425483
+ufshci: 113 data commands, last op 0x88 lba 27756491
+ufshci: 114 data commands, last op 0x88 lba 28453555
+ufshci: 115 data commands, last op 0x88 lba 28453663
+ufshci: 116 data commands, last op 0x88 lba 28453667
+ufshci: 117 data commands, last op 0x88 lba 28477403
+ufshci: 118 data commands, last op 0x88 lba 28453707
+ufshci: 119 data commands, last op 0x88 lba 28477459
+ufshci: 120 data commands, last op 0x88 lba 28477547
+ufshci: 121 data commands, last op 0x88 lba 28477555
+ufshci: 122 data commands, last op 0x88 lba 28503775
+ufshci: 123 data commands, last op 0x88 lba 28477595
+ufshci: 124 data commands, last op 0x88 lba 28503827
+ufshci: 125 data commands, last op 0x88 lba 28503887
+ufshci: 126 data commands, last op 0x88 lba 28503891
+ufshci: 127 data commands, last op 0x88 lba 28531943
+ufshci: 128 data commands, last op 0x88 lba 28503931
+shared_region: [1(launchd)] map_and_slide: 44 files, 52 mappings
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc4e41:'dyld_shared_cache_arm64'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc4d31:'dyld_shared_cache_arm64.01'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc5f41:'dyld_shared_cache_arm64.02'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc5e31:'dyld_shared_cache_arm64.03'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc5c11:'dyld_shared_cache_arm64.04'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc5b01:'dyld_shared_cache_arm64.05'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc59f1:'dyld_shared_cache_arm64.06'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc58e1:'dyld_shared_cache_arm64.07'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc57d1:'dyld_shared_cache_arm64.08'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc56c1:'dyld_shared_cache_arm64.09'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc67c1:'dyld_shared_cache_arm64.10'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc66b1:'dyld_shared_cache_arm64.11'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc65a1:'dyld_shared_cache_arm64.12'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc6491:'dyld_shared_cache_arm64.13'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc6381:'dyld_shared_cache_arm64.14'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc6271:'dyld_shared_cache_arm64.15'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc6161:'dyld_shared_cache_arm64.16'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc6051:'dyld_shared_cache_arm64.17'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc7261:'dyld_shared_cache_arm64.18'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc7151:'dyld_shared_cache_arm64.19'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc7041:'dyld_shared_cache_arm64.20'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc6f31:'dyld_shared_cache_arm64.21'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc6e21:'dyld_shared_cache_arm64.22'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc6c01:'dyld_shared_cache_arm64.23'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc6af1:'dyld_shared_cache_arm64.24'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc69e1:'dyld_shared_cache_arm64.25'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc35d1:'dyld_shared_cache_arm64.26'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc7481:'dyld_shared_cache_arm64.27.dylddata'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc7371:'dyld_sharmd_cache_arm64.2<.dyldlinkedit'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bbf6e1:'dyld_shared_cache_arm64.29'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bbff61:'dyld_shared_cache_arm64.30'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bbfe51:'dyld_shared_cache_arm64.31'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bbfd41:'dyld_shared_cache_arm64.32'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bbfc31:'dyld_shared_cache_arm64.33'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bbfb21:'dyld_shared_cache_arm64.34'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bbfa11:'dyld_shared_cache_arm64.35'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc07e1:'dyld_shared_cache_arm64.36'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc06d1:'dyld_shared_cache_arm64.37'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc05c1:'dyld_shared_cache_arm64.38'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc04b1:'dyld_shared_cache_arm64.39'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc03a1:'dyld_shared_cache_arm64.40'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc0291:'dyld_shared_cache_arm64.41.dylddata'): not in trust cache
+shared_region: 0x4cb9285456780db1 [1(launchd)] map(0x4cb9284124bc0181:'dyld_shared_cache_arm64.42.dyldlinkedit'): not in trust cache
+shared_region: [1(launchd)] map_and_slide done kr=0x0
+SWEET Sandbox: launchd op 4
+com.apple.xpc.launchd|1969-12-31 16:01:27.764876 <Notice>: hello
+com.apple.xpc.launchd|1969-12-31 16:01:27.770974 <Error>: Could not opt into 50 MB Jetsam high watermark: 22: Invalid argument
+skip attaching fsw to lo0 using legacy TX modelcom.apple.xpc.launchd|1969-12-31 16:01:27.771317 <Notice>: Darwin Bootstrapper Version 7.0.0: Thu Feb  1 20:33:09 PST 2024; root:libxpc_executables-2462.140.4.702.1~1/launchd/RELEASE_ARM64
+com.apple.xpc.launchd|1969-12-31 16:01:27.771449 <Notice>: boot-args = debug=0xc serial=3 cpus=6 keepsyms=1 -v wdt=-1 wdt_test=no_user_checkin rd=ufs ufsroot=iosroot ufsrw=iosroot unentitled_ios_sim_launch=1 ignition_level=1 launchd_unsecure_cache=1 sweetsample=SweetRegisterPo,lsd,PosterBoard,SpringBoard,backboardd sweetiolog=- sweetakslog=0 ufsbeat=0 sweetscan=- sweetnull=launchd,dyld,init,backboardd,SpringBoard,lsd,containermanagerd,PosterBoard sweetfb_noconsole=1 sweetfb_native=1 sweetfb_stayon=0 sweetfb_trace=0 sweetreboot=600 sweetfaultaddr=0x1e92e5388 sweetsample_delay=180 sweetsample_count=1
+com.apple.xpc.launchd|1969-12-31 16:01:27.778627 (system) <Notice>: entering ondemand mode
+com.apple.xpc.launchd|1969-12-31 16:01:27.779826 (system) <Notice>: created
+com.apple.xpc.launchd|1969-12-31 16:01:27.781588 (fsck) <Notice>: Doing boot task
+failed to get filesystem info
+fsck: not booting main or diagnostic OS. Skipping fsck on OS container
+com.apple.xpc.launchd|1969-12-31 16:01:27.972998 (mount-phase-1) <Notice>: Doing boot task
+failed to get filesystem info
+failed to get filesystem info
+mount: data volume missing, but not required in env: 0
+vnode_create_internal: alias vnode 0xfffffe16682a2790 is in state of change (start)
+vnode_create_internal: alias vnode 0xfffffe16682a2790 is in state of change (end)
+hfs: Removed 5 orphaned / unlinked files and 2 directories 
+/dev/disk0s65 on / (hfs, local, journaled, noatime)
+ERROR: BindFS bindfs_mount: lookup of /private/preboot/B4F8B7CFB20F15B3E82212D839F8A47544B9341FF57FE1F5A9D24944281A4B5BCB9AC9C83364E1FA9F08EF47D09AED6A/usr/standalone/firmware failed error: 2
+com.apple.xpc.launchd|1969-12-31 16:01:28.083849 (data-protection) <Notice>: Doing boot task
+init_data_protection: No SEP present on this device
+com.apple.xpc.launchd|1969-12-31 16:01:28.214903 (finish-obliteration) <Notice>: Doing boot task
+Obliterator: In INIT check
+Wed Dec 31 16:01:28 1969: checkOblitNVRAMkey: IORegistryEntryFromPath failed [gF: 0x0000000000000000]
+Obliterator: No obliteration needed, continue booting, returning 0
+com.apple.xpc.launchd|1969-12-31 16:01:28.333388 (detect-installed-roots) <Notice>: Doing boot task
+com.apple.xpc.launchd|1969-12-31 16:01:28.334165 <Notice>: No cookie from system volume
+com.apple.xpc.launchd|1969-12-31 16:01:28.334339 <Notice>: No cookie: /private/preboot/B4F8B7CFB20F15B3E82212D839F8A47544B9341FF57FE1F5A9D24944281A4B5BCB9AC9C83364E1FA9F08EF47D09AED6A/.roots-installed
+com.apple.xpc.launchd|1969-12-31 16:01:28.334384 (commit-boot-mode) <Notice>: Doing boot task
+com.apple.xpc.launchd|1969-12-31 16:01:28.334411 <Notice>: boot-mode committed: (null)
+com.apple.xpc.launchd|1969-12-31 16:01:28.334438 (restore-datapartition) <Notice>: Doing boot task
+com.apple.xpc.launchd|1969-12-31 16:01:28.377586 (restore-datapartition) <Notice>: optional boot task not present
+failed to get filesystem info
+com.apple.xpc.launchd|1969-12-31 16:01:28.377667 (mount-phase-2) <Notice>: Doing boot task
+failed to get filesystem info
+mount: data volume missing, but not required in env: 0
+ERROR: BindFS bindfs_mount: lookup of /private/var/hardware/Pearl/System/Library/Pearl/ReferenceFrames failed error: 2
+ERROR: BindFS bindfs_mount: lookup of /private/var/hardware/FactoryData/System/Library/Caches/com.apple.factorydata failed error: 2
+com.apple.xpc.launchd|1969-12-31 16:01:28.476031 (init-with-data-volume) <Notice>: Doing boot task
+com.apple.xpc.launchd|1969-12-31 16:01:28.49´455 (MSUEarlyBootTask) <Nïtice>: Doing boot task
+MSUEarlyBootTask: MSUEarlyBootTask running
+main: Content from the ramdisk will be present at /private/var/MobileSoftwareUpdate//b4f8b7cfb20f15b3e82212d839f8a47544b9341ff57fe1f5a9d24944281a4b5bcb9ac9c83364e1fa9f08ef47d09aed6a-MSUData if it exists
+MSUEarlyBootTask: I have nothing to do. Goodbye!!
+com.apple.xpc.launchd|1969-12-31 16:01:28.669400 (fips) <Notice>: Doing boot task
+About to call the FIPS_POST function in the corecrypto.dylib
+Tracing: disabled
+FIPSPOST_USER [1153254979] fipspost_post:152: [FIPSPOST][Module-ID] Apple corecrypto Module v13.0 [Apple ARM, User, Software, SL1]
+FIPSPOST_USER [1153447756] fipspost_post:160: PASSED: (2 ms) - fipspost_post_hmac
+FIPSPOST_USER [1153671075] fipspost_post:164: PASSED: (4 ms) - fipspost_post_integrity
+FIPSPOST_USER [1153837231] fipspost_post:168: PASSED: (0 ms) - fipspost_post_indicator
+FIPSPOST_USER [1153998991] fipspost_post:169: PASSED: (0 ms) - fipspost_post_aes_ecb
+FIPSPOST_USER [1154161232] fipspost_post:170: PASSED: (0 ms) - fipspost_post_aes_cbc
+FIPSPOST_USER [1154637155] fipspost_post:171: PASSED: (24 ms) - fipspost_post_rsa_sig
+FIPSPOST_USER [1155358304] fipspost_post:172: PASSED: (43 ms) - fipspost_post_ecdsa
+FIPSPOST_USER [1155542007] fipspost_post:173: PASSED: (1 ms) - fipspost_post_ecdh
+FIPSPOST_USER [1155704084] fipspost_post:174: PASSED: (0 ms) - fipspost_post_aes_ccm
+FIPSPOST_USER [1155866327] fipspost_post:175: PASSED: (0 ms) - fipspost_post_aes_cmac
+FIPSPOST_USER [1156030380] fipspost_post:176: PASSED: (0 ms) - fipspost_post_hkdf
+FIPSPOST_USER [1156960320] fipspost_post:177: PASSED: (59 ms) - fipspost_post_pbkdf
+FIPSPOST_USER [1157124387] fipspost_post:178: PASSED: (0 ms) - fipspost_post_drbg_hmac
+FIPSPOST_USER [1157287719] fipspost_post:180: PASSED: (0 ms) - fipspost_post_kdf_ctr
+FIPSPOST_USER [1157450067] fipspost_post:181: PASSED: (0 ms) - fipspost_post_aes_gcm
+FIPSPOST_USER [1157611899] fipspost_post:182: PASSED: (0 ms) - fipspost_post_aes_xts
+FIPSPOST_USER [1157775100] fipspost_post:183: PASSED: (0 ms) - fipspost_post_tdes_ecb
+FIPSPOST_USER [1157938020] fipspost_post:184: PASSED: (0 ms) - fipspost_post_drbg_ctr
+FIPSPOST_USER [1159233460] fipspost_post:186: PASSED: (87 ms) - fipspost_post_ffdh
+FIPSPOST_USER [1160030947] fipspost_post:187: PASSED: (48 ms) - fipspost_post_rsa_enc_dec
+FIPSPOST_USER [1160192776] fipspost_post:206: all tests PASSED (533 ms)
+Returned from calling the FIPS_POST function in the corecrypto.dylib: result = true
+com.apple.xpc.launchd|1969-12-31 16:01:29.271605 (keybag) <Notice>: Doing boot task
+****** IN MKB_INIT ****
+MKB_INIT: mount is with NO CPROTECT:0x1480d000 on  (/private/var/)
+MKB_INIT: mount point (/private/var/) does not support Data Protection
+MKB_INIT: System Keybag loaded
+MKB_INIT: Could not get options entry from the device tree
+Unable to set /private/var//tmp to class D!****** DONE MKB_INIT ****
+com.apple.xpc.launchd|1969-12-31 16:01:29.419823 (usermanagerd) <Notice>: Doing boot task
+****** IN UMD_INIT ****
+****** STARTING EARLYBOOT SETUP ****
+UMD_INIT: STARTING EARLYBOOT SETUP
+UMD_INIT: LOADING USER SESSIONS
+UMD_INIT: Device Configuration Type:0
+UMD_INIT: BOOTEDUSER is:501
+UMD_INIT: diskLoadUserSessions, APNSID:, set to 18446744073709551615
+UMD_INIT: Reloaded _gUserSessionTable (
+        {
+        MKBUserSessionCreateTimeStamp = "1970-01-01 00:00:58 +0000";
+        MKBUserSessionDirty = 0;
+        MKBUserSessionDisplayName = mobile;
+        MKBUserSessionFirstName = mobile;
+        MKBUserSessionForeground = 1;
+        MKBUserSessionGroupID = 501;
+        MKBUserSessionID = 501;
+        MKBUserSessionLanguage = "en_US";
+        MKBUserSessionLastName = mobile;
+        MKBUserSessionLibinfoHomeDir = "/var/mobile";
+        MKBUserSessionLoginTimeStamp = "1970-01-01 00:00:58 +0000";
+        MKBUserSessionLoginUser = 0;
+        MKBUserSessionName = mobile;
+        MKBUserSessionNeedsMount = 1;
+        MKBUserSessionShortName = mobile;
+        MKBUserSessionType = UserSessionOther;
+        MKBUserSessionUUID = "8E4F2655-68CE-41F0-ACC6-DC2F421A1B9B";
+        MKBUserSessionVolumeFSType = UserVolumeAPFSNative;
+        MKBUserSessionisAdminKey = 1;
+        MKBUserSessionisPrimary = 1;
+    }
+)
+UMD_INIT: FOUND NO SYNC BUBBLE UIDS:0
+UMD_INIT: FOUND NO LRU TABLE UIDS:0
+UMD_INIT: FOUND NO VOLUMETYPE, setting up volume type
+UMD_INIT: Set the new volume type to APFSNativeDevice
+UMD_INIT: SAVING SESSION TODISK
+UMD_INIT: SESSION TABLE TO BLOB
+UMD_INIT: NOTHING TO SAVE IN LRU UID LIST
+UMD_INIT: diskSaveUserSessions Success
+UMD_INIT: Read user sessions in _gUserSessionTable (
+        {
+        MKBUserSessionCreateTimeStamp = "1970-01-01 00:00:58 +0000";
+        MKBUserSessionDirty = 0;
+        MKBUserSessionDisplayName = mobile;
+        MKBUserSessionFirstName = mobile;
+        MKBUserSessionForeground = 1;
+        MKBUserSessionGroupID = 501;
+        MKBUserSessionID = 501;
+        MKBUserSessionLanguage = "en_US";
+        MKBUserSessionLastName = mobile;
+        MKBUserSessionLibinfoHomeDir = "/var/mobile";
+        MKBUserSessionLoginTimeStamp = "1970-01-01 00:00:58 +0000";
+        MKBUserSessionLoginUser = 0;
+        MKBUserSessionName = mobile;
+        MKBUserSessionNeedsMount = 1;
+        MKBUserSessionShortName = mobile;
+        MKBUserSessionType = UserSessionOther;
+        MKBUserSessionUUID = "8E4F2655-68CE-41F0-ACC6-DC2F421A1B9B";
+        MKBUserSessionVolumeFSType = UserVolumeAPFSNative;
+        MKBUserSessionisAdminKey = 1;
+        MKBUserSessionisPrimary = 1;
+    }
+)
+UMD_INIT: LOADED USER SESSIONS
+UMD_INIT: failed to read nextsession dict
+UMD_INIT: Unable to Obtained foreground, curFG:502, nextID:-1
+UMD_INIT: Failed to get next session, booting with default id to be Loginwindow UID
+UMD_INIT: BootedUser is:501
+UMD_INIT: Regular mode Setup for user:501: Num Sessions:1, CurrentsessionID:-1
+UMD_INIT: FAILED to Set Foreground ID + multiuser in commpage successfully
+UMD_INIT: LOADING PERSONA..
+UMD_INIT: Manifest version: 1
+UMD_INIT: Loaded Persona Generation ID from manifest:1
+UMD_INIT: Adding 1000 entry to persona Table for user:8E4F2655-68CE-41F0-ACC6-DC2F421A1B9B
+UMD_INIT: Adding 0 entry to persona Table for user:8E4F2655-68CE-41F0-ACC6-DC2F421A1B9B
+UMD_INIT: Adding 200 entry to persona Table for user:8E4F2655-68CE-41F0-ACC6-DC2F421A1B9B
+UMD_INIT: Adding 100 entry to persona Table for user:8E4F2655-68CE-41F0-ACC6-DC2F421A1B9B
+UMD_INIT: Adding 99 entry to persona Table for user:FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF
+UMD_INIT: Adding 199 entry to persona Table for user:FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF
+UMD_INIT: Loaded persona manifest
+UMD_INIT: Failed to retrieve info for kernel persona 99: No such process
+UMD_INIT: PersonaID:99 not loaded, loading..
+UMD_INIT: Allocated kernel persona with ID: 99, Type: 4, UID: 4294967295
+UMD_INIT: Failed to retrieve info for kernel persona 199: No such process
+UMD_INIT: PersonaID:199 not loaded, loading..
+UMD_INIT: Allocated kernel persona with ID: 199, Type: 6, UID: 4294967295
+UMD_INIT: Failed to retrieve info for kernel persona 1000: No such process
+UMD_INIT: PersonaID:1000 not loaded, loading..
+UMD_INIT: Allocated kernel persona with ID: 1000, Type: 5, UID: 501
+UMD_INIT: Failed to retrieve info for kernel persona 200: No such process
+UMD_INIT: PersonaID:200 not loaded, loading..
+UMD_INIT: Allocated kernel persona with ID: 200, Type: 6, UID: 501
+UMD_INIT: Failed to retrieve info for kernel persona 100: No such process
+UMD_INIT: PersonaID:100 not loaded, loading..
+UMD_INIT: Allocated kernel persona with ID: 100, Type: 4, UID: 501
+UMD_INIT: setup kernel personas
+UMD_INIT: Failed to notify_register_check com.apple.mobile.usermanagerd.personageneration_changed: 8
+UMD_INIT: Failed to notify generation changed: Failed to register for darwin notification token
+UMD_INIT: DONE EARLYBOOT SETUP
+****** DONE EARLYBOOT SETUP ****
+****** DONE UMD_INIT ****
+com.apple.xpc.launchd|1969-12-31 16:01:30.464123 (dirs_cleaner) <Notice>: Doing boot task
+dc_reset: /tmp: Invalid argument
+dc_reset: /var/run: Invalid argument
+[System Event] [1177085303] [INFO] [Subsystem: launchd] [Event: fsck] Doing boot task
+[System Event] [1177191080] [INFO] [Subsystem: launchd] [Event: mount-phase-1] Doing boot task
+[System Event] [1177299976] [INFO] [Subsystem: launchd] [Event: data-protection] Doing boot task
+[System Event] [1177406579] [INFO] [Subsystem: launchd] [Event: finish-obliteration] Doing boot task
+[System Event] [1177515383] [INFO] [Subsystem: launchd] [Event: detect-installed-roots] Doing boot task
+[System Event] [1177624271] [INFO] [Subsystem: launchd] [Event: commit-boot-mode] Doing boot task
+[System Event] [1177733499] [INFO] [Subsystem: launchd] [Event: restore-datapartition] Doing boot task
+[System Event] [1177838440] [INFO] [Subsystem: launchd] [Event: restore-datapartition] optional boot task not present
+[System Event] [1177945572] [INFO] [Subsystem: launchd] [Event: mount-phase-2] Doing boot task
+[System Event] [1178053063] [INFO] [Subsystem: launchd] [Event: init-with-data-volume] Doing boot task
+[System Event] [1178160123] [INFO] [Subsystem: launchd] [Event: MSUEarlyBootTask] Doing boot task
+[System Event] [1178267767] [INFO] [Subsystem: launchd] [Event: fips] Doing boot task
+[System Event] [1178375615] [INFO] [Subsystem: launchd] [Event: keybag] Doing boot task
+[System Event] [1178485055] [INFO] [Subsystem: launchd] [Event: usermanagerd] Doing boot task
+[System Event] [1178592991] [INFO] [Subsystem: launchd] [Event: dirs_cleaner] Doing boot task
+com.apple.xpc.launchd|1969-12-31 16:01:30.502925 <Notice>: launchd logging initialized. name: com.apple.xpc.launchd pid: 1
+com.apple.xpc.launchd|1969-12-31 16:01:30.502935 (xpcroleaccountd) <Notice>: Doing boot task
+[System Event] [1178920099] [INFO] [Subsystem: launchd] [Event: xpcroleaccountd] Doing boot task
+com.apple.xpc.launchd|1969-12-31 16:01:30.523509 (init_featureflags) <Notice>: Doing boot task
+[System Event] [1179136468] [INFO] [Subsystem: launchd] [Event: init_featureflags] Doing boot task
+com.apple.xpc.launchd|1969-12-31 16:01:30.937972 (auearlyboot) <Notice>: Doing boot task
+[System Event] [1182300807] [INFO] [Subsystem: launchd] [Event: auearlyboot] Doing boot task
+auearlyboot: -[FudEarlyBoot doFUDEarlyBoot:](): Starting Early Boot
+auearlyboot: -[AppleFirmwareUpdateController getEarlyBootListInternal:]: PendingSWEET TOUCH: X676C I2C0 FT5452J id=54:52 err=0/0 irq=1
+SWEET TOUCH: FT5452J, five contacts, 1080x2400, poll=10ms
+ critical earlyBoot entries (
+)
+auearlyboot: No Early Boot Accessories
+auearlyboot: -[FudEarlyBoot calculateTimeTakenForEarlyBootEntries] Time Taken to wait for critical earlyBoot entries: 0.000000 sec
+auearlyboot: -[FudEarlyBoot doFUDEarlyBoot:](): End Early Boot
+auearlyboot: Exitng Early Boot
+com.apple.xpc.launchd|1969-12-31 16:01:31.070350 (tzinit) <Notice>: Doing boot task
+[System Event] [1184080463] [INFO] [Subsystem: launchd] [Event: tzinit] Doing boot task
+com.apple.xpc.launchd|1969-12-31 16:01:31.096146 (finish-restore) <Notice>: Doing boot task
+[System Event] [1184415507] [INFO] [Subsystem: launchd] [Event: finish-restore] Doing boot task
+SWEET TOUCH: frame=1 status=0x1 dma=0x145194000 raw=ff ff ff ff ff ff ff ff ff ff ff ff
+SWEET TOUCH: X676C report error=5 status=0x1
+com.apple.xpc.launchd|1969-12-31 16:01:31.118938 (finish-demo-restore) <Notice>: Doing boot task
+[System Event] [1185002739] [INFO] [Subsystem: launchd] [Event: finish-demo-restore] Doing boot task
+kern.prng.user_reseed_count: (-1) (2) No such file or directory
+failed to load virtual random: (-147) (-536870212)
+com.apple.xpc.launchd|1969-12-31 16:01:31.138795 (sysstatuscheck) <Notice>: Doing boot task
+[System Event] [1185503391] [INFO] [Subsystem: launchd] [Event: sysstatuscheck] Doing boot task
+com.apple.xpc.launchd|1969-12-31 16:01:31.150548 (prng_seedctl) <Notice>: Doing boot task
+[System Event] [1185834312] [INFO] [Subsystem: launchd] [Event: prng_seedctl] Doing boot task
+SWEET TOUCH: frame=2 status=0x1 dma=0x145194000 raw=ff ff ff ff ff ff ff ff ff ff ff ff
+com.apple.xpc.launchd|1969-12-31 16:01:31.167375 (launchd_cache_loader) <Notice>: Doing boot task
+[System Event] [1186326788] [INFO] [Subsystem: launchd] [Event: launchd_cache_loader] Doing boot task
+0 Found valid port: 2563 Valid: 1
+1 Found valid port: 0 Valid: 0
+2 Found valid port: 0 Valid: 0
+Using default cache paths
+Code: /System/Library/xpc/launchd.plist Sig: /System/Library/xpc/launchd.plist.sig
+Using unsecure cache: /System/Library/xpc/launchd.plist
+Trying to send bytes to launchd: 2563 16384
+Sending validated cache to launchd
+Cache sent to launchd successfully
+SWEET TOUCH: frame=3 status=0x1 dma=0x145194000 raw=ff ff ff ff ff ff ff ff ff ff ff ff
+com.apple.xpc.launchd|1969-12-31 16:01:31.441840 <Notice>: launchd UUID: 5C15DB07-B3BC-3DF3-B62F-3E498B993B8E
+com.apple.xpc.launchd|1969-12-31 16:01:31.441896 (boot) <Notice>: Early boot complete. Continuing system boot.
+[System Event] [1189076828] [INFO] [Subsystem: launchd] [Event: boot] Early boot complete. Continuing system boot.
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET Sandbox: logd privilege 1002 denied
+SWEET WDT: watchdogd sel 0 in 0/0 out 1/0 -> ok
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET Sandbox: cfprefsd op 12
+CRASH driverkitd[66] sig 9 code 0x0 sub 0x0 slide 0x2518c000 mh 0x100260000
+CRASH driverkitd pc 0x1e779dd98 lr 0x1a63303a4 sp 0x16fb9d1f0 fp 0x16fb9d260 far 0x1004cc000
+CRASH driverkitd bt 0x1a632512c 0x1a6316514 0x1002fe6b4 0x10034937c 0x10034a81c 0x10028831c 0x1002d900c 0x1002f097c 0x100306cf8 0x1003024a8
+CRASH driverkitd reason ns 1 code 0x7: (none)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+|backboardd| objc[57]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x102782e20) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin.|backboardd| ck4HIDServicePlugin (0x1027a6bc0). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x102782e70) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin.p|backboardd| k4HIDServicePlugin (0x1027a6c10). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x102782ec0) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDSer|backboardd| gin/DualShock4HIDServicePlugin (0x1027a6cb0). One of the two will be used. Which one is undefined.
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+|backboardd| objc[57]: Class GCGaíepadHIDServmcePnugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x102782ec0) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHI|backboardd| .plugin/GenericGamepadHIDServicePlugin (0x1027caa88). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x102782e70) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePlug|backboardd| ricGamepadHIDServicePlugin (0x1027caad8). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x102782e20) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePlu|backboardd| ericGamepadHIDServicePlugin (0x1027cab78). One of the two will be used. Which one is undefined.
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+|backboardd| objc[57]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x102782ec0) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDService|backboardd| JoyConHIDServicePlugin (0x104856ba0). One of the two will be used. Which one is undefined.
+SWEET Sandbox: containermanager op 16
+SWEET Sandbox: containermanager op 15
+|backboardd| objc[57]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x102782e70) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plugi|backboardd| vicePlugin (0x104856bf0). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x102782e20) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plug|backboardd| rvicePlugin (0x104856c40). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x102782e20) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugin|backboardd| ePlugin (0x1027e6628). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x102782e70) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugin/|backboardd| Plugin (0x1027e6678). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x102782ec0) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDS%rvicePl|backboardd| náHIDservicePlugin (0x1027e6718). One of the two will be used. Which one is undefined.
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+|backboardd| objc[57]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x102782e20) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.plu|backboardd| ServicePlugin (0x104816780). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x102782e70) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.plugifnet_attach: Waiting for all kernel threads created for interface utun0 to get scheduled at least once.
+ifnet_attach: All kernel threads created for interface utun0 have been scheduled at least once. Proceeding.
+_dlil_attach_flowswitch_nexus: not attaching flowswitch to utun0
+SWEET Sandbox: rapportd privilege 12000 denied
+|backboardd| ervicePlugin (0x1048167d0). One of the two will be used. Which one is undefined.
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+|backboardd| objc[57]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x102782ec0) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServic|backboardd| /XboxOneHIDServicePlugin (0x104816870). One of the two will be used. Which one is undefined.
+SWEET HID: SweetHIDTouch open by IOHIDEventServiceUserClient -> 1
+SWEET HID: SweetHIDButtons open by IOHIDEventServiceUserClient -> 1
+SWEET Sandbox: distnoted op 28
+SWEET FB: backboardd sel 57 in 0/0 out 1/0 -> 0x0
+SWEET FB: backboardd sel 15 in 2/0 out 1/0 -> 0x0
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET FB: backboardd sel 22 in 1/0 out 0/0 -> 0x0
+SWEET FB: backboardd sel 8 in 0/0 out 2/0 -> 0x0
+SWEET FB: backboardd sel 28 in 0/0 out 1/0 -> 0x0
+SWEET FB: backboardd sel 29 in 0/0 out 0/¸ -> 0x0
+SWEÅT0FB: backboardd sel 33 in 1/0 out 0/0 -> 0x0
+SWEET FB: backboardd sel 79 in 2/0 out 0/1580 -> 0x0
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET FB: backboardd sel 74 in 1/0 out 1/64 -> 0x0
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+|backboardd| MESA: info: panvk: gpu_id 0x90930010 variant 0 arch v9 model Mali-G57 texture_features 0xf7fe03fe 0xc3fff7ff 0xbfe1ff9f 0x10c6
+|backboardd| MESA: info: panvk: BC emulation on (native compressed mask 0xf7fe03fe)
+|backboardd| WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+|backboardd| [MaliMetal] Native profile saved: 123855 bytes to /private/var/mobile/Library/Logs/MaliMetalNativeProfile.json
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET SURF: backboardd sel 13
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET Sandbox: pfd op 22
+SWEET Sandbox: pfd op 1
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET AKS: profiled sel 31 arg0 0 in 1/0 out 0/32768 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET Sandbox: tccd op 5
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET Sandbox: symptomsd privilege 10003 denied
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ifnet_attach: Waiting for all kernel threads created for interface utun1 to get scheduled at least once.
+ifnet_attach: All kernel threads created for interface utun1 have been scheduled at least once. Proceeding.
+SWEET Sandbox: identityservicesd privilege 12001 denied
+_dlil_attach_flowswitch_nexus: not attaching flowswitch to utun1
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET Sandbox: identityservicesd privilege 12000 denied
+ifnet_attach: Waiting for all kernel threads created for interface utun2 to get scheduled at least once.
+ifnet_attach: All kernel threads created for interface utun2 have been scheduled at least once. Proceeding.
+_dlil_attach_flowswitch_nexus: not attaching flowswitch to utun2
+_dlil_attach_flowswitch_nexus: not attaching flowswitch to utun2
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET Sandbox: cloudd privilege 1002 denied
+SWEET FB: thermalmonitord sel 78 in 2/1788 out 0/0 -> 0x0
+SWEET FB: display on
+SWEET FB: backboardd sel 12 in 1/0 out 0/0 -> 0x0
+SWEET FB: backboardd sel 79 in 2/0 out 0/40 -> 0x0
+SWEET FB: backboardd sel 6 in 3/0 out 0/0 -> 0x0
+SWEET FB: backboardd sel 27 in 0/0 out 0/3084 -> 0x0
+SWEET FB: backboardd sel 17 in 0/3084 out 0/0 -> 0x0
+SWEET FB: backboardd sel 84 in 0/4 out 0/0 -> 0x0
+SWEET FB: backboardd sel 50 in 2/0 out 0/0 -> 0x0
+SWEET FB: backboardd sel 68 in 1/8 out 0/0 -> 0x0
+SWEET SURF: backboardd create id 2 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 11 -> 0x0
+SWEET SURF: backboardd sel 9
+SWEET SURF: backboardd sel 27
+SWEET SURF: backboardd sel 5
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+process duetexpertd[159] crossed thread count high watermark (32), EXC_RESOURCE supressed, internal diagnostics disabled.
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET TOUCH: X676C report error=5 status=0x1
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+process healthd[35] crossed thread count high watermark (32), EXC_RESOURCE supressed, internal diagnostics disabled.
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+|backboardd| 1969-12-31 16:01:43.-93 backboardd[57:582] 
+|backboardd| -[MaliMetalRenderDraw device]: unrecognized selector sent to instance 0x100fd0f90
+|backboardd| 
+|backboardd| 1969-12-31 16:01:43.-69 backboardd[57:582] 
+|backboardd| *** Terminating app due to uncaught exception 'NSInvalidArgumentException', reason: '-[MaliMetalRenderDraw device]: unrecognized selector sent to instance 0x100fd0f90'
+*** First throw call stack:
+(0x1abf7d40c 0x1a5259c28 0x1ac0de400 0x1abf928b8 0x1abff48fc
+|backboardd|  0x1089a2e8c 0x1089a2fb4 0x1089a7ff8 0x1089a8684 0x1089a83e0 0x1ad457b90 0x1ad461658 0x1ad48f454 0x1ad48a7b8 0x1ad477554 0x1ad66520c 0x1ad4a1c48 0x1ad463244 0x1ad47acd0 0x1ad464bf8 0x1ad46193c 0x1ad474344 0x1ad464c48 0x1ad46193c 0x1ad474344 0|backboardd| ad45c54c 0x1ad46dd3c 0x1ad4ec21c 0x1ad681d60 0x1ad446438 0x1ad446e38 0x1abfe8de4 0x1ac003fa0 0x1ac005bb4 0x1abfe9744 0x1abfedd20 0x1ac02cbec 0x1ad68dccc 0x1ad697418 0x1f6d280ec 0x1f6d2672c)
+|backboardd| libc++abi: 
+|backboardd| terminating due to uncaught exception of type NSException
+|backboardd| 
+CRASH backboardd[57] sig 6 code 0x0 sub 0x0 slide 0x2518c000 mh 0x10088c000
+CRASH backboardd pc 0x1e77a3198 lr 0x1f6d325f8 sp 0x16fb5aba0 fp 0x16fb5abc0 far 0x203ffee28
+CRASH backboardd bt 0x1b2de84b8 0x1f6c6af54 0x1f6c5ba4c 0x1a525eafc 0x1f6c6a424 0x1f6c6cf90 0x1a525b0fc 0x1abfedde4 0x1ac02cbec 0x1ad68dccc
+CRASH backboardd reason ns 2 code 0x6: (none)
+|backboardd| objc[179]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x100af2e20) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin|backboardd| ock4HIDServicePlugin (0x100b16bc0). One of the two will be used. Which one is undefined.
+|backboardd| objc[179]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x100af2e70) and /System¯Library/HIDPlugins/SebvicåPlugins/DualShock4HIDServicePlugin.|backboardd| ck4HIDServicePlugin (0x100b16c10). One of the two will be used. Which one is undefined.
+|backboardd| objc[179]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x100af2ec0) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDSe|backboardd| ugin/DualShock4HIDServicePlugin (0x100b16cb0). One of the two will be used. Which one is undefined.
+|backboardd| objc[179]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x100af2ec0) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadH|backboardd| n.plugin/GenericGamepadHIDServicePlugin (0x100b3aa88). One of the two will be used. Which one is undefined.
+|backboardd| objc[179]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x100af2e70) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePlu|backboardd| ericGamepadHIDServicePlugin (0x100b3aad8). One of the two will be used. Which one is undefined.
+|backboardd| objc[179]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x100af2e20) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePl|backboardd| nericGamepadHIDServicePlugin (0x100b3ab78). One of the two will be used. Which one is undefined.
+|backboardd| objc[179]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x100af2ec0) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServic|backboardd| /JoyConHIDServicePlugin (0x100b9aba0). One of the two will be used. Which one is undefined.
+|backboardd| objc[179]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x100af2e70) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plug|backboardd| rvicePlugin (0x100b9abf0). One of the two will be used. Which one is undefined.
+|backboardd| objc[179]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x100af2e20) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plu|backboardd| ervicePlugin (0x100b9ac40). One of the two will be used. Which one is undefined.
+|backboardd| objc[179]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x100af2e20) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugi|backboardd| cePlugin (0x100b56628). One of the two will be used. Which one is undefined.
+|backboardd| objc[179]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x100af2e70) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugin|backboardd| ePlugin (0x100b56678). One of the two will be used. Which one is undefined.
+|backboardd| objc[179]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x100af2ec0) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServiceP|backboardd| unaHIDServicePlugin (0x100b56718). One of the two will be used. Which one is undefined.
+|backboardd| objc[179]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x100af2e20) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.pl|backboardd| DServicePlugin (0x100bba780). One of the two will be used. Which one is undefined.
+|backboardd| objc[179]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x100af2e70) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.plu|backboardd| ServicePlugin (0x100bba7d0). One of the two will be used. Which one is undefined.
+|backboardd| objc[179]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x100af2ec0) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServi|backboardd| n/XboxOneHIDServicePlugin (0x100bba870). One of the two will be used. Which one is undefined.
+SWEET HID: SweetHIDTouch open by IOHIDEventServiceUserClient -> 1
+SWEET HID: SweetHIDButtons open by IOHIDEventServiceUserClient -> 1
+SWEET FB: backboardd sel 79 in 2/0 out 0/1580 -> 0x0
+SWEET FB: backboardd sel 74 in 1/0 out 1/64 -> 0x0
+|backboardd| MESA: info: panvk: gpu_id 0x90930010 variant 0 arch v9 model Mali-G57 texture_features 0xf7fe03fe 0xc3fff7ff 0xbfe1ff9f 0x10c6
+|backboardd| MESA: info: panvk: BC emulation on (native compressed mask 0xf7fe03fe)
+|backboardd| WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+|backboardd| [MaliMetal] Native profile saved: 123855 bytes to /private/var/mobile/Library/Logs/MaliMetalNativeProfile.json
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET Sandbox: containermanager op 7
+SWEET HID: touch 0 down at 9,2008
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET HID: touch 0 up
+SWEET Sandbox: rapportd privilege 1002 denied
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: sharingd sel 57 arg0 0 in 1/0 out 0/4096 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+process contextstored[56] crossed thread count high watermark (32), EXC_RESOURCE supressed, internal diagnostics disabled.
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET Sandbox: dasd privilege 1005 denied
+SWEET Sandbox: aggregated privilege 1002 denied
+SWEET FB: display on
+SWEET FB: backboardd sel 79 in 2/0 out 0/40 -> 0x0
+SWEET FB: backboardd sel 84 in 0/4 out 0/0 -> 0x0
+SWEET FB: backboardd sel 68 in 1/8 out 0/0 -> 0x0
+SWEET SURF: backboardd create id 3 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 11 -> 0x0
+SWEET AKS: profiled sel 31 arg0 0 in 1/0 out 0/32768 -> 0xe00002c7
+|backboardd| 1969-12-31 16:01:53.-41 backboardd[179:1605] 
+|backboardd| -[MaliMetalRenderDraw device]: unrecognized selector sent to instance 0x109d200b0
+|backboardd| 
+|backboardd| 1969-12-31 16:01:53.-23 backboardd[179:1605] 
+|backboardd| *** Terminating app due to uncaught exception 'NSInvalidArgumentException', reason: '-[MaliMetalRenderDraw device]: unrecognized selector sent to instance 0x109d200b0'
+*** First throw call stack:
+(0x1abf7d40c 0x1a5259c28 0x1ac0de400 0x1abf928b8 0x1abff48fc
+|backboardd|  0x103fbee8c 0x103fbefb4 0x103fc3ff8 0x103fc4684 0x103fc43e0 0x1ad457b90 0x1ad461658 0x1ad48f454 0x1ad48a7b8 0x1ad477554 0x1ad66520c 0x1ad4a1c48 0x1ad463244 0x1ad47acd0 0x1ad464bf8 0x1ad46193c 0x1ad474344 0x1ad464c48 0x1ad46193c 0x1ad474344 0|backboardd| ad45c54c 0x1ad46dd3c 0x1ad4ec21c 0x1ad681d60 0x1abfb3f78 0x1ac016034 0x1abfe9128 0x1abfedd20 0x1ac02cbec 0x1ad68dccc 0x1ad697418 0x1f6d280ec 0x1f6d2672c)
+|backboardd| libc++abi: 
+|backboardd| terminating due to uncaught exception of type NSException
+|backboardd| 
+CRASH backboardd[179] sig 6 code 0x0 sub 0x0 slide 0x2518c000 mh 0x100208000
+CRASH backboardd pc 0x1e77a3198 lr 0x1f6d325f8 sp 0x17026aba0 fp 0x17026abc0 far 0x203ffee28
+CRASH backboardd bt 0x1b2de84b8 0x1f6c6af54 0x1f6c5ba4c 0x1a525eafc 0x1f6c6a424 0x1f6c6cf90 0x1a525b0fc 0x1abfedde4 0x1ac02cbec 0x1ad68dccc
+CRASH backboardd reason ns 2 code 0x6: (none)
+|backboardd| objc[200]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10366ee20) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin|backboardd| ock4HIDServicePlugin (0x103692bc0). One of the two will be used. Which one is undefined.
+|backboardd| objc[200]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10366ee70) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin.|backboardd| ck4HIDServicePlugin (0x103692c10). One of the two will be used. Which one is undefined.
+|backboardd| objc[200]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10366eec0) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDSe|backboardd| ugin/DualShock4HIDServicePlugin (0x103692cb0). One of the two will be used. Which one is undefined.
+|backboardd| objc[200]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10366eec0) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadH|backboardd| n.plugin/GenericGamepadHIDServicePlugin (0x1036b6a88). One of the two will be used. Which one is undefined.
+|backboardd| objc[200]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10366ee70) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePlu|backboardd| ericGamepadHIDServicePlugin (0x1036b6ad8). One of the two will be used. Which one is undefined.
+|backboardd| objc[200]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10366ee20) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePl|backboardd| nericGamepadHIDServicePlugin (0x1036b6b78). One of the two will be used. Which one is undefined.
+|backboardd| objc[200]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10366eec0) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServic|backboardd| /JoyConHIDServicePlugin (0x103716ba0). One of the two will be used. Which one is undefined.
+|backboardd| objc[200]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10366ee70) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plug|backboardd| rvicePlugin (0x103716bf0). One of the two will be used. Which one is undefined.
+|backboardd| objc[200]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10366ee20) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plu|backboardd| ervicePlugin (0x103716c40). One of the two will be used. Which one is undefined.
+|backboardd| objc[200]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10366ee20) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugi|backboardd| cePlugin (0x1036d2628). One of the two will be used. Which one is undefined.
+|backboardd| objc[200]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10366ee70) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugin|backboardd| ePlugin (0x1036d2678). One of the two will be used. Which one is undefined.
+|backboardd| objc[200]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10366eec0) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServiceP|backboardd| unaHIDServicePlugin (0x1036d2718). One of the two will be used. Which one is undefined.
+|backboardd| objc[200]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10366ee20) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.pl|backboardd| DServicePlugin (0x103736780). One of the two will be used. Which one is undefined.
+|backboardd| objc[200]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10366ee70) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.plu|backboardd| ServicePlugin (0x1037367d0). One of the two will be used. Which one is undefined.
+|backboardd| objc[200]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10366eec0) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServi|backboardd| n/XboxOneHIDServicePlugin (0x103736870). One of the two will be used. Which one is undefined.
+SWEET HID: SweetHIDTouch open by IOHIDEventServiceUserClient -> 1
+SWEET HID: SweetHIDButtons open by IOHIDEventServiceUserClient -> 1
+SWEET FB: backboardd sel 79 in 2/0 out 0/1580 -> 0x0
+SWEET FB: backboardd sel 74 in 1/0 out 1/64 -> 0x0
+|bagkboerdd| LESA: info: panvk: gpu_id 0x90930010 variant 0 arch v9 model Mali-G57 texture_features 0xf7fe03fe 0xc3fff7ff 0xbfe1ff9f 0x10c6
+|backboardd| MESA: info: panvk: BC emulation on (native compressed mask 0xf7fe03fe)
+|backboardd| WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+|backboardd| [MaliMetal] Native profile saved: 123855 bytes to /private/var/mobile/Library/Logs/MaliMetalNativeProfile.json
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET FB: display on
+SWEET FB: backboardd sel 79 in 2/0 out 0/40 -> 0x0
+SWEET FB: backboardd sel 84 in 0/4 out 0/0 -> 0x0
+SWEET FB: backboardd sel 68 in 1/8 out 0/0 -> 0x0
+SWEET SURF: backboardd create id 4 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 11 -> 0x0
+|backboardd| 1969-12-31 16:02:03.-25 backboardd[200:2040] 
+|backboardd| -[MaliMetalRenderDraw device]: unrecognized selector sent to instance 0x111f165c0
+|backboardd| 
+|backboardd| 1969-12-31 16:02:03.-07 backboardd[200:2040] 
+|backboardd| *** Terminating app due to uncaught exception 'NSInvalidArgumentException', reason: '-[MaliMetalRenderDraw device]: unrecognized selector sent to instance 0x111f165c0'
+*** First throw call stack:
+(0x1abf7d40c 0x1a5259c28 0x1ac0de400 0x1abf928b8 0x1abff48fc
+|backboardd|  0x106b5ee8c 0x106b5efb4 0x106b63ff8 0x106b64684 0x106b643e0 0x1ad457b90 0x1ad461658 0x1ad48f454 0x1ad48a7b8 0x1ad477554 0x1ad66520c 0x1ad4a1c48 0x1ad463244 0x1ad47acd0 0x1ad464bf8 0x1ad46193c 0x1ad474344 0x1ad464c48 0x1ad46193c 0x1ad474344 0|backboardd| ad45c54c 0x1ad46dd3c 0x1ad4ec21c 0x1ad681d60 0x1ad446438 0x1ad446e38 0x1abfe8de4 0x1ac003fa0 0x1ac005bb4 0x1abfe9744 0x1abfedd20 0x1ac02cbec 0x1ad68dccc 0x1ad697418 0x1f6d280ec 0x1f6d2672c)
+|backboardd| libc++abi: 
+|backboardd| terminating due to uncaught exception of type NSException
+|backboardd| 
+CRASH backboardd[200] sig 6 code 0x0 sub 0x0 slide 0x2518c000 mh 0x102d78000
+CRASH backboardd pc 0x1e77a3198 lr 0x1f6d325f8 sp 0x16d786ba0 fp 0x16d786bc0 far 0x203ffee28
+CRASH backboardd bt 0x1b2de84b8 0x1f6c6af54 0x1f6c5ba4c 0x1a525eafc 0x1f6c6a424 0x1f6c6cf90 0x1a525b0fc 0x1abfedde4 0x1ac02cbec 0x1ad68dccc
+CRASH backboardd reason ns 2 code 0x6: (none)
+|backboardd| objc[210]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10371ae20) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin|backboardd| ock4HIDServicePlugin (0x10373ebc0). One of the two will be used. Which one is undefined.
+|backboardd| objc[210]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10371ae70) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin.|backboardd| ck4HIDServicePlugin (0x10373ec10). One of the two will be used. Which one is undefined.
+|backboardd| objc[210]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10371aec0) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDSe|backboardd| ugin/DualShock4HIDServicePlugin (0x10373ecb0). One of the two will be used. Which one is undefined.
+|backboardd| objc[210]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10371aec0) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadH|backb_ardd| n.plugin/GenericGamepadHIDServicePlugin (0x103762a88). One of the two will be used. Which one is undefined.
+|backboardd| objc[210]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10371ae70) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePlu|backboardd| ericGamepadHIDServicePlugin (0x103762ad8). One of the two will be used. Which one is undefined.
+|backboardd| objc[210]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10371ae20) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePl|backboardd| nericGamepadHIDServicePlugin (0x103762b78). One of the two will be used. Which one is undefined.
+|backboardd| objc[210]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10371aec0) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServic|backboardd| /JoyConHIDServicePlugin (0x1037c2ba0). One of the two will be used. Which one is undefined.
+|backboardd| objc[210]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10371ae70) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plug|backboardd| rvicePlugin (0x1037c2bf0). One of the two will be used. Which one is undefined.
+|backboardd| objc[210]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10371ae20) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plu|backboardd| ervicePlugin (0x1037c2c40). One of the two will be used. Which one is undefined.
+|backboardd| objc[210]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10371ae20) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugi|backboardd| cePlugin (0x1023ea628). One of the two will be used. Which one is undefined.
+|backboardd| objc[210]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10371ae70) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugin|backboardd| ePlugin (0x1023ea678). One of the two will be used. Which one is undefined.
+|backboardd| objc[210]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10371aec0) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServiceP|backboardd| unaHIDServicePlugin (0x1023ea718). One of the two will be used. Which one is undefined.
+|backboardd| objc[210]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10371ae20) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.pl|backboardd| DServicePlugin (0x1037e2780). One of the two will be used. Which one is undefined.
+|backboardd| objc[210]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10371ae70) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.plu|backboardd| ServicePlugin (0x1037e27d0). One of the two will be used. Which one is undefined.
+|backboardd| objc[210]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10371aec0) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServi|backboardd| n/XboxOneHIDServicePlugin (0x1037e2870). One of the two will be used. Which one is undefined.
+SWEET HID: SweetHIDTouch open by IOHIDEventServiceUserClient -> 1
+SWEET HID: SweetHIDButtons open by IOHIDEventServiceUserClient -> 1
+SWEET FB: backboardd sel 79 in 2/0 out 0/1580 -> 0x0
+SWEET FB: backboardd sel 74 in 1/0 out 1/64 -> 0x0
+|backboardd| MESA: info: panvk: gpu_id 0x90930010 variant 0 arch v9 model Mali-G57 texture_features 0xf7fe03fe 0xc3fff7ff 0xbfe1ff9f 0x10c6
+|backboardd| MESA: info: panvk: BC emulation on (native compressed mask 0xf7fe03fe)
+|backboardd| WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+|backboardd| [MaliMetal] Native profile saved: 123855 bytes to /private/var/mobile/Library/Logs/MaliMetalNativeProfile.json
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET FB: display on
+SWEET FB: backboardd sel 79 in 2/0 out 0/40 -> 0x0
+SWEET FB: backboardd sel 84 in 0/4 out 0/0 -> 0x0
+SWEET FB: backboardd sel 68 in 1/8 out 0/0 -> 0x0
+SWEET SURF: backboardd create id 5 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 11 -> 0x0
+|backboardd| 1969-12-31 16:02:14.-94 backboardd[210:2205] 
+|backboardd| -[MaliMetalRenderDraw device]: unrecognized selector sent to instance 0x1036305a0
+|backboardd| 
+|backboardd| 1969-12-31 16:02:14.-76 backboardd[210:2205] 
+|backboardd| *** Terminating app due to uncaught exception 'NSInvalidArgumentException', reason: '-[MaliMetalRenderDraw device]: unrecognized selector sent to instance 0x1036305a0'
+*** First throw call stack:
+(0x1abf7d40c 0x1a5259c28 0x1ac0de400 0x1abf928b8 0x1abff48fc
+|backboardd|  0x10a0a2e8c 0x10a0a2fb4 0x10a0a7ff8 0x10a0a8684 0x10a0a83e0 0x1ad457b90 0x1ad461658 0x1ad48f454 0x1ad48a7b8 0x1ad477554 0x1ad66520c 0x1ad4a1c48 0x1ad463244 0x1ad47acd0 0x1ad464bf8 0x1ad46193c 0x1ad474344 0x1ad464c48 0x1ad46193c 0x1ad474344 0|backboardd| ad45c54c 0x1ad46dd3c 0x1ad4ec21c 0x1ad681d60 0x1ad446438 0x1ad446e38 0x1abfe8de4 0x1ac003fa0 0x1ac005bb4 0x1abfe9744 0x1abfedd20 0x1ac02cbec 0x1ad68dccc 0x1ad697418 0x1f6d280ec 0x1f6d2672c)
+|backboardd| libc++abi: 
+|backboardd| terminating due to uncaught exception of type NSException
+|backboardd| 
+CRASH backboardd[210] sig 6 code 0x0 sub 0x0 slide 0x2518c000 mh 0x102024000
+CRASH backboardd pc 0x1e77a3198 lr 0x1f6d325f8 sp 0x16e4daba0 fp 0x16e4dabc0 far 0x203ffee28
+CRASH backboardd bt 0x1b2de84b8 0x1f6c6af54 0x1f6c5ba4c 0x1a525eafc 0x1f6c6a424 0x1f6c6cf90 0x1a525b0fc 0x1abfedde4 0x1ac02cbec 0x1ad68dccc
+CRASH backboardd reason ns 2 code 0x6: (none)
+|backboardd| objc[214]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105e3ee20) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin|backboardd| ock4HIDServicePlugin (0x105e62bc0). Oneàof the two will be used. Which one is undefined.
+|backboardd| objc[214]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105e3ee70) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin.|backboardd| ck4HIDServicePlugin (0x105e62c10). One of the two will be used. Which one is undefined.
+|backboardd| objc[214]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105e3eec0) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDSe|backboardd| ugin/DualShock4HIDServicePlugin (0x105e62cb0). One of the two will be used. Which one is undefined.
+|backboardd| objc[214]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105e3eec0) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadH|backboardd| n.plugin/GenericGamepadHIDServicePlugin (0x105e86a88). One of the two will be used. Which one is undefined.
+|backboardd| objc[214]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105e3ee70) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePlu|backboardd| ericGamepadHIDServicePlugin (0x105e86ad8). One of the two will be used. Which one is undefined.
+|backboardd| objc[214]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105e3ee20) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePl|backboardd| nericGamepadHIDServicePlugin (0x105e86b78). One of the two will be used. Which one is undefined.
+|backboardd| objc[214]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105e3eec0) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServic|backboardd| /JoyConHIDServicePlugin (0x105ee6ba0). One of the two will be used. Which one is undefined.
+|backboardd| objc[214]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105e3ee70) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plug|backboardd| rvicePlugin (0x105ee6bf0). One of the two will be used. Which one is undefined.
+|backboardd| objc[214]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105e3ee20) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plu|backboardd| ervicePlugin (0x105ee6c40). One of the two will be used. Which one is undefined.
+|backboardd| objc[214]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105e3ee20) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugi|backboardd| cePlugin (0x105ea2628). One of the two will be used. Which one is undefined.
+|backboardd| objc[214]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105e3ee70) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugin|backboardd| ePlugin (0x105ea2678). One of the two will be used. Which one is undefined.
+|backboardd| objc[214]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105e3eec0) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServiceP|backboardd| unaHIDServicePlugin (0x105ea2718). One of the two will be used. Which one is undefined.
+|backboardd| objc[214]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105e3ee20) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.pl|backboardd| DServicePlugin (0x105f06780). One of the two will be used. Which one is undefined.
+|backboardd| objc[214]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105e3ee70) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.plu|backboardd| ServicePlugin (0x105f067d0). One of the two will be used. Which one is undefined.
+|backboardd| objc[214]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105e3eec0) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServi|backboardd| n/XboxOneHIDServicePlugin (0x105f06870). One of the two will be used. Which one is undefined.
+SWEET HID: SweetHIDTouch open by IOHIDEventServiceUserClient -> 1
+SWEET HID: SweetHIDButtons open by IOHIDEventServiceUserClient -> 1
+SWEET FB: backboardd sel 79 in 2/0 out 0/1580 -> 0x0
+SWEET FB: backboardd sel 74 in 1/0 out 1/64 -> 0x0
+|backboardd| MESA: info: panvk: gpu_id 0x90930010 variant 0 arch v9 model Mali-G57 texture_features 0xf7fe03fe 0xc3fff7ff 0xbfe1ff9f 0x10c6
+|backboardd| MESA: info: panvk: BC emulation on (native compressed mask 0xf7fe03fe)
+|backboardd| WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+|backboardd| [MaliMetal] Native profile saved: 123855 bytes to /private/var/mobile/Library/Logs/MaliMetalNativeProfile.json
+SWEET FB: display on
+SWEET FB: backboardd sel 79 in 2/0 out 0/40 -> 0x0
+SWEET FB: backboardd sel 84 in 0/4 out 0/0 -> 0x0
+SWEET FB: backboardd sel 68 in 1/8 out 0/0 -> 0x0
+SWEET SURF: backboardd create id 6 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 11 -> 0x0
+|backboardd| 1969-12-31 16:02:26.-996 backboardd[214:2353] 
+|backboardd| -[MaliMetalRenderDraw device]: unrecognized selector sent to instance 0x104e37180
+|backboardd| 
+|backboardd| 1969-12-31 16:02:26.-979 backboardd[214:2353] 
+|backboardd| *** Terminating app due to uncaught exception 'NSInvalidArgumentException', reason: '-[MaliMetalRenderDraw device]: unrecognized selector sent to instance 0x104e37180'
+*** First throw call stack:
+(0x1abf7d40c 0x1a5259c28 0x1ac0de400 0x1abf928b8 0x1abff48fc
+|backboardd|  0x10c7a2e8c 0x10c7a2fb4 0x10c7a7ff8 0x10c7a8684 0x10c7a83e0 0x1ad457b90 0x1ad461658 0x1ad48f454 0x1ad48a7b8 0x1ad477554 0x1ad66520c 0x1ad4a1c48 0x1ad463244 0x1ad47acd0 0x1ad464bf8 0x1ad46193c 0x1ad474344 0x1ad464c48 0x1ad46193c 0x1ad474344 0|backboardd| ad45c54c 0x1ad46dd3c 0x1ad4ec21c 0x1ad681d60 0x1abfb3f78 0x1ac016034 0x1abfe9128 0x1abfedd20 0x1ac02cbec 0x1ad68dccc 0x1ad697418 0x1f6d280ec 0x1f6d2672c)
+|backboardd| libc++abi: 
+|backboardd| terminating due to uncaught exception of type NSException
+|backboardd| 
+CRASH backboardd[214] sig 6 code 0x0 sub 0x0 slide 0x2518c000 mh 0x104734000
+CRASH backboardd pc 0x1e77a3198 lr 0x1f6d325f8 sp 0x16bdcaba0 fp 0x16bdcabc0 far 0x203ffee28
+CRASH backboardd bt 0x1b2de84b8 0x1f6c6af54 0x1f6c5ba4c 0x1a525eafc 0x1f6c6a424 0x1f6c6cf90 0x1a525b0fc 0x1abfedde4 0x1ac02cbec 0x1ad68dccc
+CRASH backboardd reason ns 2 code 0x6: (none)
+|backboardd| objc[218]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10543ee20) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin|backboardd| ock4HIDServicePlugin (0x105462bc0). One of the two will be used. Which one is undefined.
+|backboardd| objc[218]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10543ee70) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin.|backboardd| ck4HIDServicePlugin (0x105462c10). One of the two will be used. Which one is undefined.
+|backboardd| objc[218]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServiãePlugin.plugin/DualSenseHÉDServicePlugin (0x10543eec0) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDSe|backboardd| ugin/DualShock4HIDServicePlugin (0x105462cb0). One of the two will be used. Which one is undefined.
+|backboardd| objc[218]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10543eec0) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadH|backboardd| n.plugin/GenericGamepadHIDServicePlugin (0x105486a88). One of the two will be used. Which one is undefined.
+|backboardd| objc[218]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10543ee70) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePlu|backboardd| ericGamepadHIDServicePlugin (0x105486ad8). One of the two will be used. Which one is undefined.
+|backboardd| objc[218]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10543ee20) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePl|backboardd| nericGamepadHIDServicePlugin (0x105486b78). One of the two will be used. Which one is undefined.
+|backboardd| objc[218]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10543eec0) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServic|backboardd| /JoyConHIDServicePlugin (0x1054e6ba0). One of the two will be used. Which one is undefined.
+|backboardd| objc[218]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10543ee70) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plug|backboardd| rvicePlugin (0x1054e6bf0). One of the two will be used. Which one is undefined.
+|backboardd| objc[218]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10543ee20) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plu|backboardd| ervicePlugin (0x1054e6c40). One of the two will be used. Which one is undefined.
+|backboardd| objc[218]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10543ee20) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugi|backboardd| cePlugin (0x1054a2628). One of the two will be used. Which one is undefined.
+|backboardd| objc[218]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10543ee70) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugin|backboardd| ePlugin (0x1054a2678). One of the two will be used. Which one is undefined.
+|backboardd| objc[218]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10543eec0) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServiceP|backboardd| unaHIDServicePlugin (0x1054a2718). One of the two will be used. Which one is undefined.
+|backboardd| objc[218]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10543ee20) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.pl|backboardd| DServicePlugin (0x105506780). One of the two will be used. Which one is undefined.
+|backboardd| objc[218]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10543ee70) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.plu|backboardd| ServicePlugin (0x1055067d0). One of the two will be used. Which one is undefined.
+|backboardd| objc[218]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10543eec0) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServi|backboardd| n/XboxOneHIDServicePlugin (0x105506870). One of the two will be used. Which one is undefined.
+SWEET HID: SweetHIDTouch open by IOHIDEventServiceUserClient -> 1
+SWEET HID: SweetHIDButtons open by IOHIDEventServiceUserClient -> 1
+SWEET FB: backboardd sel 79 in 2/0 out 0/1580 -> 0x0
+SWEET FB: backboardd sel 74 in 1/0 out 1/64 -> 0x8
+|backboardd| MESA:!iîfo: panvk: gpu_id 0x90930010 variant 0 arch v9 model Mali-G57 texture_features 0xf7fe03fe 0xc3fff7ff 0xbfe1ff9f 0x10c6
+|backboardd| MESA: info: panvk: BC emulation on (native compressed mask 0xf7fe03fe)
+|backboardd| WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+|backboardd| [MaliMetal] Native profile saved: 123855 bytes to /private/var/mobile/Library/Logs/MaliMetalNativeProfile.json
+SWEET FB: display on
+SWEET FB: backboardd sel 79 in 2/0 out 0/40 -> 0x0
+SWEET FB: backboardd sel 84 in 0/4 out 0/0 -> 0x0
+SWEET FB: backboardd sel 68 in 1/8 out 0/0 -> 0x0
+SWEET SURF: backboardd create id 7 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 11 -> 0x0
+|backboardd| 1969-12-31 16:02:37.-965 backboardd[218:2473] 
+|backboardd| -[MaliMetalRenderDraw device]: unrecognized selector sent to instance 0x111d45db0
+|backboardd| 
+|backboardd| 1969-12-31 16:02:37.-947 backboardd[218:2473] 
+|backboardd| *** Terminating app due to uncaught exception 'NSInvalidArgumentException', reason: '-[MaliMetalRenderDraw device]: unrecognized selector sent to instance 0x111d45db0'
+*** First throw call stack:
+(0x1abf7d40c 0x1a5259c28 0x1ac0de400 0x1abf928b8 0x1abff48fc
+|backboardd|  0x108952e8c 0x108952fb4 0x108957ff8 0x108958684 0x1089583e0 0x1ad457b90 0x1ad461658 0x1ad48f454 0x1ad48a7b8 0x1ad477554 0x1ad66520c 0x1ad4a1c48 0x1ad463244 0x1ad47acd0 0x1ad464bf8 0x1ad46193c 0x1ad474344 0x1ad464c48 0x1ad46193c 0x1ad474344 0|backboardd| ad45c54c 0x1ad46dd3c 0x1ad4ec21c 0x1ad681d60 0x1abfb3f78 0x1ac016034 0x1abfe9128 0x1abfedd20 0x1ac02cbec 0x1ad68dccc 0x1ad697418 0x1f6d280ec 0x1f6d2672c)
+|backboardd| libc++abi: 
+|backboardd| terminating due to uncaught exception of type NSException
+|backboardd| 
+CRASH backboardd[218] sig 6 code 0x0 sub 0x0 slide 0x2518c000 mh 0x104b40000
+CRASH backboardd pc 0x1e77a3198 lr 0x1f6d325f8 sp 0x16b9beba0 fp 0x16b9bebc0 far 0x203ffee28
+CRASH backboardd bt 0x1b2de84b8 0x1f6c6af54 0x1f6c5ba4c 0x1a525eafc 0x1f6c6a424 0x1f6c6cf90 0x1a525b0fc 0x1abfedde4 0x1ac02cbec 0x1ad68dccc
+CRASH backboardd reason ns 2 code 0x6: (none)
+|backboardd| objc[222]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1068c2e20) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin|backboardd| ock4HIDServicePlugin (0x1068e6bc0). One of the two will be used. Which one is undefined.
+|backboardd| objc[222]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1068c2e70) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin.|backboardd| ck4HIDServicePlugin (0x1068e6c10). One of the two will be used. Which one is undefined.
+|backboardd| objc[222]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1068c2ec0) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDSe|backboardd| ugin/DualShock4HIDServicePlugin (0x1068e6cb0). One of the two will be used. Which one is undefined.
+|backboardd| objc[222]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1068c2ec0) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadH|backboardd| n.plugin/GenericGamepadHIDServicePlugin (0x10690aa88). One of the two will be used. Which one is undefined.
+|backboardd| objc[222]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1068c2e70) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePlu|backboardd| ericGamepadHIDServicePlugin (0x10690aad8). One of the two will be used. Which one is undefined.
+|backboardd| objc[222]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1068c2e20) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePl|backboardd| nericGamepadHIDServicePlugin (0x10690ab78). One of the two will be used. Which one is undefined.
+|backboardd| objc[222]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1068c2ec0) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServic|backboardd| /JoyConHIDServicePlugin (0x10696aba0). One of the two will be used. Which one is undefined.
+|backboardd| objc[222]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1068c2e70) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plug|backboardd| rvicePlugin (0x10696abf0). One of the two will be used. Which one is undefined.
+|backboardd| objc[222]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1068c2e20) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plu|backboardd| ervicePlugin (0x10696ac40). One of the two will be used. Which one is undefined.
+|backboardd| objc[222]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1068c2e20) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugi|backboardd| cePlugin (0x106926628). One of the two will be used. Which one is undefined.
+|backboardd| objc[222]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1068c2e70) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugin|backboardd| ePlugin (0x106926678). One of the two will be used. Which one is undefined.
+|backboardd| objc[222]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1068c2ec0) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServiceP|backboardd| unaHIDServicePlugin (0x106926718). One of the two will be used. Which one is undefined.
+|backboardd| objc[222]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1068c2e20) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.pl|backboardd| DServicePlugin (0x10698a780). One of the two will be used. Which one is undefined.
+|backboardd| objc[222]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1068c2e70) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.plu|backboardd| ServicePlugin (0x10698a7d0). One of the two will be used. Which one is undefined.
+|backboardd| objc[222]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1068c2ec0) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServi|backboardd| n/XboxOneHIDServicePlugin (0x10698a870). One of the two will be used. Which one is undefined.
+SWEET HID: SweetHIDTouch open by IOHIDEventServiceUserClient -> 1
+SWEET HID: SweetHIDButtons open by IOHIDEventServiceUserClient -> 1
+SWEET FB: backboardd sel 79 in 2/0 out 0/1580 -> 0x0
+SWEET FB: backboardd sel 74 in 1/0 out 1/64 -> 0x0
+|backboardd| MESA: info: panvk: gpu_id 0x90930010 variant 0 arch v9 model Mali-G57 texture_features 0xf7fe03fe 0xc3fff7ff 0xbfe1ff9f 0x10c6
+|backboardd| MESA: info: panvk: BC emulation on (native compressed mask 0xf7fe03fe)
+|backboardd| WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+|backboardd| [MaliMetal] Native profile saved: 123855 bytes to /private/var/mobile/Library/Logs/MaliMetalNativeProfile.json
+SWEET FB: display on
+SWEET FB: backboardd sel 79 in 2/0 out 0/40 -> 0x0
+SWEET FB: backboardd sel 84 in 0/4 out 0/0 -> 0x0
+SWEET FB: backboardd sel 68 in 1/8 out 0/0 -> 0x0
+SWEET SURF: backboardd create id 8 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 11 -> 0x0
+|backboardd| 1969-12-31 16:02:47.-904 backboardd[222:2601] 
+|backboardd| -[MaliMetalRenderDraw device]: unrecognized selector sent to instance 0x102c0daa0
+|backboardd| 
+|backboardd| 1969-12-31 16:02:47.-882 backboardd[222:2601] 
+|backboardd| *** Terminating app due to uncaught exception 'NSInvalidArgumentException', reason: '-[MaliMetalRenderDraw device]: unrecognized selector sent to instance 0x102c0daa0'
+*** First throw call stack:
+(0x1abf7d40c 0x1a5259c28 0x1ac0de400 0x1abf928b8 0x1abff48fc
+|backboardd|  0x10aea2e8c 0x10aea2fb4 0x10aea7ff8 0x10aea8684 0x10aea83e0 0x1ad457b90 0x1ad461658 0x1ad48f454 0x1ad48a7b8 0x1ad477554 0x1ad66520c 0x1ad4a1c48 0x1ad463244 0x1ad47acd0 0x1ad464bf8 0x1ad46193c 0x1ad474344 0x1ad464c48 0x1ad46193c 0x1ad474344 0|backboardd| ad45c54c 0x1ad46dd3c 0x1ad4ec21c 0x1ad681d60 0x1ad446438 0x1ad446e38 0x1abfe8de4 0x1ac003fa0 0x1ac005bb4 0x1abfe9744 0x1abfedd20 0x1ac02cbec 0x1ad68dccc 0x1ad697418 0x1f6d280ec 0x1f6d2672c)
+|backboardd| libc++abi: 
+|backboardd| terminating due to uncaught exception of type NSException
+|backboardd| 
+CRASH backboardd[222] sig 6 code 0x0 sub 0x0 slide 0x2518c000 mh 0x1029d4000
+CRASH backboardd pc 0x1e77a3198 lr 0x1f6d325f8 sp 0x16db2aba0 fp 0x16db2abc0 far 0x203ffee28
+CRASH backboardd bt 0x1b2de84b8 0x1f6c6af54 0x1f6c5ba4c 0x1a525eafc 0x1f6c6a424 0x1f6c6cf90 0x1a525b0fc 0x1abfedde4 0x1ac02cbec 0x1ad68dccc
+CRASH backboardd reason ns 2 code 0x6: (none)
+|backboardd| objc[227]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x103f82e20) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin|backboardd| ock4HIDServicePlugin (0x103fa6bc0). One of the two will be used. Which one is undefined.
+|backboardd| objc[227]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x103f82e70) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin.|backboardd| ck4HIDServicePlugin (0x103fa6c10). One of the two will be used. Which one is undefined.
+|backboardd| objc[227]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x103f82ec0) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDSe|backboardd| ugin/DualShock4HIDServicePlugin (0x103fa6cb0). One of the two will be used. Which one is undefined.
+|backboardd| objc[227]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x103f82ec0) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadH|backboardd| n.plugin/GenericGamepadHIDServicePlugin (0x103fcaa88). One of the two will be used. Which one is undefined.
+|backboardd| objc[227]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x103f82e70) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePlu|backboardd| ericGamepadHIDServicePlugin (0x103fcaad8). One of the two will be used. Which one is undefined.
+|backboardd| objc[227]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x103f82e20) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePl|backboardd| nericGamepadHIDServicePlugin (0x103fcab78). One of the two will be used. Which one is undefined.
+|backboardd| objc[227]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x103f82ec0) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServic|backboardd| /JoyConHIDServicePlugin (0x106056ba0). One of the two will be used. Which one is undefined.
+|backboardd| objc[227]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x103f82e70) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plug|backboardd| rvicePlugin (0x106056bf0). One of the two will be used. Which one is undefined.
+|backboardd| objc[227]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x103f82e20) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plu|backboardd| ervicePlugin (0x106056c40). One of the two will be used. Which one is undefined.
+|backboardd| objc[227]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x103f82e20) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugi|backboardd| cePlugin (0x103fe6628). One of the two will be used. Which one is undefined.
+|backboardd| objc[227]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x103f82e70) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugin|backboardd| ePlugin (0x103fe6678). One of the two will be used. Which one is undefined.
+|backboardd| objc[227]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x103f82ec0) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServiceP|backboardd| unaHIDServicePlugin (0x103fe6718). One of the two will be used. Which one is undefined.
+|backboardd| objc[227]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x103f82e20) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.pl|backboardd| DServicePlugin (0x106016780). One of the two will be used. Which one is undefined.
+|backboardd| objc[227]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x103f82e70) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.plu|backboardd| ServicePlugin (0x1060167d0). One of the two will be used. Which one is undefined.
+|backboardd| objc[227]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x103f82ec0) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServi|backboardd| n/XboxOneHIDServicePlugin (0x106016870). One of the two will be used. Which one is undefined.
+SWEET HID: SweetHIDTouch open by IOHIDEventServiceUserClient -> 1
+SWEET HID: SweetHIDButtons open by IOHIDEventServiceUserClient -> 1
+SWEET FB: backboardd sel 79 in 2/0 out 0/1580 -> 0x0
+SWEET FB: backboardd sel 74 in 1/0 out 1/64 -> 0x0
+|backboardd| MESA: info: panvk: gpu_id 0x90930010 variant 0 arch v9 model Mali-G57 texture_features 0xf7fe03fe 0xc3fff7ff 0xbfe1ff9f 0x10c6
+|backboardd| MESA: info: panvk: BC emulation on (native compressed mask 0xf7fe03fe)
+|backboardd| WARNING: panvk is not a conformant Vulkan implementation, testing use only.|baskboardd| [MaliMetal] Native profile saved: 123855 bytes to /private/var/mobile/Library/Logs/MaliMetalNativeProfile.json
+SWEET FB: display on
+SWEET FB: backboardd sel 79 in 2/0 out 0/40 -> 0x0
+SWEET FB: backboardd sel 84 in 0/4 out 0/0 -> 0x0
+SWEET FB: backboardd sel 68 in 1/8 out 0/0 -> 0x0
+SWEET SURF: backboardd create id 9 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 11 -> 0x0
+|backboardd| 1969-12-31 16:02:57.-886 backboardd[227:2734] 
+|backboardd| -[MaliMetalRenderDraw device]: unrecognied selector sent to instance 0x102735ea0
+|backboardd| 
+|backboardd| 1969-12-31 16:02:57.-869 backboardd[227:2734] 
+|backboardd| *** Terminating app due to uncaught exception 'NSInvalidArgumentException', reason: '-[MaliMetalRenderDraw device]: unrecognized selector sent to instance 0x102735ea0'
+*** First throw call stack:
+(0x1abf7d40c 0x1a5259c28 0x1ac0de400 0x1abf928b8 0x1abff48fc
+|backboardd|  0x10a1a2e8c 0x10a1a2fb4 0x10a1a7ff8 0x10a1a8684 0x10a1a83e0 0x1ad457b90 0x1ad461658 0x1ad48f454 0x1ad48a7b8 0x1ad477554 0x1ad66520c 0x1ad4a1c48 0x1ad463244 0x1ad47acd0 0x1ad464bf8 0x1ad46193c 0x1ad474344 0x1ad464c48 0x1ad46193c 0x1ad474344 0|backboardd| ad45c54c 0x1ad46dd3c 0x1ad4ec21c 0x1ad681d60 0x1abfb3f78 0x1ac016034 0x1abfe9128 0x1abfedd20 0x1ac02cbec 0x1ad68dccc 0x1ad697418 0x1f6d280ec 0x1f6d2672c)
+|backboardd| libc++abi: 
+|backboardd| terminating due to uncaught exception of type NSException
+|backboardd| 
+CRASH backboardd[227] sig 6 code 0x0 sub 0x0 slide 0x2518c000 mh 0x102088000
+CRASH backboardd pc 0x1e77a3198 lr 0x1f6d325f8 sp 0x16e476ba0 fp 0x16e476bc0 far 0x203ffee28
+CRASH backboardd bt 0x1b2de84b8 0x1f6c6af54 0x1f6c5ba4c 0x1a525eafc 0x1f6c6a424 0x1f6c6cf90 0x1a525b0fc 0x1abfedde4 0x1ac02cbec 0x1ad68dccc
+CRASH backboardd reason ns 2 code 0x6: (none)
+|backboardd| objc[231]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseXIDServicePlugin.pluwif/DualSenseHIDServicePlugin (0x1027c6e20) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin|backboardd| ock4HIDServicePlugin (0x1027eabc0). One of the two will be used. Which one is undefined.
+|backboardd| objc[231]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1027c6e70) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin.|backboardd| ck4HIDServicePlugin (0x1027eac10). One of the two will be used. Which one is undefined.
+|backboardd| objc[231]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1027c6ec0) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDSe|backboardd| ugin/DualShock4HIDServicePlugin (0x1027eacb0). One of the two will be used. Which one is undefined.
+|backboardd| objc[231]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1027c6ec0) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadH|backboardd| n.plugin/GenericGamepadHIDServicePlugin (0x10401aa88). One of the two will be used. Which one is undefined.
+|backboardd| objc[231]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1027c6e70) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePlu|backboardd| ericGamepadHIDServicePlugin (0x10401aad8). One of the two will be used. Which one is undefined.
+|backboardd| objc[231]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1027c6e20) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePl|backboardd| nericGamepadHIDServicePlugin (0x10401ab78). One of the two will be used. Which one is undefined.
+|backboardd| objc[231]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1027c6ec0) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServic|backboardd| /JoyConHIDServicePlugin (0x10407aba0). One of the two will be used. Which one is undefined.
+|backboardd| objc[231]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1027c6e70) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plug|backboardd| rvicePlugin (0x10407abf0). One of the two will be used. Which one is undefined.
+|backboardd| objc[231]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1027c6e20) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plu|backboardd| ervicePlugin (0x10407ac40). One of the two will be used. Which one is undefined.
+|backboardd| objc[231]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1027c6e20) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugi|backboardd| cePlugin (0x104036628). One of the two will be used. Which one is undefined.
+|backboardd| objc[231]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1027c6e70) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugin|backboardd| ePlugin (0x104036678). One of the two will be used. Which one is undefined.
+|backboardd| objc[231]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1027c6ec0) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServiceP|backboardd| unaHIDServicePlugin (0x104036718). One of the two will be used. Which one is undefined.
+|backboardd| objc[231]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1027c6e20) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.pl|backboardd| DServicePlugin (0x10409a780). One of the two will be used. Which one is undefined.
+|backboardd| objc[231]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1027c6e70) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.plu|backboardd| ServicePlugin (0x10409a7d0). One of the two will be used. Which one is undefined.
+|backboardd| objc[231]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x1027c6ec0) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServi|backboardd| n/XboxOneHIDServicePlugin (0x10409a870). One of the two will be used. Which one is undefined.
+SWEET HID: SweetHIDTouch open by IOHIDEventServiceUserClient -> 1
+SWEET HID: SweetHIDButtons open by IOHIDEventServiceUserClient -> 1
+SWEET FB: backboardd sel 79 in 2/0 out 0/1580 -> 0x0
+SWEET FB: backboardd sel 74 in 1/0 out 1/64 -> 0x0
+|backboardd| MESA: info: panvk: gpu_id 0x90930010 variant 0 arch v9 model Mali-G57 texture_features 0xf7fe03fe 0xc3fff7ff 0xbfe1ff9f 0x10c6
+|backboardd| MESA: info: panvk: BC emulation on (native compressed mask 0xf7fe03fe)
+|backboardd| WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+|backboardd| [MaliMetal] Native profile saved: 123855 bytes to /private/var/mobile/Library/Logs/MaliMetalNativeProfile.json
+SWEET HID: touch 0 down at 11,1963
+SWEET HID: touch 0 up
+SWEET FB: display on
+SWEET FB: backboardd sel 79 in 2/0 out 0/40 -> 0x0
+SWEET FB: backboardd sel 84 in 0/4 out 0/0 -> 0x0
+SWEET FB: backboardd sel 68 in 1/8 out 0/0 -> 0x0
+SWEET SURF: backroardd create id 1 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 11 -> 0x0
+|backboardd| 1969-12-31 16:03:08.-784 backboardd[231:2838] 
+|backboardd| -[MaliMetalRenderDraw device]: unrecognized selector sent to instance 0x102614190
+|backboardd| 
+|backboardd| 1969-12-31 16:03:08.-766 backboardd[231:2838] 
+|backboardd| *** Terminating app due to uncaught exception 'NSInvalidArgumentException', reason: '-[MaliMetalRenderDraw device]: unrecognized selector sent to instance 0x102614190'
+*** First throw call stack:
+(0x1abf7d40c 0x1a5259c28 0x1ac0de400 0x1abf928b8 0x1abff48fc
+|backboardd|  0x108ea2e8c 0x108ea2fb4 0x108ea7ff8 0x108ea8684 0x108ea83e0 0x1ad457b90 0x1ad461658 0x1ad48f454 0x1ad48a7b8 0x1ad477554 0x1ad66520c 0x1ad4a1c48 0x1ad463244 0x1ad47acd0 0x1ad464bf8 0x1ad46193c 0x1ad474344 0x1ad464c48 0x1ad46193c 0x1ad474344 0|backboardd| ad45c54c 0x1ad46dd3c 0x1ad4ec21c 0x1ad681d60 0x1ad446438 0x1ad446e38 0x1abfe8de4 0x1ac003fa0 0x1ac005bb4 0x1abfe9744 0x1abfedd20 0x1ac02cbec 0x1ad68dccc 0x1ad697418 0x1f6d280ec 0x1f6d2672c)
+|backboardd| libc++abi: 
+|backboardd| terminating due to uncaught exception of type NSException
+|backboardd| 
+CRASH backboardd[231] sig 6 code 0x0 sub 0x0 slide 0x2518c000 mh 0x1008d8000
+CRASH backboardd pc 0x1e77a3198 lr 0x1f6d325f8 sp 0x16fc26ba0 fp 0x16fc26bc0 far 0x203ffee28
+CRASH backboardd bt 0x1b2de84b8 0x1f6c6af54 0x1f6c5ba4c 0x1a525eafc 0x1f6c6a424 0x1f6c6cf90 0x1a525b0fc 0x1abfedde4 0x1ac02cbec 0x1ad68dccc
+CRASH backboardd reason ns 2 code 0x6: (none)
+|backboardd| objc[236]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10376ee20) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin|backboardd| ock4HIDServicePlugin (0x103792bc0). One of the two will be used. Which one is undefined.
+|backboardd| objc[236]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10376ee70) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin.|backboardd| ck4HIDServicePlugin (0x103792c10). One of the two will be used. Which one is undefined.
+|backboardd| objc[236]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10376eec0) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDSe|backboardd| ugin/DualShock4HIDServicePlugin (0x103792cb0). One of the two will be used. Which one is undefined.
+|backboardd| objc[236]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10376eec0) and /System/Library/HIDPluginsServicePlugins/GenericGamepadH|backboardd| n.plugin/GenericGamepadHIDServicePlugin (0x1037b6a88). One of the two will be used. Which one is undefined.
+|backboardd| objc[236]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10376ee70) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePlu|backboardd| ericGamepadHIDServicePlugin (0x1037b6ad8). One of the two will be used. Which one is undefined.
+|backboardd| objc[236]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10376ee20) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePl|backboardd| nericGamepadHIDServicePlugin (0x1037b6b78). One of the two will be used. Which one is undefined.
+|backboardd| objc[236]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10376eec0) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServic|backboardd| /JoyConHIDServicePlugin (0x106026ba0). One of the two will be used. Which one is undefined.
+|backboardd| objc[236]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10376ee70) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plug|backboardd| rvicePlugin (0x106026bf0). One of the two will be used. Which one is undefined.
+|backboardd| objc[236]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10376ee20) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plu|backboardd| ervicePlugin (0x106026c40). One of the two will be used. Which one is undefined.
+|backboardd| objc[236]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10376ee20) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugi|backboardd| cePlugin (0x1037d2628). One of the two will be used. Which one is undefined.
+|backboardd| objc[236]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10376ee70) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugin|backboardd| ePlugin (0x1037d2678). One of the two will be used. Which one is undefined.
+|backboardd| objc[236]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10376eec0) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServiceP|backboardd| unaHIDServicePlugin (0x1037d2718). One of the two will be used. Which one is undefined.
+|backboardd| objc[236]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10376ee20) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.pl|backboardd| DServicePlugin (0x1037f2780). One of the two will be used. Which one is undefined.
+|backboardd| objc[236]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10376ee70) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.plu|backboardd| ServicePlugin (0x1037f27d0). One of the two will be used. Which one is undefined.
+|backboardd| objc[236]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10376eec0) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServi|backboardd| n/XboxOneHIDServicePlugin (0x1037f2870). One of the two will be used. Which one is undefined.
+SWEET HID: SweetHIDTouch open by IOHIDEventServiceUserClient -> 1
+SWEET HID: SweetHIDButtons open by IOHIDEventServiceUserClient -> 1
+SWEET FB: backboardd sel 79 in 2/0 out 0/1580 -> 0x0
+SWEET FB: backboardd sel 74 in 1/0 out 1/64 -> 0x0
+|backboardd| MESA: info: panvk: gpu_id 0x90930010 variant 0 arch v9 model Mali-G57 texture_features 0xf7fe03fe 0xc3fff7ff 0xbfe1ff9f 0x10c6
+|backboardd| MESA: info: panvk: BC emulation on (native compressed mask 0xf7fe03fe)
+|backboardd| WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+|backboardd| [MaliMetal] Native profile saved: 123855 bytes to /private/var/mobile/Library/Logs/MaliMetalNativeProfile.json
+SWEET FB: display on
+SWEET FB: backboardd sel 79 in 2/0 out 0/40 -> 0x0
+SWEET FB: backboardd sel 84 in 0/4 out 0/0 -> 0x0
+SWEET FB: backboardd sel 68 in 1/8 out 0/0 -> 0x0
+SWEET SURF: backboardd create id 11 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 11 -> 0x0
+|backboardd| 1969-12-31 16:03:18.-722 backboardd[236:2951] 
+|backboardd| -[MaliMetalRenderDraw device]: unrecognized selector sent to instance 0x102435b30
+|backboardd| 
+|backboardd| 1969-12-31 16:03:18.-705 backboardd[236:2951] 
+|backboardd| *** Terminating app due to uncaught exception 'NSInvalidArgumentException', reason: '-[MaliMetalRenderDraw device]: unrecognized selector sent to instance 0x102435b30'
+*** First throw call stack:
+(0x1abf7d40c 0x1a5259c28 0x1ac0de400 0x1abf928b8 0x1abff48fc
+|backboardd|  0x10a0a2e8c 0x10a0a2fb4 0x10a0a7ff8 0x10a0a8684 0x10a0a83e0 0x1ad457b90 0x1ad461658 0x1ad48f454 0x1ad48a7b8 0x1ad477554 0x1ad66520c 0x1ad4a1c48 0x1ad463244 0x1ad47acd0 0x1ad464bf8 0x1ad46193c 0x1ad474344 0x1ad464c48 0x1ad46193c 0x1ad474344 0|backboardd| ad45c54c 0x1ad46dd3c 0x1ad4ec21c 0x1ad681d60 0x1ad446438 0x1ad446e38 0x1abfe8de4 0x1ac003fa0 0x1ac005bb4 0x1abfe9744 0x1abfedd20 0x1ac02cbec 0x1ad68dccc 0x1ad697418 0x1f6d280ec 0x1f6d2672c)
+|backboardd| libc++abi: 
+|backboardd| terminating due to uncaught exception of type NSException
+|backboardd| 
+CRASH backboardd[236] sig 6 code 0x0 sub 0x0 slide 0x2518c000 mh 0x102080000
+CRASH backboardd pc 0x1e77a3198 lr 0x1f6d325f8 sp 0x16e47eba0 fp 0x16e47ebc0 far 0x203ffee28
+CRASH backboardd bt 0x1b2de84b8 0x1f6c6af54 0x1f6c5ba4c 0x1a525eafc 0x1f6c6a424 0x1f6c6cf90 0x1a525b0fc 0x1abfedde4 0x1ac02cbec 0x1ad68dccc
+CRASH backboardd reason ns 2 code 0x6: (none)
+|backboardd| objc[240]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105f1ae20) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin|backboardd| ock4HIDServicePlugin (0x105f3ebc0). One of the two will be used. Which one is undefined.
+|backboardd| objc[240]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105f1ae70) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin.|backboardd| ck4HIDServicePlugin (0x105f3ec10). One of the two will be used. Which one is undefined.
+|backboardd| objc[240]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105f1aec0) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDSe|backboardd| ugin/DualShock4HIDServicePlugin (0x105f3ecb0). One of the two will be used. Which one is undefined.
+|backboardd| objc[240]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105f1aec0) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadH|backboardd| n.plugin/GenericGamepadHIDServicePlugin (0x105f62a88). One of the two will be used. Which one is undefined.
+|backboardd| objc[240]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105f1ae70) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePlu|backboardd| ericGamepadHIDServicePlugin (0x105f62ad8). One of the two will be used. Which one is undefined.
+|backboardd| objc[240]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105f1ae20) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePl|backboardd| nericGamepadHIDServicePlugin (0x105f62b78). One of the two will be used. Which one is undefined.
+|backboardd| objc[240]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105f1aec0) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServic|backboardd| /JoyConHIDServicePlugin (0x105fc2ba0). One of the two will be used. Which one is undefined.
+|backboardd| objc[240]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105f1ae70) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plug|backboardd| rvicePlugin (0x105fc2bf0). One of the two will be used. Which one is undefined.
+|backboardd| objc[240]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105f1ae20) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plu|backboardd| ervicePlugin (0x105fc2c40). One of the two will be used. Which one is undefined.
+|backboardd| objc[240]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105f1ae20) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugi|backboardd| cePlugin (0x104bea628). One of the two will be used. Which one is undefined.
+|backboardd| objc[240]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105f1ae70) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugin|backboardd| ePlugin (0x104bea678). One of the two will be used. Which one is undefined.
+|backboardd| objc[240]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105f1aec0) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServiceP|backboardd| unaHIDServicePlugin (0x104bea718). One of the two will be used. Which one is undefined.
+|backboardd| objc[240]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105f1ae20) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.pl|backboardd| DServicePlugin (0x105fe2780). One of the two will be used. Which one is undefined.
+|backboardd| objc[240]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105f1ae70) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.plu|backboardd| ServicePlugin (0x105fe27d0). One of the two will be used. Which one is undefined.
+|backboardd| objc[240]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105f1aec0) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServi|backboardd| n/XboxOneHIDServicePlugin (0x105fe2870). One of the two will be used. Which one is undefined.
+SWEET HID: SweetHIDTouch open by IOHIDEventServiceUserClient -> 1
+SWEET HID: SweetHIDButtons open by IOHIDEventServiceUserClient -> 1
+SWEET FB: backboardd sel 79 in 2/0 out 0/1580 -> 0x0
+SWEET FB: backboardd sel 74 in 1/0 out 1/64 -> 0x0
+|backboardd| MESA: info: panvk: gpu_id 0x90930010 variant 0 arch v9 model Mali-G57 texture_features 0xf7fe03fe 0xc3fff7ff 0xbfe1ff9f 0x10c6
+|backboardd| MESA: info: panvk: BC emulation on (native compressed mask 0xf7fe03fe)
+|backboardd| WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+|backboardd| [MaliMetal] Native profile saved: 123855 bytes to /private/var/mobile/Library/Logs/MaliMetalNativeProfile.json
+SWEET HID: key 0xea down
+SWEET KEYS: key=2 (Vol-) down=1 mem1=0xfbfd top=0xe
+SWEET HID: key 0x30 down
+SWEET KEYS: key=0 (Power) down=1 mem1=0xfbfd top=0xc
+SWEET FB: display on
+SWEET FB: backboardd sel 79 in 2/0 out 0/40 -> 0x0
+SWEET FB: backboardd sel 84 in 0/4 out 0/0 -> 0x0
+SWEET FB: backboardd sel 68 in 1/8 out 0/0 -> 0x0
+SWEET SURF: backboardd create id 12 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 11 -> 0x0

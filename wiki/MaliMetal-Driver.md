@@ -102,6 +102,12 @@ limits experimental availability to exact GPU ID `0x90930010` on arch 9;
 other targets retain the upstream policy. Native numerical FP16 and actual
 frame output still require candidate validation, not a profile edit or name alias.
 
+The 17:39:02 trial captured the enabled native FP16 feature. It then aborted on
+an internal draw object's absent `device` method. That object is reached only
+after native pipeline preparation succeeds; this is not evidence of command
+execution. Draw ownership now exposes the real retained device and checks exact
+pipeline/program identity, preserving command-buffer resource validation.
+
 The declared compiler series now includes patch 0003 for sRGB tile-read metadata,
 with actual color-table data forwarding and a triangle/fill-only PointSize
 qualification. In the unchanged 1304-request corpus, 511 requests compile and

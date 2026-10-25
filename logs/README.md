@@ -1,6 +1,15 @@
 # Device boot logs
 
-The latest [texture-copy/mipmap retry](boot-0199-run-40127381401-blit-sampler.log)
+The [17:39:02 integrated UI trial](boot-0199-run-40127381401-ui-five.log) on
+2026-10-25 used kernel artifact `40127381401` and userspace `34ed402`. Its original
+139,081-byte console ends at manual return. The separately captured profile
+reported FP16 enabled; backboardd then aborted on the internal
+`MaliMetalRenderDraw device` selector. Native-display constructor loading was
+observed, but its context readback retained donor geometry. The poster helper
+reached LaunchServices registration; the capture ended before its phase timeout.
+These observations do not establish a completed GPU frame or correct wallpaper.
+
+The preceding [texture-copy/mipmap retry](boot-0199-run-40127381401-blit-sampler.log)
 started at 01:01:09 on 2026-10-25, Asia/Yekaterinburg (UTC+5), with kernel
 [40127381401](https://github.com/squeeeezy/HelioDarwin/actions/runs/40127381401)
 and userspace `3323928`. Its original 106,442-byte console ends at the user's
