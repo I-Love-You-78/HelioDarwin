@@ -1,5 +1,15 @@
 # Device boot logs
 
+The [18:14:02 draw/geometry retry](boot-0199-run-40127381401-ui-render-geometry.log)
+on 2026-10-25 used kernel `40127381401` and userspace `4c3a670`. Its original
+65,739-byte console was captured after self-reset; Android reported Watchdog.
+No panic or intentional diagnostic-reset marker is recorded. Separate adapter
+logs confirmed native context and corner `match=1`, then identified SpringBoard's
+MPS GaussianBlur device assertion. The console records display-off before those
+aborts. Source inspection found inherited-watchdog service tied to display
+pushes; patch 0200 separates it. Exact inherited timeout and reset subtype were
+not captured. The poster registration outcome remained unresolved.
+
 The [17:39:02 integrated UI trial](boot-0199-run-40127381401-ui-five.log) on
 2026-10-25 used kernel artifact `40127381401` and userspace `34ed402`. Its original
 139,081-byte console ends at manual return. The separately captured profile

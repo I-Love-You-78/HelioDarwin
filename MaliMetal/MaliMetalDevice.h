@@ -49,6 +49,15 @@
 /* Feature Queries */
 - (BOOL)supportsFeatureSet:(MTLFeatureSet)featureSet;
 - (BOOL)supportsFamily:(MTLGPUFamily)gpuFamily;
+- (BOOL)supports32BitFloatFiltering;
+- (BOOL)supportsArrayOfTextures;
+- (BOOL)supportsQuadShufflesAndBroadcast;
+- (BOOL)supportsSIMDShufflesAndBroadcast;
+- (BOOL)supportsSIMDReduction;
+- (BOOL)supportsReadWriteTextureArgumentsTier2;
+- (BOOL)supportsNorm16BCubicFiltering;
+- (BOOL)supportsFloat16BCubicFiltering;
+- (BOOL)supportsCommandBufferJump;
 - (NSUInteger)maxFragmentTextures;
 - (NSUInteger)maxFragmentSamplers;
 

@@ -65,6 +65,10 @@ the original donor geometry. UIKit selects its screen-type-4 donor for native
 38/29-point inset pair alongside its other verified stock pairs; requested native
 outputs and the full context matcher are unchanged. A successful native context,
 normal status-bar provider and visible geometry remain runtime checks.
+The 18:14:02 retry reported the requested native context with `match=1`, including
+1080×2400 pixels, scale 3, the native cutout and safe area, and corner radius 39.
+SpringBoard later aborted in MPS initialization, so visible provider selection,
+orientation and rendered UI correctness are still unconfirmed.
 Loading, policy selection, application contexts, orientation and the visible
 status bar must be checked together. See [System Services and Posters](System-Services-and-Posters.md)
 for exact geometry, API guards, installation and rollback, and [Input and HID](Input-and-HID.md)

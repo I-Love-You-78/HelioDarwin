@@ -109,6 +109,14 @@ timeout; no registration hang or missing entitlement was established. A longer
 capture must show its actual return, timeout or sampled blocking stack before
 changing that path. PosterBoard had not spawned in the retained launchd segment.
 
+The 18:14:02 retry confirmed the requested context and corner radius with
+`match=1`. SpringBoard then failed MPS GaussianBlur initialization, before a
+complete visible UI was validated. Android reported Watchdog on the early
+return. The separate hardware-watchdog service in patch 0200 addresses the
+proven display-off service coupling; its runtime liveness is still pending.
+The registration log remained at LaunchServices, and an actual timeout or
+successful provider delivery has not been established.
+
 ## Remaining contracts
 
 Persistent AppleKeyStore key wrapping/unwrapping, bag lifecycle and access control remain missing prerequisites for real keychain persistence. SEP-backed protection, biometric/NFC/secure-element interfaces, modem transport, Wi-Fi/Bluetooth controllers and the USB PTP function require separate implementations. Search, ScreenTime and pass services also retain storage, account and keybag dependencies. These changes do not establish blanket daemon or hardware functionality.

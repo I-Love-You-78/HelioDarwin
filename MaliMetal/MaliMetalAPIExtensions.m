@@ -35,6 +35,7 @@ static void MMInvalid(const char *reason);
 - (BOOL)supportAddingBinaryFunctions;
 - (BOOL)supportIndirectCommandBuffers;
 - (BOOL)threadGroupSizeIsMultipleOfThreadExecutionWidth;
+- (id)driverCompilerOptions;
 - (NSUInteger)maxTotalThreadsPerThreadgroup;
 - (NSUInteger)maxCallStackDepth;
 - (id)buffers;
@@ -654,11 +655,16 @@ static BOOL MMComputeDescriptorSupported(id descriptor,NSError **error) {
         MMFail(error,"Compute pipeline descriptor is missing or invalid"); return NO;
     }
     id linked=[descriptor linkedFunctions];
+    if ([descriptor respondsToSelector:@selector(driverCompilerOptions)] &&
+        [descriptor driverCompilerOptions]) {
+        MMFail(error,"Private compute driver compiler options are unsupported");return NO;
+    }
+    /* The threadgroup multiple is a caller promise. This function path does
+     * not specialize for it; native pipeline and dispatch limits still apply. */
     if ([descriptor stageInputDescriptor] || [[descriptor binaryArchives] count] ||
         [[descriptor insertLibraries] count] || [[descriptor preloadedLibraries] count] ||
         [descriptor supportAddingBinaryFunctions] || [descriptor supportIndirectCommandBuffers] ||
         [descriptor maxTotalThreadsPerThreadgroup] ||
-        [descriptor threadGroupSizeIsMultipleOfThreadExecutionWidth] ||
         [descriptor maxCallStackDepth]>1 || [[linked functions] count] ||
         [[linked binaryFunctions] count] || [[linked privateFunctions] count] ||
         [[linked groups] allKeys].count) {

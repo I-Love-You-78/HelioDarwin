@@ -26,6 +26,7 @@ SOURCES = (
     'MaliMetalResources.m',
     'MaliMetalGraphics.m',
     'MaliMetalRender.m',
+    'MaliMetalMPSBridge.mm',
     'MaliMetalAPIExtensions.m',
     'MaliMetalMSL.m',
     'MaliMetalCommandQueue.m',
@@ -52,6 +53,10 @@ SYSTEM_LIBRARIES = (
     'System/Library/Frameworks/Metal.framework/Metal',
     'System/Library/Frameworks/IOKit.framework/IOKit',
     'System/Library/Frameworks/IOSurface.framework/IOSurface',
+)
+MPS_COMMON_LIBRARIES = (
+    'usr/lib/libc++.1.dylib',
+    'System/Library/Frameworks/MetalPerformanceShaders.framework/Frameworks/MPSCore.framework/MPSCore',
 )
 
 
@@ -203,6 +208,8 @@ def main():
                         help='explicit output directory from Shader/build_air.py')
     parser.add_argument('--vulkan-icd', type=Path,
                         help='explicit arm64 iOS PanVK library to include in the bundle')
+    parser.add_argument('--mps-common', action='store_true',
+                        help='enable experimental target-pinned native MPS Common qualification')
     args = parser.parse_args()
     output = args.out.resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -210,7 +217,8 @@ def main():
     system_library = sysroot / 'usr/lib/libSystem.dylib'
     if not system_library.is_file():
         parser.error('sysroot must contain usr/lib/libSystem.dylib and its reexports')
-    for name in SYSTEM_LIBRARIES:
+    system_libraries = SYSTEM_LIBRARIES + (MPS_COMMON_LIBRARIES if args.mps_common else ())
+    for name in system_libraries:
         if not (sysroot / name).is_file():
             parser.error(f'sysroot is missing the matching iOS library: {name}')
     headers = args.vulkan_headers.resolve(strict=True)
@@ -219,9 +227,11 @@ def main():
     hashes = source_hashes()
     digest = hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
     common = ['-target', 'aarch64-ios.16.7', '-mcpu=cortex_a55', '-O2',
-              '-fno-sanitize=all', '-Wall', '-Wextra', '-I', str(HERE),
+              '-fno-sanitize=all', '-Wall', '-Wextra', '-Werror', '-I', str(HERE),
               '-I', str(headers),
               '-isystem', str(Path(ziglang.__file__).parent / 'lib/libc/include/any-darwin-any')]
+    if args.mps_common:
+        common.append('-DMM_ENABLE_MPS_COMMON_BACKEND=1')
     provider_manifest = None
     provider_archive = None
     if args.air_provider:
@@ -231,7 +241,9 @@ def main():
     for source in SOURCES:
         obj = output / Path(source).with_suffix('.o')
         obj.parent.mkdir(parents=True, exist_ok=True)
-        flags = ['-fno-objc-arc', '-fblocks'] if source.endswith('.m') else []
+        flags = ['-fno-objc-arc', '-fblocks'] if source.endswith(('.m', '.mm')) else []
+        if source.endswith('.mm'):
+            flags += ['-std=c++17', '-fexceptions', '-fcxx-exceptions']
         run([*common, *flags, '-c', str(HERE / source), '-o', str(obj)])
         objects.append(str(obj))
     bundle = output / 'MaliMetal.bundle'
@@ -252,7 +264,7 @@ def main():
             '/System/Library/Extensions/MaliMetal.bundle/MaliMetal',
             '-adhoc_codesign', '-o', linker_path(binary),
             *(linker_path(obj) for obj in objects),
-            *(linker_path(sysroot / name) for name in SYSTEM_LIBRARIES)]
+            *(linker_path(sysroot / name) for name in system_libraries)]
     if provider_archive:
         link.append(linker_path(provider_archive))
     subprocess.run(link, check=True)
@@ -270,7 +282,16 @@ def main():
                 'target': 'aarch64-ios.16.7', 'binary_sha256': sha256(binary),
                 'binary_size': binary.stat().st_size}
     manifest['vulkan_header_sha256'] = sha256(headers / 'vulkan/vulkan_core.h')
-    manifest['system_libraries'] = {name: sha256(sysroot / name) for name in SYSTEM_LIBRARIES}
+    manifest['system_libraries'] = {name: sha256(sysroot / name) for name in system_libraries}
+    manifest['mps_common_backend'] = {
+        'enabled': args.mps_common,
+        'scope': 'experimental native Common qualification' if args.mps_common else 'disabled',
+        'target_build': '20H392',
+        'MPSCore_UUID': '078bcbde-b90f-39b5-aec9-f127ec42577d',
+        'native_object_bytes': 0x9b8,
+        'publication': 'guarded native RW acquire/release registry' if args.mps_common else None,
+        'hardware_qualified': False,
+    }
     manifest['air_provider'] = provider_manifest
     manifest['components'] = {}
     if args.air_provider:

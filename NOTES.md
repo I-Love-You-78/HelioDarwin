@@ -69,6 +69,13 @@ native validation. The poster registration call was still pending when the user
 returned manually; that capture ended before the phase timeout. Rendered output,
 native context matching, wallpaper delivery and performance remain unverified.
 
+The 18:14:02 retry reported the requested native display context and corner
+radius with `match=1`, then SpringBoard aborted in MPS GaussianBlur initialization.
+An experimental, default-off native MPS Common backend is now compiled for the
+exact framework ABI; it does not advertise an Apple GPU family. Patch 0200 also
+separates hardware-watchdog service from display refresh. New-kernel liveness,
+actual MPS registration/dispatch, pixels and performance require device evidence.
+
 ## Priorities
 
 1. Validate the assembled native display/input/MaliMetal candidate, recording

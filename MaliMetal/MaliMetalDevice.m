@@ -5,6 +5,7 @@
 #import "MaliMetalResources.h"
 #import "MaliMetalGraphics.h"
 #import "MaliMetalRender.h"
+#import "MaliMetalMPSBridge.h"
 #import "MaliMetalAPIExtensions.h"
 #import "MaliMetalMSL.h"
 #import "MaliMetalCommandQueue.h"
@@ -602,7 +603,10 @@ static void MaliMetalComputeSetError(MMVKError *error, MMVKResult code, const ch
     return _output.max_total_threads_per_threadgroup;
 }
 - (NSUInteger)threadExecutionWidth {
-    return _output.thread_execution_width;
+    /* The provider's Metal policy may prefer a logical width of 32. Report the
+     * actual native subgroup width; the qualified G57 has a fixed width of 16. */
+    const MMVKCapabilities *caps = [_device backendCapabilities];
+    return caps ? caps->subgroup_size : 0;
 }
 - (NSUInteger)staticThreadgroupMemoryLength {
     return _output.static_threadgroup_memory_length;
@@ -792,6 +796,15 @@ static void MaliMetalComputeSetError(MMVKError *error, MMVKResult code, const ch
     }
     *_nativeLimits = limits;
 }
+- (void)initFeatureQueries {
+    [super initFeatureQueries];
+    if (MaliMetalMPSCommonBackendEnabled()) {
+        MMVKError error = {0};
+        if (MaliMetalRegisterMPSCommonBackend(self, &error) != MMVK_OK)
+            [NSException raise:@"NSInternalInconsistencyException"
+                        format:@"Native MPS Common registration failed: %s", error.message];
+    }
+}
 - (MMVKDevice *)backendDevice {
     return _backend;
 }
@@ -939,6 +952,18 @@ static void MaliMetalComputeSetError(MMVKError *error, MMVKResult code, const ch
 - (BOOL)supportsSIMDGroup {
     return NO;
 }
+/* These complete the feature queries used by the genuine native MPS Common
+ * constructor. The frontend does not expose these optional Metal contracts;
+ * MPS therefore selects its real scalar/software-filter kernel variants. */
+- (BOOL)supports32BitFloatFiltering { return NO; }
+- (BOOL)supportsArrayOfTextures { return NO; }
+- (BOOL)supportsQuadShufflesAndBroadcast { return NO; }
+- (BOOL)supportsSIMDShufflesAndBroadcast { return NO; }
+- (BOOL)supportsSIMDReduction { return NO; }
+- (BOOL)supportsReadWriteTextureArgumentsTier2 { return NO; }
+- (BOOL)supportsNorm16BCubicFiltering { return NO; }
+- (BOOL)supportsFloat16BCubicFiltering { return NO; }
+- (BOOL)supportsCommandBufferJump { return NO; }
 - (BOOL)supportsTextureSampleCount:(NSUInteger)count {
     return count == 1 && [self backendDevice] != NULL;
 }

@@ -35,6 +35,23 @@ validate the pipeline/program/device identity. The former shader-name rejection
 did not recur. Native pipeline preparation precedes this ownership check;
 successful command execution, pixel correctness and numerical FP16 remain unverified.
 
+The 18:14:02 trial did not repeat that draw-owner abort and reported matching
+native display context geometry. SpringBoard then aborted while constructing
+`MPSImageGaussianBlur`: the system MPS factory rejects devices supporting none
+of Apple families 2–8. The experimental `--mps-common` bundle option registers a
+genuine native `MPSDevice_Common` for the real device, using pinned MPSCore
+exports, object layout and cache guards. It is off by default and leaves Apple
+family reports unchanged. Published native objects retain their device for the
+native process-lifetime cache; partial construction failures are quarantined.
+Actual registration, Gaussian dispatch and pixels still require a device run.
+
+When enabled, the builder requires the matching MPSCore and libc++ libraries in
+the supplied sysroot and links them strongly. Compute descriptor threadgroup
+width promises are accepted without enabling dependent optimization. The native
+pipeline getter reports the queried execution width (16 on this G57), separately
+from the translator's preferred logical width. Unsupported compilation controls
+remain rejected. Default-off bundles do not acquire the MPSCore/libc++ dependency.
+
 The current compiler series also fixes sRGB tile-read metadata and forwards the
 actual canonical color-write table. PointSize output is accepted only for the
 qualified triangle/fill path with native feature checks; this does not add a

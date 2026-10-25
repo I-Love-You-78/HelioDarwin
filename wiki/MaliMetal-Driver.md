@@ -108,6 +108,22 @@ after native pipeline preparation succeeds; this is not evidence of command
 execution. Draw ownership now exposes the real retained device and checks exact
 pipeline/program identity, preserving command-buffer resource validation.
 
+The 18:14:02 retry then reached SpringBoard's MPS GaussianBlur initialization.
+The stock MPS factory returned NULL because all queried Apple families were
+unsupported; the failure preceded kernel-library loading. The optional bundle
+flag `--mps-common` now prepares an experimental native Common backend using the
+exact MPSCore UUID, exports, native constructor/vtable, real device limits and
+guarded acquire/release cache publication. Apple-family answers stay unchanged.
+It defaults off; enabled bundles strongly link matching MPSCore and libc++.
+Both build modes pass strict linking. Actual native construction, dispatch,
+blur output and wrapper compatibility remain runtime qualification gates.
+
+The compute descriptor path accepts the caller's threadgroup-width promise
+without using that optimization; unsupported private controls still return errors.
+The pipeline's native execution width comes from the queried subgroup width,
+not the translator's fixed logical preference. Existing Gaussian asset requests
+compile offline, which does not prove native execution or numerical output.
+
 The declared compiler series now includes patch 0003 for sRGB tile-read metadata,
 with actual color-table data forwarding and a triangle/fill-only PointSize
 qualification. In the unchanged 1304-request corpus, 511 requests compile and
