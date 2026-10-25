@@ -11,11 +11,16 @@ import struct
 import tempfile
 
 from sweet_daemons import read, write
+import sweet_macho_dependency as dependency
 
 
 CACHE = 'System/Library/xpc/launchd.plist'
 POLICY = 'System/Library/FeatureFlags/Domain/SpringBoard.plist'
 STATE = 'private/var/db/sweet-native-display/original.plist'
+DEPENDENCY_STATE = 'private/var/db/sweet-native-display/dependency.plist'
+EXECUTABLE = 'System/Library/CoreServices/SpringBoard.app/SpringBoard'
+EXECUTABLE_UUID = 'e1a4fe7d-29ff-3269-b3ab-50aed40c4495'
+EXECUTABLE_SHA256 = 'ea835980610a95591fb349bca077840fab7bdd663efaa11ef054d91bc2125475'
 LIBRARY = '/usr/local/lib/sweet/SweetNativeDisplay.dylib'
 LOG = '/private/var/mobile/Library/Logs/SweetNativeDisplay.log'
 
@@ -111,9 +116,11 @@ def install(root, build):
     # one valid definition instead of adding a conflicting Enabled field.
     policy['Jindo'] = {'Enabled': False}
     libraries = [p for p in environment.get('DYLD_INSERT_LIBRARIES', '').split(':') if p]
-    if LIBRARY not in libraries:
-        libraries.append(LIBRARY)
-    environment['DYLD_INSERT_LIBRARIES'] = ':'.join(libraries)
+    libraries = [p for p in libraries if p != LIBRARY]
+    if libraries:
+        environment['DYLD_INSERT_LIBRARIES'] = ':'.join(libraries)
+    else:
+        environment.pop('DYLD_INSERT_LIBRARIES', None)
     environment['SWEET_NATIVE_DISPLAY'] = '1'
     job.setdefault('StandardErrorPath', LOG)
     destination = checked_path(root, LIBRARY.lstrip('/'))
@@ -138,6 +145,13 @@ def install(root, build):
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
+    if destination.read_bytes() != data:
+        raise ValueError('Native adapter failed readback before dependency preparation')
+    prepared_dependency = dependency.install(root, EXECUTABLE, LIBRARY,
+                                             EXECUTABLE_UUID, EXECUTABLE_SHA256,
+                                             DEPENDENCY_STATE)
+    saved['load_method'] = 'signed-dependency'
+    write(state_path, saved)
     log_directory = checked_path(root, 'private/var/mobile/Library/Logs')
     if not log_directory.exists():
         log_directory.mkdir(parents=True)
@@ -151,10 +165,12 @@ def install(root, build):
     if (read(policy_path)['Jindo'] != {'Enabled': False} or
             hashlib.sha256(destination.read_bytes()).digest() != hashlib.sha256(data).digest() or
             prepared_env.get('SWEET_NATIVE_DISPLAY') != '1' or
-            LIBRARY not in prepared_env.get('DYLD_INSERT_LIBRARIES', '').split(':')):
+            LIBRARY in prepared_env.get('DYLD_INSERT_LIBRARIES', '').split(':') or
+            hashlib.sha256(checked_path(root, EXECUTABLE).read_bytes()).hexdigest() !=
+            prepared_dependency['patched_sha256']):
         raise ValueError('Offline native display preparation did not read back correctly')
     print('Native metadata and non-Jindo policy prepared for the next assembled boot')
-    print('Dylib loading, feature-table policy, app contexts, renderer and orientation remain runtime-unverified')
+    print('Signed SpringBoard dependency prepared; loading, feature-table policy, app contexts, renderer and orientation remain runtime-unverified')
 
 
 def remove(root):
@@ -171,13 +187,17 @@ def remove(root):
         previous_enabled.add(None)
     if environment.get('SWEET_NATIVE_DISPLAY') not in previous_enabled:
         raise ValueError('Native display environment was changed after preparation')
+    if saved.get('load_method') == 'signed-dependency' and not checked_path(root, DEPENDENCY_STATE).exists():
+        raise ValueError('Native dependency recovery state is missing; configuration retained')
+    dependency.remove(root, DEPENDENCY_STATE)
     policy['Jindo'] = saved['jindo']
-    if not saved['library_was_present']:
-        libraries = [p for p in environment.get('DYLD_INSERT_LIBRARIES', '').split(':') if p and p != LIBRARY]
-        if libraries:
-            environment['DYLD_INSERT_LIBRARIES'] = ':'.join(libraries)
-        else:
-            environment.pop('DYLD_INSERT_LIBRARIES', None)
+    libraries = [p for p in environment.get('DYLD_INSERT_LIBRARIES', '').split(':') if p and p != LIBRARY]
+    if saved['library_was_present']:
+        libraries.append(LIBRARY)
+    if libraries:
+        environment['DYLD_INSERT_LIBRARIES'] = ':'.join(libraries)
+    else:
+        environment.pop('DYLD_INSERT_LIBRARIES', None)
     if saved['old_enabled_present']:
         environment['SWEET_NATIVE_DISPLAY'] = saved['old_enabled']
     else:
@@ -189,7 +209,7 @@ def remove(root):
         write(path, value, mode=stat.st_mode & 0o7777, owner=(stat.st_uid, stat.st_gid))
     saved['active'] = False
     write(state_path, saved)
-    print('Original Jindo policy restored and native adapter environment removed; dylib and logs retained')
+    print('Original SpringBoard executable and Jindo policy restored; native opt-in recovered; dylib and logs retained')
 
 
 def main():

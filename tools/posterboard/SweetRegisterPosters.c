@@ -3,12 +3,32 @@
 #include <dlfcn.h>
 #include <mach-o/dyld.h>
 #include <mach-o/loader.h>
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+static void
+operation_timed_out(int signal_number)
+{
+    (void)signal_number;
+    static const char message[] =
+        "SweetRegisterPosters: operation timed out; last checkpoint identifies the pending boundary\n";
+    /* dlopen and synchronous XPC can block before any result exists. Keep the
+     * failure path independent of their locks and of stdio's internal locks. */
+    (void)write(STDERR_FILENO, message, sizeof(message) - 1);
+    _exit(1);
+}
+
+static void
+checkpoint(const char *phase)
+{
+    fprintf(stderr, "SweetRegisterPosters: %s\n", phase);
+    alarm(125);
+}
 
 static int
 verified_image(const char *path, const unsigned char expected[16])
@@ -45,10 +65,12 @@ prewarm_posters(void)
         0x4f,0xc9,0x6a,0x43,0x1b,0x54,0x34,0x8b,
         0x9b,0x78,0x13,0x48,0x51,0x97,0xe0,0x86,
     };
+    checkpoint("loading PosterBoardServices");
     if (!dlopen(path, RTLD_NOW | RTLD_GLOBAL) || !verified_image(path, expected)) {
         fprintf(stderr, "Unverified PosterBoardServices; refusing prewarm API\n");
         return 1;
     }
+    checkpoint("PosterBoardServices loaded and UUID verified");
     void *(*klass)(const char *) = dlsym(RTLD_DEFAULT, "objc_getClass");
     void *(*sel)(const char *) = dlsym(RTLD_DEFAULT, "sel_registerName");
     void *(*method)(void *, void *) = dlsym(RTLD_DEFAULT, "class_getInstanceMethod");
@@ -62,7 +84,10 @@ prewarm_posters(void)
     void (*dispatch_release_fn)(void *) = dlsym(RTLD_DEFAULT, "dispatch_release");
     if (!klass || !sel || !method || !send || !cstring || !prewarm || !semaphore_create ||
         !semaphore_signal || !semaphore_wait || !dispatch_time_fn || !dispatch_release_fn)
+    {
+        fprintf(stderr, "Required PosterBoardServices runtime symbols are unavailable\n");
         return 1;
+    }
     void *service_class = klass("PRSService");
     if (!service_class || !method(service_class, sel("prewarmWithCompletion:"))) {
         fprintf(stderr, "PRSService prewarm selector is unavailable\n");
@@ -79,6 +104,7 @@ prewarm_posters(void)
         free(state);
         return 1;
     }
+    checkpoint("requesting PosterBoard prewarm");
     prewarm(service, sel("prewarmWithCompletion:"), ^(void *error) {
         state->failed = error != NULL;
         if (error) {
@@ -87,6 +113,7 @@ prewarm_posters(void)
         }
         semaphore_signal(state->semaphore);
     });
+    checkpoint("waiting for PosterBoard prewarm completion");
     long timed_out = semaphore_wait(state->semaphore, dispatch_time_fn(0, 120000000000LL));
     send(service, sel("release"));
     if (timed_out) {
@@ -105,6 +132,17 @@ prewarm_posters(void)
 int
 main(int argc, char **argv)
 {
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+    fprintf(stderr, "SweetRegisterPosters: main entered pid=%d uid=%u euid=%u\n",
+            getpid(), (unsigned int)getuid(), (unsigned int)geteuid());
+    struct sigaction timeout_action = {0};
+    timeout_action.sa_handler = operation_timed_out;
+    sigemptyset(&timeout_action.sa_mask);
+    if (sigaction(SIGALRM, &timeout_action, NULL)) {
+        perror("SweetRegisterPosters: cannot install operation timeout");
+        return 1;
+    }
     int registering = 0, prewarming = 0;
     for (int index = 1; index < argc; ++index) {
         if (!strcmp(argv[index], "--register")) registering = 1;
@@ -118,8 +156,13 @@ main(int argc, char **argv)
         fprintf(stderr, "Run as mobile (uid 501), using the same ExtensionKit database as PosterBoard\n");
         return 1;
     }
-    if (!dlopen("/System/Library/Frameworks/CoreServices.framework/CoreServices", RTLD_NOW | RTLD_GLOBAL) ||
-        !dlopen("/System/Library/Frameworks/ExtensionFoundation.framework/ExtensionFoundation", RTLD_NOW | RTLD_GLOBAL)) {
+    checkpoint("loading CoreServices");
+    if (!dlopen("/System/Library/Frameworks/CoreServices.framework/CoreServices", RTLD_NOW | RTLD_GLOBAL)) {
+        fprintf(stderr, "Cannot load CoreServices: %s\n", dlerror());
+        return 1;
+    }
+    checkpoint("CoreServices loaded; loading ExtensionFoundation");
+    if (!dlopen("/System/Library/Frameworks/ExtensionFoundation.framework/ExtensionFoundation", RTLD_NOW | RTLD_GLOBAL)) {
         fprintf(stderr, "Cannot load system registration/query frameworks: %s\n", dlerror());
         return 1;
     }
@@ -131,6 +174,7 @@ main(int argc, char **argv)
         fprintf(stderr, "Unverified CoreServices UUID; refusing private registration API\n");
         return 1;
     }
+    checkpoint("CoreServices UUID verified; resolving runtime contract");
     void *(*klass)(const char *) = dlsym(RTLD_DEFAULT, "objc_getClass");
     void *(*sel)(const char *) = dlsym(RTLD_DEFAULT, "sel_registerName");
     void *(*class_method)(void *, void *) = dlsym(RTLD_DEFAULT, "class_getClassMethod");
@@ -149,8 +193,10 @@ main(int argc, char **argv)
     void (*release)(void *) = dlsym(RTLD_DEFAULT, "CFRelease");
     if (!klass || !sel || !class_method || !instance_method || !send0 || !send1 ||
         !send_count || !send_index || !send_cstring || !send_bool || !pool_push ||
-        !pool_pop || !url_create || !string_create || !release)
+        !pool_pop || !url_create || !string_create || !release) {
+        fprintf(stderr, "Required registration/query runtime symbols are unavailable\n");
         return 1;
+    }
     void *workspace_class = klass("LSApplicationWorkspace");
     void *query_class = klass("_EXQuery");
     void *controller = klass("_EXQueryController");
@@ -166,11 +212,14 @@ main(int argc, char **argv)
     }
     void *pool = pool_push();
     unsigned int (^query_visible)(void) = ^{
+        checkpoint("constructing ExtensionKit provider query");
         void *point = string_create(NULL, "com.apple.posterkit.provider", 0x08000100);
         void *query = point ? send1(send0(query_class, sel("alloc")),
                                    sel("initWithExtensionPointIdentifier:"), point) : NULL;
         void *queries = query ? send1(array_class, sel("arrayWithObject:"), query) : NULL;
+        checkpoint("executing ExtensionKit provider query");
         void *results = queries ? send1(controller, sel("executeQueries:"), queries) : NULL;
+        checkpoint("ExtensionKit provider query returned");
         unsigned long count = results ? send_count(results, sel("count")) : 0;
         printf("ExtensionKit currently returns %lu poster providers\n", count);
         unsigned int observed = 0;
@@ -200,6 +249,7 @@ main(int argc, char **argv)
             "/Applications/PaperBoard.app/PlugIns/LegacyPoster.appex",
             "/System/Library/PrivateFrameworks/WallpaperKit.framework/PlugIns/CollectionsPoster.appex",
         };
+        checkpoint("opening LaunchServices workspace");
         void *workspace = send0(workspace_class, sel("defaultWorkspace"));
         if (!workspace) failed = 1;
         for (unsigned int i = 0; i < sizeof(paths) / sizeof(paths[0]); ++i) {
@@ -213,6 +263,8 @@ main(int argc, char **argv)
              * an already visible identity on every boot. */
             if (visible & (1u << i)) continue;
             void *url = url_create(NULL, (const unsigned char *)paths[i], (long)strlen(paths[i]), 1);
+            fprintf(stderr, "SweetRegisterPosters: registering %s\n", paths[i]);
+            checkpoint("waiting for LaunchServices registerPlugin result");
             int accepted = url && send_bool(workspace, sel("registerPlugin:"), url);
             if (url) release(url);
             printf("Registration %s: %s\n", accepted ? "accepted" : "failed", paths[i]);
@@ -225,6 +277,9 @@ main(int argc, char **argv)
         failed = 1;
     }
     if (prewarming && !failed) failed = prewarm_posters();
+    checkpoint("releasing registration resources");
     pool_pop(pool);
+    alarm(0);
+    fprintf(stderr, "SweetRegisterPosters: completed status=%d\n", failed);
     return failed;
 }

@@ -13,10 +13,14 @@ from pathlib import Path
 import plistlib
 import struct
 import tempfile
+import sweet_macho_dependency
 
 
 CACHE = 'System/Library/xpc/launchd.plist'
 ARCHIVE = 'private/var/db/sweet-root-tweaks/launchd-original-jobs.plist'
+POSTER_LIBRARY = '/usr/local/lib/sweet/SweetPosterBoard.dylib'
+POSTER_DEPENDENCY_STATE = 'private/var/db/sweet-root-tweaks/poster-dependency.plist'
+POSTER_LOG = '/private/var/mobile/Library/Logs/SweetPosterBoard.log'
 DEPENDENCIES = {
     'com.apple.CommCenter': 'baseband transport and CoreTelephony modem interface',
     'com.apple.locationd': 'location providers, authorization database and sensor interfaces',
@@ -119,8 +123,27 @@ def restore(root, label, source_cache=None):
     print('Required dependencies: ' + DEPENDENCIES.get(label, 'inspect the original service contract'))
 
 
+def remove_poster_injection(environment):
+    """Remove this component's obsolete injection token, preserving other libraries."""
+    value = environment.get('DYLD_INSERT_LIBRARIES')
+    if value is None:
+        return
+    if not isinstance(value, str):
+        raise ValueError('Unexpected PosterBoard DYLD_INSERT_LIBRARIES value')
+    libraries = value.split(':')
+    if POSTER_LIBRARY not in libraries:
+        return
+    remaining = [item for item in libraries if item != POSTER_LIBRARY]
+    if any(remaining):
+        environment['DYLD_INSERT_LIBRARIES'] = ':'.join(remaining)
+    else:
+        environment.pop('DYLD_INSERT_LIBRARIES', None)
+
+
 def prepare_posters(root, build):
     """Install explicit, UUID-gated readiness and real provider preparation."""
+    if os.name != 'posix':
+        raise ValueError('Poster preparation requires an offline POSIX root shell')
     root, build = Path(root), Path(build)
     version = read(root / 'System/Library/CoreServices/SystemVersion.plist')
     if version.get('ProductBuildVersion') != '20H392':
@@ -142,7 +165,7 @@ def prepare_posters(root, build):
         command_count, command_bytes = struct.unpack_from('<II', data, 16)
         if command_bytes > len(data) - 32:
             raise ValueError(f'Truncated Mach-O commands: {filename}')
-        offset, platform = 32, None
+        offset, platform, dependencies = 32, None, []
         for _ in range(command_count):
             if offset + 8 > 32 + command_bytes:
                 raise ValueError(f'Truncated Mach-O command: {filename}')
@@ -151,9 +174,16 @@ def prepare_posters(root, build):
                 raise ValueError(f'Invalid Mach-O command: {filename}')
             if command == 0x32 and size >= 24:
                 platform = struct.unpack_from('<I', data, offset + 8)[0]
+            if command == 0xc and size >= 24:
+                start = struct.unpack_from('<I', data, offset + 8)[0]
+                if start < 24 or start >= size:
+                    raise ValueError(f'Invalid dependency name: {filename}')
+                dependencies.append(data[offset + start:offset + size].split(b'\0', 1)[0].decode())
             offset += size
         if platform != 2:
             raise ValueError(f'Artifact does not target iOS: {filename}')
+        if stem == 'SweetPosterBoard' and '/System/Library/PrivateFrameworks/PosterBoard.framework/PosterBoard' not in dependencies:
+            raise ValueError('Readiness guard requires a strong PosterBoard initialization dependency')
         artifacts.append((root / destination, data))
 
     cache_path = root / CACHE
@@ -166,6 +196,9 @@ def prepare_posters(root, build):
     poster_key, poster_job = matches[0]
     if poster_job.get('ProgramArguments') != ['/Applications/PosterBoard.app/PosterBoard'] or poster_job.get('UserName') != 'mobile':
         raise ValueError('Unexpected PosterBoard launchd contract')
+    if not isinstance(poster_job.get('EnvironmentVariables', {}), dict):
+        raise ValueError('Unexpected PosterBoard environment contract')
+    remove_poster_injection(copy.deepcopy(poster_job.get('EnvironmentVariables', {})))
     preparation_key = '/System/Library/LaunchDaemons/org.heliodarwin.prepare-posters.plist'
     existing = cache['LaunchDaemons'].get(preparation_key)
     if existing and existing.get('Label') != 'org.heliodarwin.prepare-posters':
@@ -176,6 +209,8 @@ def prepare_posters(root, build):
     archive_path = root / ARCHIVE
     archive = read(archive_path) if archive_path.exists() else {}
     archive.setdefault(poster_key, copy.deepcopy(poster_job))
+    if not isinstance(archive[poster_key], dict) or archive[poster_key].get('Label') != 'com.apple.PosterBoard':
+        raise ValueError('Conflicting original PosterBoard job archive')
     write(archive_path, archive)
     for path, data in artifacts:
         missing = []
@@ -199,19 +234,22 @@ def prepare_posters(root, build):
         finally:
             if os.path.exists(temporary):
                 os.unlink(temporary)
+    # The verified library must exist before the executable acquires its normal
+    # dependency. Keep the old original-job archive when migrating injection.
+    sweet_macho_dependency.install(
+        root, 'Applications/PosterBoard.app/PosterBoard', POSTER_LIBRARY,
+        'ec7ac4c9-f35c-3f28-a3eb-e50973113683',
+        '644656cf6f6da07dc8a42b49f95b188aa1973a7d5a1fd12f5c1e8d40cea315be',
+        POSTER_DEPENDENCY_STATE)
     environment = poster_job.setdefault('EnvironmentVariables', {})
-    libraries = environment.get('DYLD_INSERT_LIBRARIES', '').split(':')
-    library = '/usr/local/lib/sweet/SweetPosterBoard.dylib'
-    if library not in libraries:
-        libraries.append(library)
-    environment['DYLD_INSERT_LIBRARIES'] = ':'.join(item for item in libraries if item)
+    remove_poster_injection(environment)
     environment['SWEET_POSTERBOARD_READINESS'] = '1'
     log_directory = root / 'private/var/mobile/Library/Logs'
     if not log_directory.exists():
         log_directory.mkdir(parents=True)
         os.chown(log_directory, 501, 501)
         os.chmod(log_directory, 0o755)
-    poster_job.setdefault('StandardErrorPath', '/private/var/mobile/Library/Logs/SweetPosterBoard.log')
+    poster_job.setdefault('StandardErrorPath', POSTER_LOG)
     job = {
         'Label': 'org.heliodarwin.prepare-posters', 'UserName': 'mobile',
         'ProgramArguments': ['/usr/local/libexec/SweetRegisterPosters', '--register', '--prewarm'],
@@ -226,6 +264,8 @@ def prepare_posters(root, build):
 
 
 def remove_poster_preparation(root):
+    if os.name != 'posix':
+        raise ValueError('Poster removal requires an offline POSIX root shell')
     root = Path(root)
     path = root / CACHE
     cache = read(path)
@@ -236,14 +276,43 @@ def remove_poster_preparation(root):
         raise ValueError('Conflicting poster preparation job')
     if file.exists() and read(file).get('Label') != 'org.heliodarwin.prepare-posters':
         raise ValueError('Conflicting poster preparation plist')
-    restore(root, 'com.apple.PosterBoard')
+    originals = read(root / ARCHIVE)
+    matches = [(name, job) for name, job in originals.items()
+               if isinstance(job, dict) and job.get('Label') == 'com.apple.PosterBoard']
+    if len(matches) != 1:
+        raise ValueError('Expected one original PosterBoard job for preparation rollback')
+    poster_key, original = matches[0]
+    current = cache['LaunchDaemons'].get(poster_key)
+    if not current or current.get('Label') != 'com.apple.PosterBoard':
+        raise ValueError('PosterBoard cached job changed outside this preparation')
+    if sum(job.get('Label') == 'com.apple.PosterBoard' for job in cache['LaunchDaemons'].values()) != 1:
+        raise ValueError('Conflicting cached PosterBoard job definitions')
+    if not isinstance(current.get('EnvironmentVariables', {}), dict):
+        raise ValueError('Unexpected PosterBoard environment contract')
+    # Restore the executable before removing any opt-in or startup policy. The
+    # common module refuses unrelated executable changes and preserves recovery.
+    sweet_macho_dependency.remove(root, POSTER_DEPENDENCY_STATE)
     state = path.stat()
-    cache = read(path)
+    environment = current.get('EnvironmentVariables', {})
+    remove_poster_injection(environment)
+    original_environment = original.get('EnvironmentVariables', {})
+    if environment.get('SWEET_POSTERBOARD_READINESS') == '1':
+        if 'SWEET_POSTERBOARD_READINESS' in original_environment:
+            environment['SWEET_POSTERBOARD_READINESS'] = original_environment['SWEET_POSTERBOARD_READINESS']
+        else:
+            environment.pop('SWEET_POSTERBOARD_READINESS', None)
+    if not environment:
+        current.pop('EnvironmentVariables', None)
+    if current.get('StandardErrorPath') == POSTER_LOG:
+        if 'StandardErrorPath' in original:
+            current['StandardErrorPath'] = original['StandardErrorPath']
+        else:
+            current.pop('StandardErrorPath', None)
     cache['LaunchDaemons'].pop(key, None)
     write(path, cache, mode=state.st_mode & 0o7777, owner=(state.st_uid, state.st_gid))
     if file.exists():
         file.unlink()
-    print('Poster startup job and readiness environment removed; tools, logs and provider data retained')
+    print('Poster dependency restored and startup policy removed; tools, logs and provider data retained')
 
 
 def main():

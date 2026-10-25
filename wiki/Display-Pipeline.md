@@ -51,6 +51,10 @@ the stock non-Jindo, geometry-aware `FixedSplit` policy. It keeps scanout,
 scale, artwork identity and touch coordinates unchanged.
 
 The native metadata adapter is compile-checked but not yet phone-validated.
+Its offline installer now adds a guarded normal dependency to the exact supported
+SpringBoard executable. It preserves the existing entitlement blobs and signature
+metadata, updates ad-hoc page hashes, and retains an exact executable backup;
+it does not depend on a DYLD environment variable reaching the process.
 Loading, policy selection, application contexts, orientation and the visible
 status bar must be checked together. See [System Services and Posters](System-Services-and-Posters.md)
 for exact geometry, API guards, installation and rollback, and [Input and HID](Input-and-HID.md)

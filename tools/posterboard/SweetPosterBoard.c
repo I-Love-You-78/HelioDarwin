@@ -23,6 +23,7 @@ static ptrdiff_t initialized_offset;
 static void (*lock_state)(uint32_t *);
 static void (*unlock_state)(uint32_t *);
 static unsigned int reported_wait;
+static unsigned int reported_ready;
 
 static int
 verified_framework(void)
@@ -73,6 +74,8 @@ ready_switcher_configuration(void *object, void *selector)
             fprintf(stderr, "SweetPosterBoard: configuration read deferred until initial extensions load\n");
         return NULL;
     }
+    if (!__atomic_exchange_n(&reported_ready, 1, __ATOMIC_RELAXED))
+        fprintf(stderr, "SweetPosterBoard: initial extensions loaded; forwarding configuration reads\n");
     return original_getter(object, selector);
 }
 
@@ -80,7 +83,11 @@ __attribute__((constructor)) static void
 install_readiness_guard(void)
 {
     const char *enabled = getenv("SWEET_POSTERBOARD_READINESS");
-    if (!enabled || strcmp(enabled, "1") || strcmp(getprogname(), "PosterBoard"))
+    if (strcmp(getprogname(), "PosterBoard"))
+        return;
+    fprintf(stderr, "SweetPosterBoard: constructor entered; readiness opt-in=%s\n",
+            enabled ? enabled : "unset");
+    if (!enabled || strcmp(enabled, "1"))
         return;
     if (!verified_framework()) {
         fprintf(stderr, "SweetPosterBoard: unverified framework UUID; readiness guard not installed\n");
