@@ -35,6 +35,11 @@ BootROM / platform firmware -> MediaTek LK -> HelioDarwin shim
     -> XNU platform and IOKit startup -> UFS HFS+ root -> launchd
 ```
 
+In the 23:17:49 run, the kernel admitted the exact 2,760-entry set and
+served successful real selector-6 membership calls from lsd and installd.
+This validates that bounded lookup path, without establishing general
+AMFI policy or authenticated boot.
+
 ## Handoff
 
 The host payload builder resolves kernel fixups and packages kernel segments, the ADT and command line. LK loads the Android image. The shim locates the payload in the initrd, checks its bounds, copies the segments into the selected RAM window, places the ADT and `boot_args` after them, and enters XNU with the MMU and caches off and the physical boot-argument address in `x0`.

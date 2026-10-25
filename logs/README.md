@@ -1,5 +1,26 @@
 # Device boot logs
 
+Latest capture: [boot-0202-run-40219933214-ui-signed-cache.log](boot-0202-run-40219933214-ui-signed-cache.log).
+
+The 23:17:49 run on 2026-10-25 used kernel `40219933214` and userspace
+`0de001f`. Its original 163,421-byte console records the pinned 2,760-entry
+trust set ready and successful real membership calls from `lsd` and `installd`.
+PosterBoard and AegirPoster subsequently ran. Native geometry again read back
+`match=1`; the previous D8F18H rejection did not recur. This does not establish
+completed GPU rendering: backboardd aborted with `buffer memory binding:
+VkResult -2`, a label then shared by allocation, mapping and binding failures.
+Separate helper logs identify the missing
+`newTextureLayoutWithDescriptor:isHeapOrBufferBacked:` selector. Later surface
+creation failed with NoMemory. No new driverkitd per-process-limit report was
+retained; the exact mmap branch and memory-failure cause remain unproven.
+
+The user saw Sakura with artifacts and a spinner, then black screens, and
+returned manually to Android. The console reaches sync and the single diagnostic
+reset write; its subsequent `reset returned` print also occurs in earlier
+automatic-return captures, so it does not identify the reset failure by itself.
+Successful GPU job completions were not individually logged in this build.
+Buffer swaps and a visible spinner alone do not identify the frame producer.
+
 The [19:51:55 MPS/watchdog run](boot-0200-run-40200328350-ui-mps-common.log)
 on 2026-10-25 used kernel `40200328350` and userspace `ec1806d`. The 79,206-byte
 original console reaches the 600-second sync/reset sequence and automatic

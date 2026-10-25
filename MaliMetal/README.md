@@ -62,6 +62,12 @@ report their individual reason. Both observed D8F18H specializations pass offlin
 compilation and SPIR-V validation; GPU dispatch, pixels and performance still
 require a new device run.
 
+The later 23:17:49 capture did not repeat the D8F18H rejection. It reached
+a native buffer error with VkResult -2 and exposed the missing texture-layout
+selector in SpringBoard/PosterBoard. The old shared error label does not
+distinguish allocation from mapping or binding. Hardware job-completion
+logging and image correctness remain separate acceptance gates.
+
 The current compiler series also fixes sRGB tile-read metadata and forwards the
 actual canonical color-write table. PointSize output is accepted only for the
 qualified triangle/fill path with native feature checks; this does not add a

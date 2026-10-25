@@ -37,6 +37,11 @@ logs include physical power/volume-key events. GPU jobs, multi-touch, volume and
 sleep/wake behavior, and the installed PosterBoard/native display adapters still
 require runtime validation.
 
+The latest [signed-cache capture](https://github.com/squeeeezy/HelioDarwin/blob/x676c/logs/boot-0202-run-40219933214-ui-signed-cache.log)
+records successful AMFI membership queries and PosterBoard startup.
+Texture-layout and native memory failures still prevent a confirmed
+rendered UI; the user returned manually to Android.
+
 ## Documentation boundaries
 
 Hardware observations, implemented source and offline checks are identified

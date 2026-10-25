@@ -1,0 +1,1920 @@
+x676c shim: xnu loader
+CurrentEL=0x0000000000000001
+load=0x0000000040000000
+dtb=0x0000000047c80000
+cntfrq=0x0000000000c65d40
+mpidr=0x0000000081000000
+midr=0x00000000412fd050
+sctlr_el1=0x0000000030d01800
+id_aa64mmfr0=0x0000000000101122
+-- ufshci std
+11270000: 3587071f 00000000 00000200 00000000
+11270010: 00000000 00000426 00000000 00000000
+11270020: 00000000 00030e75 00000000 00000000
+11270030: 0000010f 00000001 80000010 00000000
+11270040: 00000000 00000000 00000000 0000000011270°50: 51252c0 00000000 00000000 00000000
+11270060: 00000001 00400000 00000000 00000000
+11270070: 00000000 00000000 00000000 00000000
+11270080: 00000001 00000000 00000000 00000000
+11270090: 00000002 15710000 00000000 00000000
+112700a0: 00000000 00000000 00000000 00000000
+112700b0: 00000000 00000000 00000000 00000000
+112700c0: 000a0a00 00000000 00000000 00000000
+112700d0: 20000000 00000000 00000000 00000000
+112700e0: 00000000 00000000 00000000 00000000
+112700f0: 00000800 00000000 00000000 0000010a
+-- ufshci mtk 0x140
+11270140: 00000100 00000003 00000000 00000000
+11270150: 00000000 00000000 00000000 00000000
+-- ufshci mtk 0x2100
+11272100: 00000000 00000000 00000000 00000000
+-- ufshci mtk 0x2200
+11272200: 00000007 000000cc 00800040 008000c0
+11272210: 00000000 00000000 00000000 00000000
+11272220: 00000000 00000000 00000000 00000000
+11272230: 00000000 00000000 00000000 00000000
+11272240: 20160706 00000000 00000001 00000000
+11272250: 00000000 00000000 00000000 00000000
+11272260: 00000000 00000000 00000000 00000000
+11272270: 00000000 00000000 00000000 00000000
+11272280: 00000511 001642eb d01605d3 d0160a21
+11272290: 0216050f 021605ae 00000000 00000000
+112722a0: 0216050f 0016907b 0016958a 00000000
+112722b0: 00000000 00000000 00000000 00000000
+112722c0: 00000000 00000000 00000000 00000000
+splash drawn
+initrd lo=0x0000000066f00000
+initrd hi=0x000000006994b6d2
+payload=0x00000000688b1a08
+phys base=0x0000000140000000
+mem size=0x00000000ffff0000
+virt base=0xfffffe0006000000
+entry va=0xfffffe00074c0488
+segments=0x000000000000000a
+boot_args=0x0000000142f9c000
+top=0x0000000142fa0000
+jump=0x00000001414c0488
+SWEET EARLY 1: arm_init entered (MMU on)
+SWEET EARLY 2: PE_init_platform done
+SWEET EARLY 3: ml_parse_cpu_topology done
+SWEET EARLY 4: cpu_bootstrap done
+SWEET EARLY 5: kernel_startup_bootstrap done
+SWEET EARLY 6: cpu_init done
+SWEET EARLY 7: entering arm_vm_init
+SWEET EARLY 8: leaving bootstrap TTBR0
+SWEET EARLY 9: kernel framebuffer VA live
+SWEET EARLY 10: TTBR0 off; TLB flushed
+SWEET EARLY 11: physmap table pointers rebound
+SWEET EARLY 12: calling pmap_bootstrap
+SWEET EARLY 13: pmap_bootstrap done
+SWEET EARLY 14: early I/O page tables ready
+SWEET EARLY 15: arm_vm_init returned
+SWEET EARLY 16: calling serial_init
+SWEET EARLY 17: fbcon config read; mapping
+SWEET EARLY 18: fbcon mapping returned
+SWEET EARLY 19: serial_init returned
+SWEET EARLY 20: kprintf startup complete
+Darwin Kernel Version 22.6.0: Mon Aug 14 05:06:07 UTC 2023; runner:xnu-8796.141.3
+pmap_startup() init/release time: 22078 microsec
+pmap_startup() delayed init/release of 0 pages
+vm_page_bootstrap: 258060 free pages, 4080 wired pages, (up to 0 of which are delayed free)
+VM boostrap: 97 maps, 204 entries and 512 holes available
+Maximum number of VM swap files: 100
+bufferhdr               : 0xfffffe1000560p00 - 0xffvffe10p0828000 (2848K)
+zones                   : 0xfffffe1000828000 - 0xfffffe3000828000 (128G)
+kmem_ptr_range          : 0xfffffe3000828000 - 0xfffffe43f44e8000 (79G)
+io_submap               : 0xfffffe43f44e8000 - 0xfffffe43f4ce8000 (8M)
+ipc_kernel_copy_map     : 0xfffffe43f4ce8000 - 0xfffffe43f54e8000 (8M)
+gIOKitPageableFixed0    : 0xfffffe43f54e8000 - 0xfffffe43fb4e8000 (96M)
+zone_meta               : 0xfffffe43fb4e8000 - 0xfffffe44040e8000 (140M)
+compressor              : 0xfffffe44040e8000 - 0xfffffe5404660000 (64G)
+kmem_ptr_range_meta     : 0xfffffe5404660000 - 0xfffffe5404ddc000 (7M)
+bsd_pageable            : 0xfffffe5404ddc000 - 0xfffffe54090e4000 (67M)
+gIOKitPageableFixed1    : 0xfffffe54090e4000 - 0xfffffe540f0e4000 (96M)
+gIOKitPageableFixed3    : 0xfffffe540f0e4000 - 0xfffffe54150e4000 (96M)
+kmem_data_range         : 0xfffffe54150e4000 - 0xfffffe8f735e8000 (237G)
+gIOKitPageableFixed2    : 0xfffffe8f735e8000 - 0xfffffe8f795e8000 (96M)
+mb                      : 0xfffffe8f795e8000 - 0xfffffe8f7d5e8000 (64M)
+ipc_kernel_map          : 0xfffffe8f7d5e8000 - 0xfffffe8f815e8000 (64M)
+kmem_sprayqtn_range     : 0xfffffe8f815e8000 - 0xfffffe8fffdfc000 (2024M)
+kmem_large_ranges[1]    : 0 - 0 (0B)
+kmem_large_ranges[2]    : 0 - 0 (0B)
+kmem_large_ranges[3]    : 0 - 0 (0B)
+kmem_large_ranges[4]    : 0xfffffe8f912ea800 - 0xfffffe8fffdfc000 (1771M)
+kmem_large_ranges[5]    : 0xfffffe5b80d84800 - 0xfffffe8f735e8000 (207G)
+"vm_compressor_mode" is 4
+zone_init: pgzalloc  0xfffffe1000828000:0xfffffe10027cc000 (31M) [1012 slots]
+zone_init: map VM    0xfffffe10027cc000:0xfffffe14cefd8000 (19G)
+zone_init: map RO    0xfffffe14cefd8000:0xfffffe16687dc000 (6G)
+zone_init: map GEN0  0xfffffe16687dc000:0xfffffe1b34fe8000 (19G)
+zone_init: map GEN1  0xfffffe1b34fe8000:0xfffffe20017f4000 (19G)
+zone_init: map GEN2  0xfffffe20017f4000:0xfffffe24ce000000 (19G)
+zone_init: map GEN3  0xfffffe24ce000000:0xfffffe299a810000 (19G)
+zone_init: map DATA  0xfffffe299a810000:0xfffffe3000828000 (25G)
+zone_init: metadata  0xfffffe43fb4f8000:0xfffffe44034f8000 (128M)
+zone_init: metabits  0xfffffe44034f8000:0xfffffe44040d8000 (11M)
+zone_init: extra     0:0 (0B)
+VM bootstrap done: 85 maps, 165 entries and 501 holes left
+Long logs support configured: size: 16384
+Log queues configured: slot count: 48, per-slot size: 32768, total size: 1572864
+Firehose configured: 16 chunks, 8 io pages
+OSLog stream configured: stream: 8192 bytes, cache: 2112 bytes
+OSLog stream verification: 0
+standard timeslicing quantum is 10000 us
+standard background quantum is 2500 us
+mig_table_max_displ = 54 mach_kobj_count = 374
+debug_log_init: Error!! gPanicBase is still not initialized
+debug_log_init: Error!! gPanicBase is still not initialized
+kdp_core zlib memory 0x8000
+Serial requested, consistent debug disabled or debug boot arg not present, configuring debugging over serial
+iBoot version: x676c-shim
+"name" not a kext
+"AAPL,phandle" not a kext
+SWEET AMFI: built-in interface registered (XML entitlements)
+calling mpo_policy_init for vnguard
+Security policy loaded: Guarded vnode policy (vnguard)
+SWEET: trust caches unavailable (Image4/AMFI not installed)
+keepsyms boot arg specified; keeping linkedit segment for symbols.
+No POST boot-arg set.
+SWEET: starting device-tree platform expert
+SWEET: platform expert registered
+SWEET AKS: AppleKeyStore registered (no passcode, unlocked)
+SWEET WDT: IOWatchdog registered (accepts check-ins, never fires)
+SWEET SURF: IOCoreSurfaceRoot registered
+SWEET SCALER: AppleM2ScalerCSCDriver registered
+SWEET HID: buttons registered
+SWEET HID: touch registered
+SWEET BATTERY: static fallback, 100% 4200mV external=1 charging=0
+SWEET TOPRGU: inherited mode 0x7d length 0xf000 status 0; enabled 1 timeout_us 30000000 heartbeat_us 1000000
+SWEET CPU: requested=6 selected=6 (limit=8)
+SWEET CPU: cpu=0 mpidr=0x0 came alive; SGI1 OK
+SWEET CPU: cpu=1 CPU_ON target=0x100 entry_pa=0x1414c2000 context=1
+SWEET CPU: cpu=1 PSCI CPU_ON rc=0
+SWEET FB: MT6789 DSI0 (0x14013000) and MUTEX0 (0x14001000) mapped for HW scanout
+SWEET GPU: powering on MT6789 Mali-G57 subsystem...
+SWEET CPU: cpu=1 mpidr=0x100 came alive; SGI1 OK
+SWEET CPU: cpu=2 CPU_ON target=0x200 entry_pa=0x1414c2000 context=2
+SWEET CPU: cpu=2 PSCI CPU_ON rc=0
+SWEET GPU: PMIC enables verified; inherited VGPU selector 0x38 VSRAM_GPU 0x38
+SWEET GPU: SPM PWR_STATUS pre=0xf83a1bc1/0xf83a1bc1 MFG0_CON=0x00001112
+SWEET CPU: cpu=2 mpidr=0x200 came alive; SGI1 OK
+SWEET GPU: SPM PWR_STATUS post=0xf83a1bfd/0xf83a1bfd MFG_CON[0..3]=0x0000000d 0x0000000d 0x0000000d 0x0000000d
+SWEET CPU: cpu=3 CPU_ON target=0x300 entry_pa=0x1414c2000 context=3
+SWEET CPU: cpu=3 PSCI CPU_ON rc=0
+SWEET CPU: cpu=3 mpidr=0x300 came alive; SGI1 OK
+SWEET CPU: cpu=4 CPU_ON target=0x400 entry_pa=0x1414c2000 context=4
+SWEET CPU: cpu=4 PSCI CPU_ON rc=0
+SWEET CPU: cpu=4 mpidr=0x400 came alive; SGI1 OK
+SWEET CPU: cpu=5 CPU_ON target=0x500 entry_pa=0x1414c2000 context=5
+SWEET CPU: cpu=5 PSCI CPU_ON rc=0
+SWEET CPU: cpu=5 mpidr=0x500 came alive; SGI1 OK
+SWEET CPU: 6/6 CPUs initialized, SGI1 verified
+Copyright (c) 1982, 1986, 1989, 1991, 1993
+	The Regents of the University of California. All rights reserved.
+
+MAC Framework successfully initialized
+using 5181 buffer headers and 4638 cluster IO buffer headers
+SWEET GPU: topckgen CLK_CFG_3=0x01020000 (mfg stable=0)
+SWEET GPU: Mali-G57 ID=0x90930010 (Arch 147 Rev 0) L2=0x08120206 Tiler=0x00000809 Mem=0x00000001 MMU=0x00002830 AS=0xff JS=0x7
+SWEET GPU: Mali-G57 registered as MaliMetal / MaliMetalDevice (vendor 0x13b5, device 0x9093)
+SWEET FB: AppleCLCD 1080x2400 stride 4320 at 0xfeabe000, default surface 1, presented as 1080x2400
+SWEET TOPRGU: heartbeat 2 gap_us 1001065 inherited_timeout_us 30000000
+SWEET TOPRGU: heartbeat 3 gap_us 1031911 inherited_timeout_us 30000000
+SWEET TOPRGU: heartbeat 4 gap_us 1008680 inherited_timeout_us 30000000
+ktriage_register_subsystem_strings: set subsystem 8 strings
+calling mpo_policy_init for SWEET AMFI
+Security policy loaded: SWEET built-in Mobile File Integrity (SWEET AMFI)
+SWEET AMFI: platform binary policy registered (0)
+calling mpo_policy_init for Sandbox
+Security policy loaded: SWEET permissive sandbox stand-in (Sandbox)
+SWEET Sandbox: permissive policy registered (0)
+SWEET HFS: hfs-627.100.6 registered
+mcache: 6 CPU(s), 64 bytes CPU cache line size
+mbinit: done [64 MB total pool size, (42/21) split]
+dlil_init: Waiting for all the create dlil kernel threads to get scheduled at least once.
+dlil_init: All the created dlil kernel threads have been scheduled at least once. Proceeding.
+SWEET AMFI: AppleMobileFileIntegrity registered; pinned trust set ready (2760 records)
+ifnet_attach: All kernel threads created for interface lo0 have been scheduled at least once. Proceeding.
+ifnet_attach: All kernel threads created for interface gif0 have been scheduled at least once. Proceeding.
+skip attaching fsw to lo0 using legacy TX modelifnet_attach: All kernel threads created for interface stf0 have been scheduled at least once. Proceeding.
+ufshci: MediaTek host, UFSHCI 2.0, 32 slots, CAP 0x3587071f, DMA at 0x145140000
+ufshci: as found: HCE 0x1 HCS 0x10f IS 0x0 DBR 0x0 RSR 0x1
+ufshci: UIC errors PA 0x0 DL 0x0 N 0x0 T 0x0 DME 0x0
+ufs_mtk: link up (probe 0x21100001), REFCLK_CTRL 0x3
+ufshci: UPIU 0x00 OCS 0x5 (try 0)
+ufshci: slot_wait spin 100000 slot 0 door=0x1 IS=0x815 now=787495248 end=828470816
+ufshci: slot 0 (UPIU 0x00 op 0x00) timed out (try 1)
+ufshci: slot_wait spin 100000 slot 0 door=0x1 IS=0x815 now=924170864 end=965052064
+ufshci: slot 0 (UPIU 0x00 op 0x00) timed out (try 2)
+ufshci: slot_wait spin 1000000slot 0 door=0x1 IS=0x815 now=1060755391 end=1101633884
+ufshci: slot 0 (UPIU 0x00 op 0x00) timed out (try 3)
+ufshci: adopted link does not carry a NOP: HCE 0x1 HCS 0x501 IS 0x815 DBR 0x1 RSR 0x0
+ufshci: UIC errors PA 0x80000010 DL 0x80002002 N 0x0 T 0x0 DME 0x0
+ufs_mtk: link up (probe 0x25100081), REFCLK_CTRL 0x3
+ufshci: HS gear tx 3 rx 3, lanes tx 2 rx 2, rate B
+ufshci: ready (full init)
+ufs_disk: LU 0: 4 MiB, 4096-byte blocks, boot LU A
+ufs_disk: LU 1: 4 MiB, 4096-byte blocks, boot LU B
+ufs_disk: LU 2: 122032 MiB, 4096-byte blocks
+ufshci: 1 data commands, last op 0x9e lba 0
+ufshci: 2 data commands, last op 0x88 lba 1
+ufshci: 3 data commands, last op 0x88 lba 2
+ufs_disk: disk0s1 boot_para               1 MiB
+ufs_disk: disk0s2 proinfo                 3 MiB
+ufs_disk: disk0s3 misc                    0 MiB
+ufs_disk: disk0s4 para                    0 MiB
+ufs_disk: disk0s5 expdb                 128 MiB
+ufs_disk: disk0s6 frp                     1 MiB
+ufs_disk: disk0s7 nvcfg                  32 MiB
+ufs_disk: disk0s8 nvdata                 64 MiB
+ufs_disk: disk0s9 tkv_a                   1 MiB
+ufs_disk: disk0s10 vbmeta_a                8 MiB
+ufs_disk: disk0s11 vbmeta_system_a         8 MiB
+ufs_disk: disk0s12 vbmeta_vendor_a         8 MiB
+ufs_disk: disk0s13 tkv_b                   1 MiB
+ufs_disk: disk0s14 vbmeta_b                8 MiB
+ufs_disk: disk0s15 vbmeta_system_b         8 MiB
+ufs_disk: disk0s16 vbmeta_vendor_b         8 MiB
+ufs_disk: disk0s17 metadata               32 MiB
+ufs_disk: disk0s18 persist                55 MiB
+ufs_disk: disk0s19 protect1                8 MiB
+ufs_disk: disk0s20 protect2                8 MiB
+ufs_disk: disk0s21 seccfg                  8 MiB
+ufs_disk: disk0s22 otp                    48 MiB
+ufs_disk: disk0s23 md1img_a              200 MiB
+ufs_disk: disk0s24 spmfw_a                 1 MiB
+ufs_disk: disk0s25 pi_img_a                1 MiB
+ufs_disk: disk0s26 dpm_a                   4 MiB
+ufs_disk: disk0s27 scp_a                   6 MiB
+ufs_disk: disk0s28 sspm_a                  1 MiB
+ufs_disk: disk0s29 mcupm_a                 1 MiB
+ufs_disk: disk0s30 gz_a                   32 MiB
+ufs_disk: disk0s31 lk_a                    4 MiB
+ufs_disk: disk0s32 logo_a                 24 MiB
+ufs_disk: disk0s33 boot_a                 64 MiB
+ufs_disk: disk0s34 vendor_boot_a          64 MiB
+ufs_disk: disk0s35 dtbo_a                  8 MiB
+ufs_disk: disk0s36 tee_a                   5 MiB
+ufs_disk: disk0s37 sec1                    2 MiB
+ufs_disk: disk0s38 efuse                   0 MiB
+ufs_disk: disk0s39 nvram                  64 MiB
+ufs_disk: disk0s40 dram_para              25 MiB
+ufs_disk: disk0s41 connsys_bt_a            8 MiB
+ufs_disk: disk0s42 connsys_wifi_a          8 MiB
+ufs_disk: disk0s43 connsys_gnss_a         13 MiB
+ufs_disk: disk0s44 md1img_b              200 MiB
+ufs_disk: disk0s45 spmfw_b                 1 MiB
+ufs_disk: disk0s46 pi_img_b                1 MiB
+ufs_disk: disk0s47 dpm_b                   4 MiB
+ufs_disk: disk0s48 scp_b                   6 MiB
+ufs_disk: disk0s49 sspm_b                  1 MiB
+ufs_disk: disk0s50 mcupm_b                 1 MiB
+ufs_disk: disk0s51 gz_b                   32 MiB
+ufs_disk: disk0s52 lk_b                    4 MiB
+ufs_disk: disk0s53 logo_b                 24 MiB
+ufs_disk: disk0s54 boot_b                 64 MiB
+ufs_disk: disk0s55 vendor_boot_b          64 MiB
+ufs_disk: disk0s56 connsys_bt_b            8 MiB
+ufs_disk: disk0s57 connsys_wifi_b          8 MiB
+ufs_disk: disk0s58 connsys_gnss_b          8 MiB
+ufs_disk: disk0s59 dtbo_b                  8 MiB
+ufs_disk: disk0s60 tee_b                   6 MiB
+ufs_disk: disk0s61 super               10546 MiB
+ufs_disk: disk0s62 tranfs                301 MiB
+ufs_disk: disk0s63 userdata            89271 MiB
+ufs_disk: disk0s64 flashinfo              16 MiB
+ufs_disk: disk0s65 iosroot             20480 MiB (read-write)
+ufs_disk: LUN 2, 122032 MiB, 65 partitions
+SWEET BOOT: diagnostic reset armed for 600 seconds
+SWEET SAMPLE: thread started
+SWEET TOUCH: starting in 5 s
+SWEET KEYS: X676C KPD volume bits 0/1; MT6366 TOPSTATUS bit1 power
+BSD root: disk0s65, major 1, minor 64
+ufshci: 4 data commands, last op 0x88 lba 25992960
+ufshci: 5 data commands, last op 0x88 lba 25992960
+ufshci: 6 data commands, last op 0x88 lba 25995138
+ufshci: 7 data commands, last op 0x88 lba 26176642
+ufshci: 8 data commands, last op 0x88 lba 26176642
+ufshci: 9 data commands, last op 0x88 lba 25996418
+ufshci: 10 data commands, last op 0x88 lba 25996418
+ufshci: 11 data commands, last op 0x88 lba 27756389
+ufshci: 12 data commands, last op 0x88 lba 26177208
+ufshci: 13 data commands, last op 0x88 lba 26176648
+ufshci: 14 data commands, last op 0x88 lba 26176644
+ufshci: 15 data commands, last op 0x88 lba 25993089
+ufshci: 16 data commands, last op 0x88 lba 25992961
+ufshci: 17 data commands, last op 0x88 lba 25993090
+jnl: b(1, 64): journal start/end pointers reset! (s 0x3fb000 e 0x7ef000)
+ufshci: 18 data commands, last op 0x88 lba 25992961
+ufshci: 19 data commands, last op 0x88 lba 25992962
+ufshci: 20 data commands, last op 0x88 lba 25992963
+ufshci: 21 data commands, last op 0x88 lba 25992964
+ufshci: 22 data commands, last op 0x88 lba 25992965
+ufshci: 23 data commands, last op 0x88 lba 25992966
+ufshci: 24 data commands, last op 0x88 lba 25992967
+ufshci: 25 data commands, last op 0x88 lba 25992968
+ufshci: 26 data commands, last op 0x88 lba 25992969
+hfs: mounted iOSRoot on device b(1, 64)
+SWEET: root volume is not authenticated (error 25); continuing unsealed
+No POST boot-arg set.
+load_init_program: attempting to load /usr/appleinternal/sbin/launchd.development
+ufshci: 27 data commands, last op 0x88 lba 27755847
+VM Swap Subsystem is ON
+load_init_program: attempting to load /sbin/launchd
+ufshci: 28 data commands, last op 0x88 lba 27755809
+ufshci: 29 data commands, last op 0x88 lba 28087503
+ufshci: 30 data commands, last op 0x88 lba 28087627
+ufshci: 31 data commands, last op 0x88 lba 27756387
+ufshci: 32 data commands, last op 0x88 lba 27755927
+ufshci: 33 data commands, last op 0x88 lba 27755853
+ufshci: 34 data commands, last op 0x88 lba 28088706
+ufshci: 35 data commands, last op 0x88 lba 28088922
+ufshci: 36 data commands, last op 0x88 lba 28088722
+ufshci: 37 data commands, last op 0x88 lba 28088846
+ufshci: 38 data commands, last op 0x88 lba 28088810
+ufshci: 39 data commands, last op 0x88 lba 28088710
+ufshci: 40 data commands, last op 0x88 lba 28088782
+ufshci: 41 data commands, last op 0x88 lba 28088818
+ufshci: 42 data commands, last op 0x88 lba 28088714
+ufshci: 43 data commands, last op 0x88 lba 28088718
+ufshci: 44 data commands, last op 0x88 lba 28088822
+ufshci: 45 data commands, last op 0x88 lba 28088850
+ufshci: 46 data commands, last op 0x88 lba 28088790
+ufshci: 47 data commands, last op 0x88 lba 28088834
+ufshci: 48 data commands, last op 0x88 lba 28088838
+ufshci: 49 data commands, last op 0x88 lba 28088842
+ufshci: 50 data commands, last op 0x88 lba 28088802
+ufshci: 51 data commands, last op 0x88 lba 28088770
+ufshci: 52 data commands, last op 0x88 lba 28088794
+ufshci: 53 data commands, last op 0x88 lba 28088826
+ufshci: 54 data commands, last op 0x88 lba 28088746
+shared_region: 0x668954834235b5e5 [1(launchd)] check_np(0x16f893bc0) vm_shared_region_start_address() failed
+ufshci: 55 data commands, last op 0x88 lba 28088754
+ufshci: 56 data commands, last op 0x88 lba 28088758
+ufshci: 57 data commands, last op 0x88 lba 28088762
+SWEET Sandbox: launchd op 2
+Darwin Ignition Sequence Version 1.0.0: Tue Jul  2 20:41:23 PDT 2024; root:libignition-51~1974/libignition_core/RELEASE_ARM64
+libignition: 1: arguments           :
+libignition: 1:   ignition level    : 0x1
+libignition: 1:   force dylib root  : 0x0
+libignition: 1:   halt after stage  : n/a
+libignition: 1: ignition blob not available
+libignition: 1: configuration         :
+libignition: 1:   program             : launchd
+libignition: 1:   os environment      : n/a
+libignition: 1:   rd                  : ufs
+libignition: 1:   arp0                : n/a
+libignition: 1:   rp                  : n/a
+libignition: 1:   pivot src           : n/a
+libignition: 1:   root ramdisk        : 0x0
+libignition: 1:   restore             : 0x0
+libignition: 1:   root device info    : 0x0
+libignition: 1:   can haz debugger    : 0x1
+libignition: 1:   rootfs mount flags  : 0x480d001
+libignition: 1:   ecid                : 0x0
+libignition: 1:   hardware target     : d22ap
+libignition: 1:   initproc            : 0x1
+libignition: 1:   single user         : 0x0
+libignition: 1:   userspace reboot    : 0x0
+libignition: 1:   secure boot level   : 0x0
+libignition: 1:   os version          : n/a
+libignition: 1: parameters          :
+libignition: 1:   version           : 0x1
+libignition: 1:   argc              : 0x1
+libignition: 1:   log fd            : 0xffffffffffffffff
+libignition: 1:   platform          : 0x2
+libignition: 1: boot spec           :
+libignition: 1:   name              : local
+libignition: 1:   stage count       : 0x7
+libignition: 1:        hello: commence primary ignition
+libignition: 1:        hello: hello from launchd.1
+libignition: 1:      preboot: ignition level insufficient: actual = 1, required >= 2
+libignition: 1: cryptex1 sniff: ignition level insufficient: actual = 1, required >= 2
+libignition: 1:        graft: ignition level insufficient: actual = 1, required >= 3
+libignition: 1: select os cryptex path: ignition level insufficient: actual = 1, required >= 3
+libignition: 1:  dylib_cache: discovering shared library cache
+libignition: 1:  dylib_cache: finding shared cache on system volume: ignition level = 1, search root fd = 4, subpath = System/Library/Caches/com.apple.dyld/
+ufshci: 58 data commands, last op 0x88 lba 26176652
+ufshci: 59 data commands, last op 0x88 lba 26178310
+ufshci: 60 data commands, last op 0x88 lba 26178150
+ufshci: 61 data commands, last op 0x88 lba 26217703
+ufshci: 62 data commands, last op 0x88 lba 26214631
+libignition: 1:  dylib_cache: opened shared cache directory: /System/Library/Caches/com.apple.dyld
+libignition: 1:      goodbye: ignition sequence complete
+ufshci: 63 data commands, last op 0x88 lba 28088730
+shared_region: 0x668954834235b5e5 [1(launchd)] check_np(0x16f893150) vm_shared_region_start_address() failed
+ufshci: 64 data commands, last op 0x88 lba 27756707
+ufshci: 65 data commands, last op 0x88 lba 27756499
+ufshci: 66 data commands, last op 0x88 lba 27756485
+ufshci: 67 data commands, last op 0x88 lba 27757107
+ufshci: 68 data commands, last op 0x88 lba 28229427
+ufshci: 69 data commands, last op 0x88 lba 28229519
+ufshci: 70 data commands, last op 0x88 lba 28229467
+ufshci: 71 data commands, last op 0x88 lba 28088778
+ufshci: 72 data commands, last op 0x88 lba 27756489
+ufshci: 73 data commands, last op 0x88 lba 28229523
+ufshci: 74 data commands, last op 0x88 lba 28257455
+ufshci: 75 data commands, last op 0x88 lba 28229563
+ufshci: 76 data commands, last op 0x88 lba 28257523
+ufshci: 77 data commands, last op 0x88 lba 28257543
+ufshci: 78 data commands, last op 0x88 lba 27756487
+ufshci: 79 data commands, last op 0x88 lba 28257555
+ufshci: 80 data commands, last op 0x88 lba 28285763
+ufshci: 81 data commands, last op 0x88 lba 28257595
+ufshci: 82 data commands, last op 0x88 lba 28285827
+ufshci: 83 data commands, last op 0x88 lba 28285867
+ufshci: 84 data commands, last op 0x88 lba 28285875
+ufshci: 85 data commands, last op 0x88 lba 28313783
+ufshci: 86 data commands, last op 0x88 lba 28285915
+ufshci: 87 data commands, last op 0x88 lba 28313843
+ufshci: 88 data commands, last op 0x88 lba 28313931
+ufshci: 89 data commands, last op 0x88 lba 28313939
+ufshci: 90 data commands, last op 0x88 lba 28342059
+ufshci: 91 data commands, last op 0x88 lba 28313979
+ufshci: 92 data commands, last op 0x88 lba 28342115
+ufshci: 93 data commands, last op 0x88 lba 28342179
+ufshci: 94 data commands, last op 0x88 lba 28342195
+ufshci: 95 data commands, last op 0x88 lba 28370399
+ufshci: 96 data commands, last op 0x88 lba 28342235
+ufshci: 97 data commands, last op 0x88 lba 27757097
+ufshci: 98 data commands, last op 0x88 lba 28370467
+ufshci: 99 data commands, last op 0x88 lba 28370563
+ufshci: 100 data commands, last op 0x88 lba 28370579
+ufshci: 101 data commands, last op 0x88 lba 28398799
+ufshci: 102 data commands, last op 0x88 lba 28370619
+ufshci: 103 data commands, last op 0x88 lba 28398867
+ufshci: 104 data commands, last op 0x88 lba 28398959
+ufshci: 105 data commands, last op 0x88 lba 28398963
+ufshci: 106 data commands, last op 0x88 lba 28425271
+ufshci: 107 data commands, last op 0x88 lba 28399003
+ufshci: 108 data commands, last op 0x88 lba 28425331
+ufshci: 109 data commands, last op 0x88 lba 28425427
+ufshci: 110 data commands, last op 0x88 lba 28425443
+ufshci: 111 data commands, last op 0x88 lba 28453487
+ufshci: 112 data commands, last op 0x88 lba 28425483
+ufshci: 113 data commands, last op 0x88 lba 27756491
+ufshci: 114 data commands, last op 0x88 lba 28453555
+ufshci: 115 data commands, last op 0x88 lba 28453663
+ufshci: 116 data commands, last op 0x88 lba 28453667
+ufshci: 117 data commands, last op 0x88 lba 28477403
+ufshci: 118 data commands, last op 0x88 lba 28453707
+ufshci: 119 data commands, last op 0x88 lba 28477459
+ufshci: 120 data commands, last op 0x88 lba 28477547
+ufshci: 121 data commands, last op 0x88 lba 28477555
+ufshci: 122 data commands, last op 0x88 lba 28503775
+ufshci: 123 data commands, last op 0x88 lba 28477595
+ufshci: 124 data commands, last op 0x88 lba 28503827
+ufshci: 125 data commands, last op 0x88 lba 28503887
+ufshci: 126 data commands, last op 0x88 lba 28503891
+ufshci: 127 data commands, last op 0x88 lba 28531943
+ufshci: 128 data commands, last op 0x88 lba 28503931
+shared_region: [1(launchd)] map_and_slide: 44 files, 52 mappings
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x66895483420181e5:'dyld_shared_cache_arm64'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x66895483420180d5:'dyld_shared_cache_arm64.01'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342017fc5:'dyld_shared_cache_arm64.02'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342017eb5:'dyld_shared_cache_arm64.03'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342017c95:'dyld_shared_cache_arm64.04'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342018fb5:'dyld_shared_cache_arm64.05'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342018ea5:'dyld_shared_cache_arm64.06'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342018d95:'dyld_shared_cache_arm64.07'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342018c85:'dyld_shared_cache_arm64.08'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342018a65:'dyld_shared_cache_arm64.09'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342018955:'dyld_shared_cache_arm64.10'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342018845:'dyld_shared_cache_arm64.11'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342018735:'dyld_shared_cache_arm64.12'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342019945:'dyld_shared_cache_arm64.13'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342019725:'dyld_shared_cache_arm64.14'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342019615:'dyld_shared_cache_arm64.15'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342019505:'dyld_shared_cache_arm64.16'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x66895483420193f5:'dyld_shared_cache_arm64.17'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x66895483420192e5:'dyld_shared_cache_arm64.18'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x66895483420191d5:'dyld_shared_cache_arm64.19'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x66895483420190c5:'dyld_shared_cache_arm64.20'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x668954834201a1c5:'dyld_shared_cache_arm64.21'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x668954834201a0b5:'dyld_shared_cache_arm64.22'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342019fa5:'dyld_shared_cache_arm64.23'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342019e95:'dyld_shared_cache_arm64.24'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342019d85:'dyld_shared_cache_arm64.25'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342019c75:'dyld_shared_cache_arm64.26'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342019b65:'dyld_shared_cache_arm64.27.dylddata'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x668954834201ae85:'dyld_shared_cache_arm64.28.dyldlinkedit'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x668954834201aa45:'dyld_shared_cache_arm64.29'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x668954834201a935:'dyld_shared_cache_arm64.30'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x668954834201a825:'dyld_shared_cache_arm64.31'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x668954834201a715:'dyld_shared_cache_arm64.32'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x668954834201a4f5:'dyld_shared_cache_arm64.33'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x668954834201a3e5:'dyld_shared_cache_arm64.34'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x668954834201a2d5:'dyld_shared_cache_arm64.35'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x66895483420171f5:'dyld_shared_cache_arm64.36'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x668954834201b0a5:'dyld_shared_cache_arm64.37'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x668954834201af95:'dyld_shared_cache_arm64.38'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342027305:'dyld_shared_cache_arm64.39'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342027b85:'dyld_shared_cache_arm64.40'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342027a75:'dyld_shared_cache_arm64.41.dylddata'): not in trust cache
+shared_region: 0x668954834235b5e5 [1(launchd)] map(0x6689548342027965:'dyld_shared_cache_arm64.42.dyldlinkedit'): not in trust cache
+shared_region: [1(launchd)] map_and_slide done kr=0x0
+SWEET Sandbox: launchd op 4
+com.apple.xpc.launchd|1969-12-31 16:01:27.191285 <Notice>: hello
+com.apple.xpc.launchd|1969-12-31 16:01:27.198691 <Error>: Could not opt into 50 MB Jetsam high watermark: 22: Invalid argument
+skip attaching fsw to lo0 using legacy TX modelcom.apple.xpc.launchd|1969-12-31 16:01:27.199366 <Notice>: Darwin Bootstrapper Version 7.0.0: Thu Feb  1 20:33:09 PST 2024; root:libxpc_executables-2462.140.4.702.1~1/launchd/RELEASE_ARM64
+com.apple.xpc.launchd|1969-12-31 16:01:27.199629 <Notice>: boot-args = debug=0xc serial=3 cpus=6 keepsyms=1 -v wdt=-1 wdt_test=no_user_checkin rd=ufs ufsroot=iosroot ufsrw=iosroot unentitled_ios_sim_launch=1 ignition_level=1 launchd_unsecure_cache=1 sweetsample=SweetRegisterPos,lsd,PosterBoard,SpringBoard,backboardd sweetiolog=- sweetakslog=0 ufsbeat=0 sweetscan=- sweetnull=launchd,dyld,init,backboardd,SpringBoard,lsd,containermanagerd,PosterBoard sweetfb_noconsole=1 sweetfb_native=1 sweetfb_stayon=0 sweetfb_trace=0 sweetreboot=600 sweetsample_delay=60 sweetsample_count=1
+com.apple.xpc.launchd|1969-12-31 16:01:27.207741 (system) <Notice>: entering ondemand mode
+com.apple.xpc.launchd|1969-12-31 16:01:27.208642 (system) <Notice>: created
+com.apple.xpc.launchd|1969-12-31 16:01:27.210027 (fsck) <Notice>: Doing boot task
+failed to get filesystem info
+fsck: not booting main or diagnostic OS. Skipping fsck on OS container
+com.apple.xpc.launchd|1969-12-31 16:01:27.416921 (mount-phase-1) <Notice>: Doing boot task
+failed to get filesystem info
+failed to get filesystem info
+mount: data volume missing, but not required in env: 0
+vnode_create_internal: alias vnode 0xfffffe24cded79a0 is in state of change (start)
+vnode_create_internal: alias vnode 0xfffffe24cded79a0 is in state of change (end)
+hfs: Removed 4 orphaned / unlinked files and 15 directories 
+/dev/disk0s65 on / (hfs, local, journaled, noatime)
+ERROR: BindFS bindfs_mount: lookup of /private/preboot/B4F8B7CFB20F15B3E82212D839F8A47544B9341FF57FE1F5A9D24944281A4B5BCB9AC9C83364E1FA9F08EF47D09AED6A/usr/standalone/firmware failed error: 2
+com.apple.xpc.launchd|1969-12-31 16:01:27.566059 (data-protection) <Notice>: Doing boot task
+init_data_protection: No SEP present on this device
+com.apple.xpc.launchd|1969-12-31 16:01:27.723950 (finish-obliteration) <Notice>: Doing boot task
+Obliterator: In INIT check
+Wed Dec 31 16:01:27 1969: checkOblitNVRAMkey: IORegistryEntryFromPath failed [gF: 0x0000000000000000]
+Obliterator: No obliteration needed, continue booting, returning 0
+com.apple.xpc.launchd|1969-12-31 16:01:27.843368 (detect-installed-roots) <Notice>: Doing boot task
+com.apple.xpc.launchd|1969-12-31 16:01:27.844145 <Notice>: No cookie from system volume
+com.apple.xpc.launchd|1969-12-31 16:01:27.844322 <Notice>: No cookie: /private/preboot/B4F8B7CFB20F15B3E82212D839F8A47544B9341FF57FE1F5A9D24944281A4B5BCB9AC9C83364E1FA9F08EF47D09AED6A/.roots-installed
+com.apple.xpc.launchd|1969-12-31 16:01:27.844367 (commit-boot-mode) <Notice>: Doing boot task
+com.apple.xpc.launchd|1969-12-31 16:01:27.844397 <Notice>: boot-mode committed: (null)
+com.apple.xpc.launchd|1969-12-31 16:01:27.844424 (restore-datapartition) <Notice>: Doing boot task
+failed to get filesystem info
+com.apple.xpc.launchd|1969-12-31 16:01:27.887583 (restore-datapartition) <Notice>: optional boot task not present
+failed to get filesystem info
+com.apple.xpc.launchd|1969-12-31 16:01:27.887670 (mount-phase-2) <Notice>: Doing boot task
+mount: data volume missing, but not required in env: 0
+ERROR: BindFÓ bindfs_mount: lookup of ¯private/var/hardware/Pearl/System/Library/Pearl/ReferenceFrames failed error: 2
+ERROR: BindFS bindfs_mount: lookup of /private/var/hardware/FactoryData/System/Library/Caches/com.apple.factorydata failed error: 2
+com.apple.xpc.launchd|1969-12-31 16:01:27.985781 (init-with-data-volume) <Notice>: Doing boot task
+com.apple.xpc.launchd|1969-12-31 16:01:28.004119 (MSUEarlyBootTask) <Notice>: Doing boot task
+MSUEarlyBootTask: MSUEarlyBootTask running
+main: Content from the ramdisk will be present at /private/var/MobileSoftwareUpdate//b4f8b7cfb20f15b3e82212d839f8a47544b9341ff57fe1f5a9d24944281a4b5bcb9ac9c83364e1fa9f08ef47d09aed6a-MSUData if it exists
+MSUEarlyBootTask: I have nothing to do. Goodbye!!
+com.apple.xpc.launchd|1969-12-31 16:01:28.123564 (fips) <Notice>: Doing boot task
+About to call the FIPS_POST function in the corecrypto.dylib
+Tracing: disabled
+FIPSPOST_USER [1146099647] fipspost_post:152: [FIPSPOST][Module-ID] Apple corecrypto Module v13.0 [Apple ARM, User, Software, SL1]
+FIPSPOST_USER [1146292820] fipspost_post:160: PASSED: (2 ms) - fipspost_post_hmac
+FIPSPOST_USER [1146516051] fipspost_post:164: PASSED: (4 ms) - fipspost_post_integrity
+FIPSPOST_USER [1146682228] fipspost_post:168: PASSED: (0 ms) - fipspost_post_indicator
+FIPSPOST_USER [1146844091] fipspost_post:169: PASSED: (0 ms) - fipspost_post_aes_ecb
+FIPSPOST_USER [1147006600] fipspost_post:170: PASSED: (0 ms) - fipspost_post_aes_cbc
+FIPSPOST_USER [1147482860] fipspost_post:171: PASSED: (24 ms) - fipspost_post_rsa_sig
+FIPSPOST_USER [1148204984] fipspost_post:172: PASSED: (43 ms) - fipspost_post_ecdsa
+FIPSPOST_USER [1148387719] fipspost_post:173: PASSED: (1 ms) - fipspost_post_ecdh
+FIPSPOST_USER [1148549695] fipspost_post:174: PASSED: (0 ms) - fipspost_post_aes_ccm
+FIPSPOST_USER [1148712036] fipspost_post:175: PASSED: (0 ms) - fipspost_post_aes_cmac
+FIPSPOST_USER [1148876108] fipspost_post:176: PASSED: (0 ms) - fipspost_post_hkdf
+FIPSPOST_USER [1149805911] fipspost_post:177: PASSED: (59 ms) - fipspost_post_pbkdf
+FIPSPOST_USER [1149969176] fipspost_post:178: PASSED: (0 ms) - fipspost_post_drbg_hmac
+FIPSPOST_USER [1150132512] fipspost_post:180: PASSED: (0 ms) - fipspost_post_kdf_ctr
+FIPSPOST_USER [1150294356] fipspost_post:181: PASSED: (0 ms) - fipspost_post_aes_gcm
+FIPSPOST_USER [1150456075] fipspost_post:182: PASSED: (0 ms) - fipspost_post_aes_xts
+FIPSPOST_USER [1150619372] fipspost_post:183: PASSED: (0 ms) - fipspost_post_tdes_ecb
+FIPSPOST_USER [1150781851] fipspost_post:184: PASSED: (0 ms) - fipspost_post_drbg_ctr
+FIPSPOST_USER [1152077171] fipspost_post:186: PASSED: (87 ms) - fipspost_post_ffdh
+FIPSPOST_USER [1152874504] fipspost_post:187: PASSED: (48 ms) - fipspost_post_rsa_enc_dec
+FIPSPOST_USER [1153036415] fipspost_post:206: all tests PASSED (533 ms)
+Returned from calling the FIPS_POST function in the corecrypto.dylib: result = true
+com.apple.xpc.launchd|1969-12-31 16:01:28.721064 (keybag) <Notice>: Doing boot task
+****** IN MKB_INIT ****
+MKB_INIT: mount is with NO CPROTECT:0x1480d000 on  (/private/var/)
+MKB_INIT: mount point (/private/var/) does not support Data Protection
+MKB_INIT: System Keybag loaded
+MKB_INIT: Could not get options entry from the device tree
+Unable to set /private/var//tmp to class D!****** DONE MKB_INIT ****
+com.apple.xpc.launchd|1969-12-31 16:01:28.864837 (usermanagerd) <Notice>: Doing boot task
+****** IN UMD_INIT ****
+****** STARTING EARLYBOOT SETUP ****
+UMD_INIT: STARTING EARLYBOOT SETUP
+UMD_INIT: LOADING USER SESSIONS
+UMD_INIT: Device Configuration Type:0
+UMD_INIT: BOOTEDUSER is:501
+UMD_INIT: diskLoadUserSessions, APNSID:, set to 18446744073709551615
+UMD_INIT: Reloaded _gUserSessionTable (
+        {
+        MKBUserSessionCreateTimeStamp = "1970-01-01 00:00:58 +0000";
+        MKBUserSessionDirty = 0;
+        MKBUserSessionDisplayName = mobile;
+        MKBUserSessionFirstName = mobile;
+        MKBUserSessionForeground = 1;
+        MKBUserSessionGroupID = 501;
+        MKBUserSessionID = 501;
+        MKBUserSessionLanguage = "en_US";
+        MKBUserSessionLastName = mobile;
+        MKBUserSessionLibinfoHomeDir = "/var/mobile";
+        MKBUserSessionLoginTimeStamp = "1970-01-01 00:00:58 +0000";
+        MKBUserSessionLoginUser = 0;
+        MKBUserSessionName = mobile;
+        MKBUserSessionNeedsMount = 1;
+        MKBUserSessionShortName = mobile;
+        MKBUserSessionType = UserSessionOther;
+        MKBUserSessionUUID = "8E4F2655-68CE-41F0-ACC6-DC2F421A1B9B";
+        MKBUserSessionVolumeFSType = UserVolumeAPFSNative;
+        MKBUserSessionisAdminKey = 1;
+        MKBUserSessionisPrimary = 1;
+    }
+)
+UMD_INIT: FOUND NO SYNC BUBBLE UIDS:0
+UMD_INIT: FOUND NO LRU TABLE UIDS:0
+UMD_INIT: FOUND NO VOLUMETYPE, setting up volume type
+UMD_INIT: Set the new volume type to APFSNativeDevice
+UMD_INIT: SAVING SESSION TODISK
+UMD_INIT: SESSION TABLE TO BLOB
+UMD_INIT: NOTHING TO SAVE IN LRU UID LIST
+UMD_INIT: diskSaveUserSessions Success
+UMD_INIT: Read user sessions in _gUserSessionTable (
+        {
+        MKBUserSessionCreateTimeStamp = "1970-01-01 00:00:58 +0000";
+        MKBUserSessionDirty = 0;
+        MKBUserSessionDisplayName = mobile;
+        MKBUserSessionFirstName = mobile;
+        MKBUserSessionForeground = 1;
+        MKBUserSessionGroupID = 501;
+        MKBUserSessionID = 501;
+        MKBUserSessionLanguage = "en_US";
+        MKBUserSessionLastName = mobile;
+        MKBUserSessionLibinfoHomeDir = "/var/mobile";
+        MKBUserSessionLoginTimeStamp = "1970-01-01 00:00:58 +0000";
+        MKBUserSessionLoginUser = 0;
+        MKBUserSessionName = mobile;
+        MKBUserSessionNeedsMount = 1;
+        MKBUserSessionShortName = mobile;
+        MKBUserSessionType = UserSessionOther;
+        MKBUserSessionUUID = "8E4F2655-68CE-41F0-ACC6-DC2F421A1B9B";
+        MKBUserSessionVolumeFSType = UserVolumeAPFSNative;
+        MKBUserSessionisAdminKey = 1;
+        MKBUserSessionisPrimary = 1;
+    }
+)
+UMD_INIT: LOADED USER SESSIONS
+UMD_INIT: failed to read nextsession dict
+UMD_INIT: Unable to Obtained foreground, curFG:502, nextID:-1
+UMD_INIT: Failed to get next session, booting with default id to be Loginwindow UID
+UMD_INIT: BootedUser is:501
+UMD_INIT: Regular mode Setup for user:501: Num Sessions:1, CurrentsessionID:-1
+UMD_INIT: FAILED to Set Foreground ID + multiuser in commpage successfully
+UMD_INIT: LOADING PERSONA..
+UMD_INIT: Manifest version: 1
+UMD_INIT: Loaded Persona Generation ID from manifest:1
+UMD_INIT: Adding 1000 entry to persona Table for user:8E4F2655-68CE-41F0-ACC6-DC2F421A1B9B
+UMD_INIT: Adding 0 entry to persona Table for user:8E4F2655-68CE-41F0-ACC6-DC2F421A1B9B
+UMD_INIT: Adding 200 entry to persona Table for user:8E4F2655-68CE-41F0-ACC6-DC2F421A1B9B
+UMD_INIT: Adding 100 entry to persona Table for user:8E4F2655-68CE-41F0-ACC6-DC2F421A1B9B
+UMD_INIT: Adding 99 entry to persona Table for user:FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF
+UMD_INIT: Adding 199 entry to persona Table for user:FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF
+UMD_INIT: Loaded persona manifest
+UMD_INIT: Failed to retrieve info for kernel persona 99: No such process
+UMD_INIT: PersonaID:99 not loaded, loading..
+UMD_INIT: Allocated kernel persona with ID: 99, Type: 4, UID: 4294967295
+UMD_INIT: Failed to retrieve info for kernel persona 199: No such process
+UMD_INIT: PersonaID:199 not loaded, loading..
+UMD_INIT: Allocated kernel persona with ID: 199, Type: 6, UID: 4294967295
+UMD_INIT: Failed to retrieve info for kernel persona 1000: No such process
+UMD_INIT: PersonaID:1000 not loaded, loading..
+UMD_INIT: Allocated kernel persona with ID: 1000, Type: 5, UID: 501
+UMD_INIT: Failed to retrieve info for kernel persona 200: No such process
+UMD_INIT: PersonaID:200 not loaded, loading..
+UMD_INIT: Allocated kernel persona with ID: 200, Type: 6, UID: 501
+UMD_INIT: Failed to retrieve info for kernel persona 100: No such process
+UMD_INIT: PersonaID:100 not loaded, loading..
+UMD_INIT: Allocated kernel persona with ID: 100, Type: 4, UID: 501
+UMD_INIT: setup kernel personas
+UMD_INIT: Failed to notify_register_check com.apple.mobile.usermanagerd.personageneration_changed: 8
+UMD_INIT: Failed to notify generation changed: Failed to register for darwin notification token
+UMD_INIT: DONE EARLYBOOT SETUP
+****** DONE EARLYBOOT SETUP ****
+****** DONE UMD_INIT ****
+com.apple.xpc.launchd|1969-12-31 16:01:29.884031 (dirs_cleaner) <Notice>: Doing boot task
+dc_reset: /tmp: Invalid argument
+dc_reset: /var/run: Invalid argument
+[System Event] [1169475012] [INFO] [Subsystem: launchd] [Event: fsck] Doing boot task
+[System Event] [1169582363] [INFO] [Subsystem: launchd] [Event: mount-phase-1] Doing boot task
+[System Event] [1169691368] [INFO] [Subsystem: launchd] [Event: data-protection] Doing boot task
+[System Event] [1169798167] [INFO] [Subsystem: launchd] [Event: finish-obliteration] Doing boot task
+[System Event] [1169906539] [INFO] [Subsystem: launchd] [Event: detect-installed-roots] Doing boot task
+[System Event] [1170013652] [INFO] [Subsystem: launchd] [Event: commit-boot-mode] Doing boot task
+[System Event] [1170121979] [INFO] [Subsystem: launchd] [Event: restore-datapartition] Doing boot task
+[System Event] [1170226864] [INFO] [Subsystem: launchd] [Event: restore-datapartition] optional boot task not present
+[System Event] [1170334788] [INFO] [Subsystem: launchd] [Event: mount-phase-2] Doing boot task
+[System Event] [1170441679] [INFO] [Subsystem: launchd] [Event: init-with-data-volume] Doing boot task
+[System Event] [1170550256] [INFO] [Subsystem: launchd] [Event: MSUEarlyBootTask] Doing boot task
+[System Event] [1170656735] [INFO] [Subsystem: launchd] [Event: fips] Doing boot task
+[System Event] [1170766119] [INFO] [Subsystem: launchd] [Event: keybag] Doing boot task
+[System Event] [1170872696] [INFO] [Subsystem: launchd] [Event: usermanagerd] Doing boot task
+[System Event] [1170981927] [INFO] [Subsystem: launchd] [Event: dirs_cleaner] Doing boot task
+com.apple.xpc.launchd|1969-12-31 16:01:29.917981 <Notice>: launchd logging initialized. name: com.apple.xpc.launchd pid: 1
+com.apple.xpc.launchd|1969-12-31 16:01:29.917992 (xpcroleaccountd) <Notice>: Doing boot task
+[System Event] [117±3°6928] [INFO] [Subsystem: launchd] [Event: xpcroleaccountd] Doing boot task
+com.apple.xpc.launchd|1969-12-31 16:01:29.938513 (init_featureflags) <Notice>: Doing boot task
+[System Event] [1171524820] [INFO] [Subsystem: launchd] [Event: init_featureflags] Doing boot task
+com.apple.xpc.launchd|1969-12-31 16:01:30.342465 (auearlyboot) <Notice>: Doing boot task
+[System Event] [1174558504] [INFO] [Subsystem: launchd] [Event: auearlyboot] Doing boot task
+auearlyboot: -[FudEarlyBoot doFUDEarlyBoot:](): Starting Early Boot
+auearlyboot: -[AppleFirmwareUpdateController getEarlyBootListInternal:]: Pending critical earlyBoot entries (
+)
+auearlyboot: No Early Boot Accessories
+auearlyboot: -[FudEarlyBoot calculateTimeTakenForEarlyBootEntries] Time Taken to wait for critical earlyBoot entries: 0.000000 sec
+auearlyboot: -[FudEarlyBoot doFUDEarlyBoot:](): End Early Boot
+auearlyboot: Exitng Early Boot
+com.apple.xpc.launchd|1969-12-31 16:01:30.462245 (tzinit) <Notice>: Doing boot task
+[System Event] [1176174687] [INFO] [Subsystem: launchd] [Event: tzinit] Doing boot task
+com.apple.xpc.launchd|1969-12-31 16:01:30.488076 (finish-restore) <Notice>: Doing boot task
+[System Event] [1176510635] [INFO] [Subsystem: launchd] [Event: finish-restore] Doing boot task
+com.apple.xpc.launchd|1969-12-31 16:01:30.510942 (finish-demo-restore) <Notice>: Doing boot task
+[System Event] [1176844439] [INFO] [Subsystem: launchd] [Event: finish-demo-restore] Doing boot task
+SWEET TOUCH: X676C I2C0 FT5452J id=54:52 err=0/0 irq=1
+SWEET TOUCH: FT5452J, five contacts, 1080x2400, poll=10ms
+SWEET TOUCH: frame=1 status=0x1 dma=0x1451a4000 raw=ff ff ff ff ff ff ff ff ff ff ff ff
+SWEET TOUCH: X676C report error=5 status=0x1
+SWEET TOUCH: frame=2 status=0x1 dma=0x1451a4000 raw=ff ff ff ff ff ff ff ff ff ff ff ff
+SWEET TOUCH: frame=3 status=0x1 dma=0x1451a4000 raw=ff ff ff ff ff ff ff ff ff ff ff ff
+com.apple.xpc.launchd|1969-12-31 16:01:32.464927 (sysstatuscheck) <Notice>: Doing boot task
+[System Event] [1202210228] [INFO] [Subsystem: launchd] [Event: sysstatuscheck] Doing boot task
+com.apple.xpc.launchd|1969-12-31 16:01:32.489186 (prng_seedctl) <Notice>: Doing boot task
+kern.prng.user_reseed_count: (-1) (2) No such file or directory
+[System Event] [1202548420] [INFO] [Subsystem: launchd] [Event: prng_seedctl] Doing boot task
+failed to load virtual random: (-147) (-536870212)
+com.apple.xpc.launchd|1969-12-31 16:01:32.522803 (launchd_cache_loader) <Notice>: Doing boot task
+[System Event] [1202963295] [INFO] [Subsystem: launchd] [Event: launchd_cache_loader] Doing boot task
+0 Found valid port: 7683 Valid: 1
+1 Found valid port: 0 Valid: 0
+2 Found valid port: 0 Valid: 0
+Using default cache paths
+Code: /System/Library/xpc/launchd.plist Sig: /System/Library/xpc/launchd.plist.sig
+Using unsecure cache: /System/Library/xpc/launchd.plist
+Trying to send bytes to launchd: 7683 16384
+Sending validated cache to launchd
+Cache sent to launchd successfully
+com.apple.xpc.launchd|1969-12-31 16:01:32.884947 <Notice>: launchd UUID: 5C15DB07-B3BC-3DF3-B62F-3E498B993B8E
+com.apple.xpc.launchd|1969-12-31 16:01:32.885006 (boot) <Notice>: Early boot complete. Continuing system boot.
+[System Event] [1207837888] [INFO] [Subsystem: launchd] [Event: boot] Early boot complete. Continuing system boot.
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET Sandbox: logd privilege 1002 denied
+SWEET WDT: watchdogd sel 0 in 0/0 out 1/0 -> ok
+ufshci: UPIU 0x01 OCS 0xf (try 1)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET Sandbox: cfprefsd op 12
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+KextLog: kernelmanagerd is not active
+KextLog: Loading FileSet KC(s)
+deferred rematching count 0
+KextLog: kernelmanagerd is active
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET Sandbox: containermanager op 16
+SWEET Sandbox: containermanager op 15
+|backboardd| objc[57]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105ddae20) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin.|backboardd| ck4HIDServicePlugin (0x105dfebc0). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105ddae70) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin.p|backboardd| k4HIDServicePlugin (0x105dfec10). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105ddaec0) and /Sùstem/Librar}/HIFPlugins/ServicePlugins/DualShock4HIDSer|backboardd| gin/DualShock4HIDServicePlugin (0x105dfecb0). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105ddaec0) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHI|backboardd| .plugin/GenericGamepadHIDServicePlugin (0x105e22a88). One of the two will be used. Which one is undefined.
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+|backboardd| objc[57]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105ddae70) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePlug|backboardd| ricGamepadHIDServicePlugin (0x105e22ad8). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105ddae20) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePlu|backboardd| ericGamepadHIDServicePlugin (0x105e22b78). One of the two will be used. Which one is undefined.
+SWEET AMFI: lsd selector 6 pinned membership -> 0x0
+|backboardd| objc[57]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105ddaec0) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDService|backboardd| JoyConHIDServicePlugin (0x105e82ba0). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105ddae70) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plugi|backboardd| vicePlugin (0x105e82bf0). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105ddae20) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plugufshci: UPIU 0x01 OCS 0xf (try 0)
+|backboardd| rvicePlugin (0x105e82c40). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105ddae20) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugin|backboardd| ePlugin (0x105e3e628). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105ddae70) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugin/|backboardd| Plugin (0x105e3e678). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105ddaec0) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePl|backboardd| naHIDServicePlugin (0x105e3e718). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105ddae20) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.plu|backboardd| ServicePlugin (0x105ea2780). One of the two will be used. Which one is undefined.
+SWEET Sandbox: distnoted op 28
+|backboardd| objc[57]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105ddae70) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.plugufshci: UPIU 0x01 OCS 0xf (try 0)
+|backboardd| ervicePlugin (0x105ea27d0). One of the two will be used. Which one is undefined.
+|backboardd| objc[57]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x105ddaec0) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServic|backboardd| /XboxOneHIDServicePlugin (0x105ea2870). One of the two will be used. Which one is undefined.
+SWEET HID: SweetHIDTouch open by IOHIDEventServiceUserClient -> 1
+SWEET HID: SweetHIDButtons open by IOHIDEventServiceUserClient -> 1
+SWEET FB: backboardd sel 57 in 0/0 out 1/0 -> 0x0
+SWEET FB: backboardd sel 15 in 2/0 out 1/0 -> 0x0
+SWEET FB: backboardd sel 22 in 1/0 out 0/0 -> 0x0
+SWEET FB: backboardd sel 8 in 0/0 out 2/0 -> 0x0
+SWEET FB: backboardd sel 28 in 0/0 out 1/0 -> 0x0
+SWEET FB: backboardd sel 29 in 0/0 out 0/8 -> 0x0
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET FB: backboardd sel 33 in 1/0 out 0/0 -> 0x0
+SWEET FB: backboardd sel 79 in 2/0 out 0/1580 -> 0x0
+SWEET FB: backboardd sel 74 in 1/0 out 1/64 -> 0x0
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+|backboardd| MESA: info: panvk: gpu_id 0x90930010 variant 0 arch v9 model Mali-G57 texture_features 0xf7fe03fe 0xc3fff7ff 0xbfe1ff9f 0x10c6
+|backboardd| MESA: info: panvk: BC emulation on (native compressed mask 0xf7fe03fe)
+|backboardd| WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+|backboardd| 1969-12-31 16:01:35.-366 backboardd[57:323] 
+|backboardd| [MaliMetal] Experimental native MPS Common device=0x104f17550 class=MaliMetalDevice node=0x10800fe00 readback=0x10800fe00 shared=32768 layers=1; validation wrappers unqualified
+|backboardd| 
+SWEET SURF: backboardd sel 13
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ifnet_attach: All kernel threads created for interface utun0 have been scheduled at least once. Proceeding.
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+_dlil_attach_flowswitch_nexus: not attaching flowswitch to utun0
+SWEET Sandbox: rapportd privilege 12000 denied
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 1)
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET Sandbox: pfd op 22
+SWEET Sandbox: pfd op 1
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET Sandbox: tccd op 5
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: profiled sel 31 arg0 0 in 1/0 out 0/32768 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET Sandbox: containermanager op 7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+ifnet_attach: Waiting for all kernel threads created for interface utun1 to get scheduled at least once.
+ifnet_attach: All kernel threads created for interface utun1 have been scheduled at least once. Proceeding.
+SWEET Sandbox: identityservicesd privilege 12001 denied
+_dlil_attach_flowswitch_nexus: not attaching flowswitch to utun1
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET Sandbox: identityservicesd privilege 12000 denied
+ifnet_attach: Waiting for all kernel threads created for interface utun2 to get scheduled at least once.
+ifnet_attach: All kernel threads created for interface utun2 have been scheduled at least once. Proceeding.
+_dlil_attach_flowswitch_nexus: not attaching flowswitch to utun2
+_dlil_attach_flowswitch_nexus: not attaching flowswitch to utun2
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET Sandbox: cloudd privilege 1002 denied
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET TOUCH: X676C report error=5 status=0x1
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET FB: thermalmonitord sel 78 in 2/1788 out 0/0 -> 0x0
+SWEET FB: display on
+SWEET FB: backboardd sel 12 in 1/0 out 0/0 -> 0x0
+SWEET FB: backboardd sel 79 in 2/0 out 0/40 -> 0x0
+SWEET FB: backboardd sel 6 in 3/0 out 0/0 -> 0x0
+SWEET FB: backboardd sel 27 in 0/0 out 0/3084 -> 0x0
+SWEET FB: backboardd sel 17 in 0/3084 out 0/0 -> 0x0
+SWEET FB: backboardd sel 84 in 0/4 out 0/0 -> 0x0
+SWEET FB: backboardd sel 50 in 2/0 out 0/0 -> 0x0
+SWEET FB: backboardd sel 68 in 1/8 out 0/0 -> 0x0
+SWEET SURF: backboardd create id 2 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 11 -> 0x0
+SWEET SURF: backboardd sel 9
+SWEET SURF: backboardd sel 27
+SWEET SURF: backboardd sel 5
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET Sandbox: SpringBoard privilege 1007 denied
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET Sandbox: rapportd privilege 1002 denied
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: sharingd sel 57 arg0 0 in 1/0 out 0/4096 -> 0xe00002c7
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET Sandbox: cloudd privilege 10001 denied
+SWEET FB: backboardd sel 4 in 0/0 out 1/0 -> 0x0
+SWEET SURF: backboardd trap 2
+SWEET FB: backboardd sel 68 in 1/8 out 0/0 -> 0x0
+SWEET FB: backboardd sel 5 in 0/1132 out 0/0 -> 0x0
+SWEET FB: backboardd sel 3 in 2/0 out 1/0 -> 0x0
+SWEET SURF: backboardd sel 34
+SWEET FB: backboardd sel 55 in 1/72 out 0/0 -> 0x0
+SWEET FB: GUI takeover, text console muted
+SWEET FB: swap 2 layer 0 surface 2 1080x2400 fmt 0x42475241 bpr 4352 a 0,0 1080x2400 b 0,0 1080x2400
+SWEET SURF: backboardd trap 3
+SWEET FB: swap 3 layer 0 surface 1 1080x2400 fmt 0x42475241 bpr 4320 a 0,0 1080x2400 b 0,0 1080x2400
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET FB: display off
+process contextstored[56] crossed thread count high watermark (32), EXC_RESOURCE supressed, internal diagnostics disabled.
+SWEET Sandbox: symptomsd privilege 10003 denied
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+process aggregated[171] crossed thread count high watermark (32), EXC_RESOURCE supressed, iîternal diagnostics dicablåd.
+SWEET Sandbox: dasd privilege 1005 denied
+SWEET TOUCH: X676C report error=5 status=0x1
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: profiled sel 31 arg0 0 in 1/0 out 0/32768 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AMFI: installd selector 6 pinned membership -> 0x0
+SWEET AKS: SpringBoard sel 32 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET AKS: SpringBoard sel 32 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET FB: display on
+SWEET FB: backboardd sel 79 in 2/0 out 0/40 -> 0x0
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET SURF: SpringBoard create id 3 272x184 fmt 0x42475241 bpe 4 bpr 1088 planes 0 size 212992 keys 6 -> 0x0
+SWEET SURF: SpringBoard trap 0
+SWEET SURF: SpringBoard create id 4 312x202 fmt 0x4c413038 bpe 2 bpr 640 planes 0 size 131072 keys 6 -> 0x0
+SWEET SURF: SpringBoard create id 5 230x186 fmt 0x4c413038 bpe 2 bpr 480 planes 0 size 98304 keys 6 -> 0x0
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET SURF: SpringBoard sel 35
+SWEET FB: swap 6 layer 0 surface 1 1080x2400 fmt 0x42475241 bpr 4320 a 0,0 1080x2400 b 0,0 1080x2400
+SWEET SURF: SpringBoard create id 6 105x144 fmt 0x4c413038 bpe 2 bpr 224 planes 0 size 32768 keys 6 -> 0x0
+SWEET SURF: SpringBoard create id 7 102x144 fmt 0x4c413038 bpe 2 bpr 224 planes 0 size 32768 keys 6 -> 0x0
+SWEET SURF: SpringBoard create id 8 360x246 fmt 0x4c413038 bpe 2 bpr 736 planes 0 size 196608 keys 6 -> 0x0
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET SURF: chronod create id 9 423x423 fmt 0x42475241 bpe 4 bpr 1792 planes 0 size 770048 keys 10 -> 0x0
+SWEET SURF: chronod sel 10
+SWEET SURF: chronod create id 10 423x423 fmt 0x42475241 bpe 4 bpr 1792 planes 0 size 770048 keys 10 -> 0x0
+CRASH chronod[107] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100c2c000
+CRASH chronod pc 0x213a27198 lr 0x222fb65f8 sp 0x16f62e7a0 fp 0x16f62e7c0 far 0x148a18548
+CRASH chronod bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def836fc 0x1def841b0 0x1def8df14
+CRASH chronod reason ns 2 code 0x6: (none)
+SWEET SURF: backboardd trap 4
+SWEET SURF: backboardd trap 5
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET Sandbox: dasd privilege 10001 denied
+SWEET FB: swap 7 layer 0 surface 2 1080x2400 fmt 0x42475241 bpr 4352 a 0,0 1080x2400 b 0,0 1080x2400
+SWEET Sandbox: ReportMemoryExcepti privilege 1002 denied
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET TOUCH: X676C report error=5 status=0x1
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET FB: swap 8 layer 0 surface 1 1080x2400 fmt 0x42475241 bpr 4320 a 0,0 1080x2400 b 0,0 1080x2400
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET Sandbox: kernel_task privilege 10001 denied
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET Sandbox: aggregated privilege 1002 denied
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET TOUCH: X676C report error=5 status=0x1
+SMP --- sample 0
+SMP PosterBoard[205] slide 0x51410000 mh 0x100908000 kslide 0x0
+SMP irq total=1406402 timer=811629 ipi=594759 other=0 abstime=1895230044
+SMP fault esr=0x9200004b far=0x104018208 cnt=1295210 SCTLR.SPAN=1 fault_spsr=0x80000000 fault.PAN=0
+SMP kprof hot 0xfffffe00074c3c64:112862 0xfffffe0007bdae60:188 0xfffffe0007bdae58:348 0xfffffe0007bdae4c:77 0xfffffe0007bdae48:75 0xfffffe00074c448c:527558 0xfffffe0007bdae54:73 0xfffffe000740d4c4:1
+SMP kprof live 0xfffffe000740d4c4 0xfffffe00074af9c4 0xfffffe00074afda0 0xfffffe00078ecca8 0xfffffe00078ec138 0xfffffe00079b3f3c 0xfffffe00074bcec8 0xfffffe00074bc5a4
+SMP kprof work 0xfffffe000740d4c4 0xfffffe00074af9c4 0xfffffe00074afda0 0xfffffe00078ecca8 0xfffffe00078ec138 0xfffffe00079b3f3c 0xfffffe00074bcec8 0xfffffe00074bc5a4
+SMP PosterBoard t0 pc 0x213a21030 lr 0x213a32b18 sp 0x16f4f67c0 bt 0x213a32db8 0x213a21524 0x1d826c148 0x1d826d2e0 0x1d8271d20 0x210345998 0x1da50434c 0x1da503fc4 0x1e048fddc 0x10090fce8 0x1f5a34344 0x0
+SMP PosterBoard t0 regs [x16=-47/0xffffffffffffffd1 x0=0x16f4f68a8 x1=0x507000806 x2=0x200000000 x3=0x160300000000 x4=0x0 x5=0x160300000000`cpsr=1x40000000]
+WMP PosterBoard t0 kern [state=0x1 cont=0xfffffe000731fe00 (unslid 0xfffffe000731fe00) wait_event=0x0 wr=-1 rsn=0x0 block_hint=0x2 pending=0x0]
+SMP PosterBoard t1 pc 0x213a214f0 lr 0x222faac1c sp 0x16f57eb40 bt 0x222faa720
+SMP PosterBoard t1 regs [x16=368/0x170 x0=0x40 x1=0x16f57eb80 x2=0x1 x3=0x0 x4=0x5 x5=0x20 cpsr=0x40000000]
+SMP PosterBoard t1 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24cf0ecbf8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP PosterBoard t2 pc 0x213a214f0 lr 0x222faac1c sp 0x16f60ab30 bt 0x222faa720
+SMP PosterBoard t2 regs [x16=368/0x170 x0=0x100 x1=0x16f60ab80 x2=0x1 x3=0x0 x4=0x281eb4b80 x5=0x2820 cpsr=0x40000000]
+SMP PosterBoard t2 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24ceb2b3d8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP PosterBoard t3 pc 0x213a214f0 lr 0x222faac1c sp 0x16f696b30 bt 0x222faa720
+SMP PosterBoard t3 regs [x16=368/0x170 x0=0x100 x1=0x16f696b80 x2=0x1 x3=0x0 x4=0x281bbdc80 x5=0x0 cpsr=0x40000000]
+SMP PosterBoard t3 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24cf060bf8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP PosterBoard t4 pc 0x213a21030 lr 0x213a32b18 sp 0x16f721c70 bt 0x213a32db8 0x213a21524 0x1d826c148 0x1d826d2e0 0x1d8271d20 0x1d25c0ef8 0x1d25c0df4 0x1da626818 0x1d25d8a5c 0x222fac0ec 0x222faa72c
+SMP PosterBoard t4 regs [x16=-47/0xffffffffffffffd1 x0=0x16f721d58 x1=0x507000806 x2=0x200000000 x3=0x2e0300000000 x4=0x0 x5=0x2e0300000000 cpsr=0x40000000]
+SMP PosterBoard t4 kern [state=0x1 cont=0xfffffe000731fe00 (unslid 0xfffffe000731fe00) wait_event=0x0 wr=-1 rsn=0x0 block_hint=0x2 pending=0x0]
+SMP lsd[94] slide 0x51410000 mh 0x1048f4000 kslide 0x0
+SMP irq total=1406414 timer=811629 ipi=594771 other=0 abstime=1895239251
+SMP fault esr=0x9200004b far=0x104018208 cnt=1295210 SCTLR.SPAN=1 fault_spsr=0x80000000 fault.PAN=0
+SMP kprof hot 0xfffffe00074c3c64:112862 0xfffffe0007bdae60:188 0xfffffe0007bdae58:348 0xfffffe0007bdae4c:77 0xfffffe0007bdae48:75 0xfffffe00074c448c:527558 0xfffffe0007bdae54:73 0xfffffe000740d4c4:1
+SMP kprof live 0xfffffe000740d4c4 0xfffffe00074af9c4 0xfffffe00074afda0 0xfffffe00078ecca8 0xfffffe00078ec138 0xfffffe00079b3f3c 0xfffffe00074bcec8 0xfffffe00074bc5a4
+SMP kprof work 0xfffffe000740d4c4 0xfffffe00074af9c4 0xfffffe00074afda0 0xfffffe00078ecca8 0xfffffe00078ec138 0xfffffe00079b3f3c 0xfffffe00074bcec8 0xfffffe00074bc5a4
+SMP lsd t0 pc 0x213a21030 lr 0x213a32b18 sp 0x16b50a900 bt 0x213a32db8 0x213a21524 0x1d826c148 0x1d826d2e0 0x1d8271d20 0x1d82b0bec 0x1d30fccc0 0x1d30fcbf4 0x1f5a34344 0x0
+SMP lsd t0 regs [x16=-47/0xffffffffffffffd1 x0=0x16b50a9e8 x1=0x507000806 x2=0x200000000 x3=0x100300000000 x4=0x0 x5=0x100300000000 cpsr=0x40000000]
+SMP lsd t0 kern [state=0x1 cont=0xfffffe000731fe00 (unslid 0xfffffe000731fe00) wait_event=0x0 wr=-1 rsn=0x0 block_hint=0x2 pending=0x0]
+SMP lsd t1 pc 0x213a214f0 lr 0x222faac1c sp 0x16b6aafc0 bt 0x222faa720
+SMP lsd t1 regs [x16=368/0x170 x0=0x4 x1=0x0 x2=0x0 x3=0x0 x4=0x30 x5=0x104d329d0 cpsr=0x40000000]
+SMP lsd t1 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24ce84dfe8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP lsd t2 pc 0x213a21030 lr 0x213a32b18 sp 0x16b7bd6c0 bt 0x213a32db8 0x213a21524 0x1def7a308 0x1def7a694 0x222ffe0ec 0x1d261c224 0x1d25b5cb0 0x1d25b548c 0x1d25b4ad4 0x1fd24e260 0x1fd25511c 0x1d306baa8 0x1d3068594 0x1d306b764 0x1defa8780 0x1def8aa50
+SMP lsd t2 regs [x16=-47/0xffffffffffffffd1 x0=0x16b7bd860 x1=0x40700420e x2=0x0 x3=0x2a03 x4=0x0 x5=0x240300000000 cpsr=0x40000000]
+SMP lsd t2 kern [state=0x41 cont=0xfffffe000731fe00 (unslid 0xfffffe000731fe00) wait_event=0x0 wr=-1 rsn=0x2 block_hint=0x2 pending=0x0]
+SMP lsd t3 pc 0x213a214f0 lr 0x222faac1c sp 0x16b966fc0 bt 0x222faa720
+SMP lsd t3 regs [x16=368/0x170 x0=0x4 x1=0x0 x2=0x0 x3=0x0 x4=0x50 x5=0x104e24a90 cpsr=0x0]
+SMP lsd t3 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24ce8433d8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP lsd t4 pc 0x213a214f0 lr 0x222faac1c sp 0x16b592b30 bt 0x222faa720
+SMP lsd t4 regs [x16=368/0x170 x0=0x100 x1=0x16b592b80 x2=0x1 x3=0x0 x4=0x222fff7c0 x5=0x20 cpsr=0x0]
+SMP lsd t4 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24ced2f3d8 wr=-1 rsn=0x2 block_hint=0xf pending=0x0]
+SMP lsd t5 pc 0x213a214f0 lr 0x222faac1c sp 0x16b736fc0 bt 0x222faa720
+SMP lsd t5 regs [x16=368/0x170 x0=0x4 x1=0x0 x2=0x0 x3=0x0 x4=0x70 x5=0x104e25210 cpsr=0x40000000]
+SMP lsd t5 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24cf2eb3d8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP lsd t6 pc 0x213a214f0 lr 0x222faac1c sp 0x16b84efc0 bt 0x222faa720
+SMP lsd t6 regs [x16=368/0x170 x0=0x4 x1=0x0 x2=0x0 x3=0x0 x4=0x70 x5=0x104e24100 cpsr=0x40000000]
+SMP lsd t6 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24cf049fe8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP lsd t7 pc 0x213a214f0 lr 0x222faac1c sp 0x16b8dafc0 bt 0x222faa720
+SMP lsd t7 regs [x16=368/0x170 x0=0x4 x1=0x0 x2=0x0 x3=0x0 x4=0x64004 x5=0x0 cpsr=0x40000000]
+SMP lsd t7 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24ce735fe8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP lsd t8 pc 0x213a214f0 lr 0x222faac1c sp 0x16b9f2b30 bt 0x222faa720
+SMP lsd t8 regs [x16=368/0x170 x0=0x100 x1=0x16b9f2b80 x2=0x1 x3=0x0 x4=0x40 x5=0x104e25c20 cpsr=0x40000000]
+SMP lsd t8 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24ce8e5fe8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP lsd t9 pc 0x213a214f0 lr 0x222faac1c sp 0x16b61efc0 bt 0x222faa720
+SMP lsd t9 regs [x16=368/0x170 x0=0x4 x1=0x0 x2=0x0 x3=0x0 x4=0x70 x5=0x104e24530 cpsr=0x40000000]
+SMP lsd t9 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24cee04bf8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP lsd t10 pc 0x213a214f0 lr 0x222faac1c sp 0x16ba7efc0 bt 0x222faa720
+SMP lsd t10 regs [x16=368/0x170 x0=0x4 x1=0x0 x2=0x0 x3=0x0 x4=0x70 x5=0x104e257c0 cpsr=0x40000000]
+SMP lsd t10 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24ce714bf8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP lsd t11 pc 0x213a214f0 lr 0x222faac1c sp 0x16bb0afc0 bt 0x222faa720
+SMP lsd t11 regs [x16=368/0x170 x0=0x4 x1=0x0 x2=0x0 x3=0x0 x4=0x70 x5=0x104c28b50 cpsr=0x40000000]
+SMP lsd t11 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24ced79fe8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP lsd t12 pc 0x213a214f0 lr 0x222faac1c sp 0x16bb95130 bt 0x222faa720
+SMP lsd t12 regs [x16=368/0x170 x0=0x100 x1=0x16bb96b80 x2=0x2 x3=0x0 x4=0x104958600 x5=0x0 cpsr=0x0]
+SMP lsd t12 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24ced55fe8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP lsd t13 pc 0x213a214f0 lr 0x222faac1c sp 0x16bc22fc0 bt 0x222faa720
+SMP lsd t13 regs [x16=368/0x170 x0=0x4 x1=0x0 x2=0x0 x3=0x0 x4=0x70 x5=0x104d342d0 cpsr=0x40000000]
+SMP lsd t13 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24cea91fe8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP lsd t14 pc 0x213a214f0 lr 0x222faac1c sp 0x16bcaefc0 bt 0x222faa720
+SMP lsd t14 regs [x16=368/0x170 x0=0x4 x1=0x0 x2=0x0 x3=0x0 x4=0x60 x5=0x104c30430 cpsr=0x40000000]
+SMP lsd t14 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24cf159fe8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP lsd t15 pc 0x0 lr 0x0 sp 0x0 bt
+SMP lsd t15 regs [x16=0/0x0 x0=0x0 x1=0x0 x2=0x0 x3=0x0 x4=0x0 x5=0x0 cpsr=0x0]
+SMP lsd t15 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24ce8d73d8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP SweetRegisterPos[48] slide 0x51410000 mh 0x10025c000 kslide 0x0
+SMP irq total=1406442 timer=811633 ipi=594795 other=0 abstime=1895256011
+SMP fault esr=0x9200004b far=0x10501c208 cnt=1295211 SCTLR.SPAN=1 fault_spsr=0x80000000 fault.PAN=0
+SMP kprof hot 0xfffffe00074c3c64:112865 0xfffffe0007bdae60:188 0xfffffe0007bdae58:348 0xfffffe0007bdae4c:77 0xfffffe0007bdae48:75 0xfffffe00074c448c:527558 0xfffffe0007bdae54:73 0xfffffe000740d4c4:1
+SMP kprof live 0xfffffe00074c3c64 0xfffffe00077c0120 0xfffffe00077c2e58 0xfffffe00077c255c 0xfffffe00077c22e8 0xfffffe00074c25a0
+SMP kprof work 0xfffffe00074c3c64 0xfffffe00077c0120 0xfffffe00077c2e58 0xfffffe00077c255c 0xfffffe00077c22e8 0xfffffe00074c25a0
+SMP SweetRegisterPos t0 pc 0x213a21030 lr 0x213a32b18 sp 0x16fb9ded0 bt 0x213a32db8 0x213a21524 0x1def7a308 0x1def7a694 0x222ffe0ec 0x1d261c224 0x1d25b5cb0 0x1d8216640 0x1d82788fc 0x1d30c05f4 0x1d30ee844 0x1d30ed7d4 0x1d30ed690 0x1d305e1c0 0x1d305ddec 0x1SMP SweetRegisterPos t0 regs [x16=-47/0xffffffffffffffd1 x0=0x16fb9e070 x1=0x40700420e x2=0x0 x3=0x1803 x4=0x0 x5=0x1e0300000000 cpsr=0x40000000]
+SMP SweetRegisterPos t0 kern [state=0x1 cont=0xfffffe000731fe00 (unslid 0xfffffe000731fe00) wait_event=0x0 wr=-1 rsn=0x0 block_hint=0x2 pending=0x0]
+SMP SweetRegisterPos t1 pc 0x213a214f0 lr 0x222faac1c sp 0x16fcb6b30 bt 0x222faa720
+SMP SweetRegisterPos t1 regs [x16=368/0x170 x0=0x100 x1=0x16fcb6b80 x2=0x1 x3=0x0 x4=0x30 x5=0x100609440 cpsr=0x40000000]
+SMP SweetRegisterPos t1 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24cebb1fe8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP backboardd[57] slide 0x51410000 mh 0x104cec000 kslide 0x0
+SMP irq total=1406444 timer=811633 ipi=594797 other=0 abstime=1895260952
+SMP fault esr=0x92000047 far=0x126c00000 cnt=1295213 SCTLR.SPAN=1 fault_spsr=0x20000000 fault.PAN=0
+SMP kprof hot 0xfffffe00074c3c64:112865 0xfffffe0007bdae60:188 0xfffffe0007bdae58:348 0xfffffe0007bdae4c:77 0xfffffe0007bdae48:75 0xfffffe00074c448c:527558 0xfffffe0007bdae54:73 0xfffffe000740d4c4:1
+SMP kprof live 0xfffffe00074c3c64 0xfffffe00077c0120 0xfffffe00077c2e58 0xfffffe00077c255c 0xfffffe00077c22e8 0xfffffe00074c25a0
+SMP kprof work 0xfffffe00074c3c64 0xfffffe00077c0120 0xfffffe00077c2e58 0xfffffe00077c255c 0xfffffe00077c22e8 0xfffffe00074c25a0
+SMP backboardd t0 pc 0x213a21030 lr 0x213a32b18 sp 0x16b112880 bt 0x213a32db8 0x213a21524 0x1d826c148 0x1d826d2e0 0x1d8271d20 0x104cf5e40 0x1f5a34344 0x0
+SMP backboardd t0 regs [x16=-47/0xffffffffffffffd1 x0=0x16b112968 x1=0x507000806 x2=0x200000000 x3=0x3d0300000000 x4=0x0 x5=0x3d0300000000 cpsr=0x40000000]
+SMP backboardd t0 kern [state=0x1 cont=0xfffffe000731fe00 (unslid 0xfffffe000731fe00) wait_event=0x0 wr=-1 rsn=0x0 block_hint=0x2 pending=0x0]
+SMP backboardd t1 pc 0x213a21f3c lr 0x222fb5620 sp 0x16b2b2580 bt 0x222fac304 0x1d990d6c8 0x1d98f5150 0x104d35878 0x104d35170 0x104d34f28 0x1defa77a8 0x1defa8780 0x1def836fc 0x1def841e4 0x1def8df14 0x222faabd0 0x222faa720
+SMP backboardd t1 regs [x16=301/0x12d x0=0x10ae04098 x1=0x70000000802 x2=0x700 x3=0x237 x4=0x20a0 x5=0x16b2b30e0 cpsr=0x40000000]
+SMP backboardd t1 kern [state=0x41 cont=0xfffffe00077b9640 (unslid 0xfffffe00077b9640) wait_event=0xfffffe1668e3c800 wr=-1 rsn=0x0 block_hint=0xb pending=0x0]
+SMP backboardd t2 pc 0x213a21030 lr 0x213a32b18 sp 0x16b33deb0 bt 0x213a32db8 0x213a21524 0x1d826c148 0x1d826d2e0 0x1d8271d20 0x1d82b0bec 0x1df9b2f70 0x222fac0ec 0x222faa72c
+SMP backboardd t2 regs [x16=-47/0xffffffffffffffd1 x0=0x16b33df98 x1=0x507000806 x2=0x200000000 x3=0x3b0300000000 x4=0x0 x5=0x3b0300000000 cpsr=0x40000000]
+SMP backboardd t2 kern [state=0x1 cont=0xfffffe000731fe00 (unslid 0xfffffe000731fe00) wait_event=0x0 wr=-1 rsn=0x0 block_hint=0x2 pending=0x0]
+SMP backboardd t3 pc 0x213a20fc4 lr 0x1def77d9c sp 0x16b456f30 bt 0x1def78328 0x1def8ca80 0x222fac0ec 0x222faa72c
+SMP backboardd t3 regs [x16=-38/0xffffffffffffffda x0=0x220b x1=0x3b9ac79900000004 x2=0x3b9ac799 x3=0xfffffc088 x4=0x30 x5=0x105929710 cpsr=0x80000000]
+SMP backboardd t3 kern [state=0x1 cont=0xfffffe0007388530 (unslid 0xfffffe0007388530) wait_event=0xfffffe0007008fb8 wr=-1 rsn=0x0 block_hint=0x6 pending=0x0]
+SMP backboardd t4 pc 0x213a21030 lr 0x213a32b18 sp 0x16b55e9b0 bt 0x213a32db8 0x213a21524 0x1d96dc884 0x1d991b418 0x222fac0ec 0x222faa72c
+SMP backboardd t4 regs [x16=-47/0xffffffffffffffd1 x0=0x16b55ea98 x1=0x50300080e x2=0x200000000 x3=0x0 x4=0x0 x5=0x7f0300000000 cpsr=0x40000000]
+SMP backboardd t4 kern [state=0x1 cont=0xfffffe000731fe00 (unslid 0xfffffe000731fe00) wait_event=0x0 wr=-1 rsn=0x0 block_hint=0x2 pending=0x0]
+SMP backboardd t5 pc 0x10e69837c lr 0x10e6a3e48 sp 0x16b6e4ee0 bt 0x10e6a5068 0x10e8996c0 0x10e8994d0 0x10e7cf300 0x10e5565bc 0x10e5f308c 0x10e5eadfc 0x10ced10c4 0x10cebdb64 0x10cebd11c 0x10cea1454 0x10ceb1c24 0x10ceb22d4 0x10ceb2030 0x1d96dbb90 0x1d96e56SMP backboardd t5 regs [x16=9176162700/0x222f1218c x0=0x120443a10 x1=0x7 x2=0x1 x3=0x0 x4=0x40 x5=0x105c951a0 cpsr=0x20000000]
+SMP backboardd t5 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=1 rsn=0x0 block_hint=0x0 pending=0x0]
+SMP backboardd t5 ksp 0xfffffe8f81a63d20 kfp 0xfffffe8f81a63d40 klr 0xfffffe00074c9990 kbt 0xfffffe24ce905e18
+SMP backboardd t5 kscan 0xfffffe00078578c8 0xfffffe00074ad35c 0xfffffe000722b750 0xfffffe00079b3f84 0xfffffe00074bcec8 0xfffffe000736e26c 0xfffffe000733518c 0xfffffe00074bc874 0xfffffe00074c9990
+SMP backboardd t5 kframes 0xfffffe00078578c8 0xfffffe00079b3f84 0xfffffe00074bcec8 0xfffffe000736e26c 0xfffffe000733518c 0xfffffe00074bc874
+SMP backboardd t6 pc 0x213a21030 lr 0x213a32b18 sp 0x16b891d90 bt 0x213a32db8 0x213a21524 0x1d826c148 0x1d826d2e0 0x1d8271d20 0x1d82b0bec 0x1d9911ccc 0x1d991b418 0x222fac0ec 0x222faa72c
+SMP backboardd t6 regs [x16=-47/0xffffffffffffffd1 x0=0x16b891e78 x1=0x507000806 x2=0x200000000 x3=0xa20300000000 x4=0x0 x5=0xa20300000000 cpsr=0x40000000]
+SMP backboardd t6 kern [state=0x1 cont=0xfffffe000731fe00 (unslid 0xfffffe000731fe00) wait_event=0x0 wr=-1 rsn=0x0 block_hint=0x2 pending=0x0]
+SMP backboardd t7 pc 0x213a21030 lr 0x213a32b18 sp 0x16b99dd90 bt 0x213a32db8 0x213a21524 0x1d826c148 0x1d826d2e0 0x1d8271d20 0x1d82b0bec 0x1d9911ccc 0x1d991b418 0x222fac0ec 0x222faa72c
+SMP backboardd t7 regs [x16=-47/0xffffffffffffffd1 x0=0x16b99de78 x1=0x507000806 x2=0x200000000 x3=0x870300000000 x4=0x0 x5=0x870300000000 cpsr=0x40000000]
+SMP backboardd t7 kern [state=0x1 cont=0xfffffe000731fe00 (unslid 0xfffffe000731fe00) wait_event=0x0 wr=-1 rsn=0x0 block_hint=0x2 pending=0x0]
+SMP backboardd t8 pc 0x213a21030 lr 0x213a32b18 sp 0x16baa9d90 bt 0x213a32db8 0x213a21524 0x1d826c148 0x1d826d2e0 0x1d8271d20 0x1d82b0bec 0x1d9911ccc 0x1d991b418 0x222fac0ec 0x222faa72c
+SMP backboardd t8 regs [x16=-47/0xffffffffffffffd1 x0=0x16baa9e78 x1=0x507000806 x2=0x200000000 x3=0x9c0300000000 x4=0x0 x5=0x9c0300000000 cpsr=0x40000000]
+SMP backboardd t8 kern [state=0x1 cont=0xfffffe000731fe00 (unslid 0xfffffe000731fe00) wait_event=0x0 wr=-1 rsn=0x0 block_hint=0x2 pending=0x0]
+SMP backboardd t9 pc 0x213a21030 lr 0x213a32b18 sp 0x16bb35e40 bt 0x213a32db8 0x213a21524 0x1d826c148 0x1d826d2e0 0x1d8271d20 0x1d82b0bec 0x1e2dcdfac 0x222fac0ec 0x222faa72c
+SMP backboardd t9 regs [x16=-47/0xffffffffffffffd1 x0=0x16bb35f28 x1=0x507000806 x2=0x200000000 x3=0x960300000000 x4=0x0 x5=0x960300000000 cpsr=0x40000000]
+SMP backboardd t9 kern [state=0x1 cont=0xfffffe000731fe00 (unslid 0xfffffe000731fe00) wait_event=0x0 wr=-1 rsn=0x0 block_hint=0x2 pending=0x0]
+SMP backboardd t10 pc 0x213a21ad0 lr 0x1def78128 sp 0x16b5ee860 bt 0x1def784a0 0x104d04a78 0x1defa77a8 0x1defa8780 0x1def836fc 0x1def841e4 0x1def8df14 0x222faabd0 0x222faa720
+SMP backboardd t10 regs [x16=515/0x203 x0=0x1000001 x1=0x104f2b614 x2=0x0 x3=0x0 x4=0x1e0 x5=0x20 cpsr=0x40000000]
+SMP backboardd t10 kern [state=0x41 cont=0xfffffe000789b240 (unslid 0xfffffe000789b240) wait_event=0xfffffe2001371cc0 wr=-1 rsn=0x0 block_hint=0xa pending=0x0]
+SMP backboardd t11 pc 0x213a214f0 lr 0x222faac1c sp 0x16b786b30 bt 0x222faa720
+SMP backboardd t11 regs [x16=368/0x170 x0=0x100 x1=0x16b786b80 x2=0x1 x3=0x0 x4=0x222fff7c0 x5=0x105cc4700 cpsr=0x40000000]
+SMP backboardd t11 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24ce9bf3d8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP backboardd t12 pc 0x213a214f0 lr 0x222faac1c sp 0x16bbc2800 bt 0x222faa720
+SMP backboardd t12 regs [x16=368/0x170 x0=0x100 x1=0x16bbc2b80 x2=0x2 x3=0x0 x4=0xf0 x5=0x104fc7b80 cpsr=0x40000000]
+SMP backboardd t12 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24cea933d8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP backboardd t13 pc 0x213a214f0 lr 0x222faac1c sp 0x16b226b40 bt 0x222faa720
+SMP backboardd t13 regs [x16=368/0x170 x0=0x40 x1=0x16b226b80 x2=0x1 x3=0x0 x4=0x5 x5=0x7515922d cpsr=0x40000000]
+SMP backboardd t13 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24ced133d8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP backboardd t14 pc 0x0 lr 0x0 sp 0x0 bt
+SMP backboardd t14 regs [x16=0/0x0 x0=0x0 x1=0x0 x2=0x0 x3=0x0 x4=0x0 x5=0x0 cpsr=0x0]
+SMP backboardd t14 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24cee51fe8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP SpringBoard[27] slide 0x51410000 mh 0x100e60000 kslide 0x0
+SMP irq total=1406473 timer=811635 ipi=594824 other=0 abstime=1895281412
+SMP fault esr=0x9200004b far=0x10581e208 cnt=1295216 SCTLR.SPAN=1 fault_spsr=0x80000000 fault.PAN=0
+SMP kprof hot 0xfffffe00074c3c64:112865 0xfffffe0007bdae60:188 0xfffffe0007bdae58:348 0xfffffe0007bdae4c:77 0xfffffe0007bdae48:75 0xfffffe00074c448c:527558 0xfffffe0007bdae54:73 0xfffffe00073ba210:1
+SMP kprof live 0xfffffe00073ba210 0xfffffe000732d2c0 0xfffffe000732d094 0xfffffe000739dec4 0xfffffe00077c3cb4 0xfffffe00077c2aa8 0xfffffe00077c1404 0xfffffe00079b3f3c 0xfffffe00074bcec8 0xfffffe00074bc5a4
+SMP kprof work 0xfffffe00073ba210 0xfffffe000732d2c0 0xfffffe000732d094 0xfffffe000739dec4 0xfffffe00077c3cb4 0xfffffe00077c2aa8 0xfffffe00077c1404 0xfffffe00079b3f3c 0xfffffe00074bcec8 0xfffffe00074bc5a4
+SMP SpringBoard t0 pc 0x213a21030 lr 0x213a32b18 sp 0x16ef9e180 bt 0x213a32db8 0x213a21524 0x1d826c148 0x1d826d2e0 0x1d8271d20 0x210345998 0x1da50434c 0x1da503fc4 0x216c755e8 0x1f5a34344 0x0
+SMP SpringBoard t0 regs [x16=-47/0xffffffffffffffd1 x0=0x16ef9e268 x1=0x507000806 x2=0x200000000 x3=0x6a0300000000 x4=0x0 x5=0x6a0300000000 cpsr=0x40000000]
+SMP SpringBoard t0 kern [state=0x1 cont=0xfffffe000731fe00 (unslid 0xfffffe000731fe00) wait_event=0x0 wr=-1 rsn=0x0 block_hint=0x2 pending=0x0]
+SMP SpringBoard t1 pc 0x213a214f0 lr 0x222faac1c sp 0x16f256b30 bt 0x222faa720
+SMP SpringBoard t1 regs [x16=368/0x170 x0=0x100 x1=0x16f256b80 x2=0x1 x3=0x0 x4=0x280677a80 x5=0x16f2570e0 cpsr=0x0]
+SMP SpringBoard t1 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24ce8db3d8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP SpringBoard t2 pc 0x213a21030 lr 0x213a32b18 sp 0x16f3f9c70 bt 0x213a32db8 0x213a21524 0x1d826c148 0x1d826d2e0 0x1d8271d20 0x1d25c0ef8 0x1d25c0df4 0x1da626818 0x1d25d8a5c 0x222fac0ec 0x222faa72c
+SMP SpringBoard t2 regs [x16=-47/0xffffffffffffffd1 x0=0x16f3f9d58 x1=0x507000806 x2=0x200000000 x3=0x870700000000 x4=0x0 x5=0x870700000000 cpsr=0x40000000]
+SMP SpringBoard t2 kern [state=0x1 cont=0xfffffe000731fe00 (unslid 0xfffffe000731fe00) wait_event=0x0 wr=-1 rsn=0x0 block_hint=0x2 pending=0x0]
+SMP SpringBoard t3 pc 0x213a21030 lr 0x213a32b18 sp 0x16f511e40 bt 0x213a32db8 0x213a21524 0x1d826c148 0x1d826d2e0 0x1d8271d20 0x1d82b0bec 0x1e2dcdfac 0x222fac0ec 0x222faa72c
+SMP SpringBoard t3 regs [x16=-47/0xffffffffffffffd1 x0=0x16f511f28 x1=0x507000806 x2=0x200000000 x3=0xc20300000000 x4=0x0 x5=0xc20300000000 cpsr=0x40000000]
+SMP SpringBoard t3 kern [state=0x1 cont=0xfffffe000731fe00 (unslid 0xfffffe000731fe00) wait_event=0x0 wr=-1 rsn=0x0 block_hint=0x2 pending=0x0]
+SMP SpringBoard t4 pc 0x213a214f0 lr 0x222faac1c sp 0x16f972b40 bt 0x222faa720
+SMP SpringBoard t4 regs [x16=368/0x170 x0=0x40 x1=0x16f972b80 x2=0x1 x3=0x0 x4=0x5 x5=0x0 cpsr=0x40000000]
+SMP SpringBoard t4 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24cf320bf8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP SpringBoard t5 pc 0x213a21030 lr 0x213a32b18 sp 0x16fba1c80 bt 0x213a32db8 0x213a21524 0x1d826c148 0x1d826d2e0 0x1d8271d20 0x1d25c0ef8 0x1d25c0da4 0x216da05b8 0x1d25d8a5c 0x222fac0ec 0x222faa72c
+SMP SpringBoard t5 regs [x16=-47/0xffffffffffffffd1 x0=0x16fba1d68 x1=0x507000806 x2=0x200000000 x3=0x1d60300000000 x4=0x0 x5=0x1d60300000000 cpsr=0x40000000]
+SMP SpringBoard t5 kern [state=0x1 cont=0xfffffe000731fe00 (unslid 0xfffffe000731fe00) wait_event=0x0 wr=-1 rsn=0x0 block_hint=0x2 pending=0x0]
+SMP SpringBoard t6 pc 0x213a21030 lr 0x213a32b18 sp 0x16f1c9c60 bt 0x213a32db8 0x213a21524 0x1d826c148 0x1d826d2e0 0x1d8271d20 0x1d82b0bec 0x1f1a2d1b8 0x1d25d8a5c 0x222fac0ec 0x222faa72c
+SMP SpringBoard t6 regs [x16=-47/0xffffffffffffffd1 x0=0x16f1c9d48 x1=0x507000806 x2=0x200000000 x3=0x2010300000000 x4=0x0 x5=0x2010300000000 cpsr=0x40000000]
+SMP SpringBoard t6 kern [state=0x1 cont=0xfffffe000731fe00 (unslid 0xfffffe000731fe00) wait_event=0x0 wr=-1 rsn=0x0 block_hint=0x2 pending=0x0]
+SMP SpringBoard t7 pc 0x213a20fac lr 0x1def77d24 sp 0x16fcbacf0 bt 0x1def78360 0x1da5cdd9c 0x1d25d8a5c 0x222fac0ec 0x222faa72c
+SMP SpringBoard t7 regs [x16=-36/0xffffffffffffffdc x0=0x23403 x1=0xffffffffffffffff x2=0x2331569c0 x3=0x23041f460 x4=0x0 x5=0x101e0ac40 cpsr=0x60000000]
+SMP SpringBoard t7 kern [state=0x1 cont=0xfffffe0007388530 (unslid 0xfffffe0007388530) wait_event=0xfffffe0007008fb8 wr=-1 rsn=0x0 block_hint=0x6 pending=0x0]
+SMP SpringBoard t8 pc 0x213a21030 lr 0x213a32b18 sp 0x16fd45c80 bt 0x213a32db8 0x213a21524 0x1d826c148 0x1d826d2e0 0x1d8271d20 0x1d25c0ef8 0x1d25c0da4 0x246baa0d4 0x1d25d8a5c 0x222fac0ec 0x222faa72c
+SMP SpringBoard t8 regs [x16=-47/0xffffffffffffffd1 x0=0x16fd45d68 x1=0x507000806 x2=0x200000000 x3=0x23d0b00000000 x4=0x0 x5=0x23d0b00000000 cpsr=0x40000000]
+SMP SpringBoard t8 kern [state=0x1 cont=0xfffffe000731fe00 (unslid 0xfffffe000731fe00) wait_event=0x0 wr=-1 rsn=0x0 block_hint=0x2 pending=0x0]
+SMP SpringBoard t9 pc 0x213a21030 lr 0x213a32b18 sp 0x16fdd1c60 bt 0x213a32db8 0x213a21524 0x1d826c148 0x1d826d2e0 0x1d8271d20 0x1d25c0ef8 0x1d25c0da4 0x246bb8d80 0x1d25d8a5c 0x222fac0ec 0x222faa72c
+SMP SpringBoard t9 regs [x16=-47/0xffffffffffffffd1 x0=0x16fdd1d48 x1=0x507000806 x2=0x200000000 x3=0x23e0b00000000 x4=0x0 x5=0x23e0b00000000 cpsr=0x40000000]
+SMP SpringBoard t9 kern [state=0x1 cont=0xfffffe000731fe00 (unslid 0xfffffe000731fe00) wait_event=0x0 wr=-1 rsn=0x0 block_hint=0x2 pending=0x0]
+SMP SpringBoard t10 pc 0x213a214f0 lr 0x222faac1c sp 0x16feeab30 bt 0x222faa720
+SMP SpringBoard t10 regs [x16=368/0x170 x0=0x100 x1=0x16feeab80 x2=0x1 x3=0x0 x4=0x2806a4e00 x5=0x0 cpsr=0x0]
+SMP SpringBoard t10 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24ce958bf8 wr=-1 rsn=0x2 block_hint=0xf pending=0x0]
+SMP SpringBoard t11 pc 0x213a214f0 lr 0x222faac1c sp 0x1702beb30 bt 0x222faa720
+SMP SpringBoard t11 regs [x16=368/0x170 x0=0x100 x1=0x1702beb80 x2=0x1 x3=0x0 x4=0x1e0 x5=0x20 cpsr=0x40000000]
+SMP SpringBoard t11 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24cee073d8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP SpringBoard t12 pc 0x213a214f0 lr 0x222faac1c sp 0x1703d6b40 bt 0x222faa720
+SMP SpringBoard t12 regs [x16=368/0x170 x0=0x40 x1=0x1703d6b80 x2=0x0 x3=0x0 x4=0x4e00000000 x5=0x0 cpsr=0x40000000]
+SMP SpringBoard t12 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24cf15b3d8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP SpringBoard t13 pc 0x213a214f0 lr 0x222faac1c sp 0x170606b40 bt 0x222faa720
+SMP SpringBoard t13 regs [x16=368/0x170 x0=0x40 x1=0x170606b80 x2=0x0 x3=0x0 x4=0x1a0 x5=0x20 cpsr=0x40000000]
+SMP SpringBoard t13 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24cf2973d8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP launchd[1] slide 0x51410000 mh 0x10056c000 kslide 0x0
+SMP irq total=1406491 timer=811635 ipi=594842 other=0 abstime=1895298723
+SMP fault esr=0x9200004b far=0x10800dc08 cnt=1295217 SCTLR.SPAN=1 fault_spsr=0x80000000 fault.PAN=0
+SMP kprof hot 0xfffffe00074c3c64:112865 0xfffffe0007bdae60:188 0xfffffe0007bdae58:348 0xfffffe0007bdae4c:77 0xfffffe0007bdae48:75 0xfffffe00074c448c:527558 0xfffffe0007bdae54:73 0xfffffe00073ba210:1
+SMP kprof live 0xfffffe00073ba210 0xfffffe000732d2c0 0xfffffe000732d094 0xfffffe000739dec4 0xfffffe00077c3cb4 0xfffffe00077c2aa8 0xfffffe00077c1404 0xfffffe00079b3f3c 0xfffffe00074bcec8 0xfffffe00074bc5a4
+SMP kprof work 0xfffffe00073ba210 0xfffffe000732d2c0 0xfffffe000732d094 0xfffffe000739dec4 0xfffffe00077c3cb4 0xfffffe00077c2aa8 0xfffffe00077c1404 0xfffffe00079b3f3c 0xfffffe00074bcec8 0xfffffe00074bc5a4
+SMP launchd t0 pc 0x213a22e74 lr 0x1df06287c sp 0x16f91a6b0 bt 0x1df058d40 0x1df059bcc 0x1df064a28 0x1005ab0a8 0x1defa8780 0x1def7fd48 0x1def91780 0x1def835d4 0x1def841b0 0x1def8df14 0x222faabd0 0x222faa720
+SMP launchd t0 regs [x16=397/0x18d x0=0x5 x1=0x125f0c000 x2=0xec x3=0x126f0b050 x4=0x130 x5=0x126f0b050 cpsr=0x0]
+SMP launchd t0 kern [state=0x4 cont=0x0 (unslid 0x0) wait_event=0x0 wr=0 rsn=0x0 block_hint=0x0 pending=0x0]
+SMP launchd t0 ksp 0xfffffe8f81e0be50 kfp 0xfffffe8f81e0be80 klr 0xfffffe00074c4488 kbt 0xfffffe14cf045600
+SMP launchd t0 kscan 0xfffffe000736e26c 0xfffffe00074bc57c 0xfffffe00074bc5a4 0xfffffe0007379aa0 0xfffffe00073716f0 0xfffffe00074c4488
+SMP launchd t0 kframes
+SMP launchd t1 pc 0x213a214f0 lr 0x222faac1c sp 0x16fa32a40 bt °x222fqa720
+SMP launchd t1 regs [x16=368/0x170 x0=0x100 x1=0x16fa32b80 x2=0x2 x3=0x0 x4=0xf0 x5=0x126cb06a0 cpsr=0x40000000]
+SMP launchd t1 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24ce23dfe8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP launchd t2 pc 0x213a2892c lr 0x1def8e7f4 sp 0x16fabef90 bt 0x1def8e7c8 0x0
+SMP launchd t2 regs [x16=410/0x19a x0=0x0 x1=0xffffffffffffffff x2=0x0 x3=0x16fabefc0 x4=0x16fabf040 x5=0x190008ff cpsr=0x0]
+SMP launchd t2 kern [state=0x1 cont=0xfffffe000786d520 (unslid 0xfffffe000786d520) wait_event=0xfffffe1b3511acf0 wr=-1 rsn=0x0 block_hint=0x0 pending=0x0]
+SMP launchd t3 pc 0x213a214f0 lr 0x222faac1c sp 0x16fbd6b40 bt 0x222faa720
+SMP launchd t3 regs [x16=368/0x170 x0=0x40 x1=0x16fbd6b80 x2=0x0 x3=0x0 x4=0x1e03 x5=0x15 cpsr=0x40000000]
+SMP launchd t3 kern [state=0x1 cont=0xfffffe00077c2240 (unslid 0xfffffe00077c2240) wait_event=0xfffffe24ceed33d8 wr=-1 rsn=0x0 block_hint=0xf pending=0x0]
+SMP launchd t4 pc 0x213a20fac lr 0x1def77d24 sp 0x16f9a6f10 bt 0x1def78360 0x100571898 0x222fac0ec 0x222faa72c
+SMP launchd t4 regs [x16=-36/0xffffffffffffffdc x0=0x1c30b x1=0x200000003 x2=0x2800001513 x3=0x7440b00000203 x4=0xd5a00000000 x5=0x7440b00000000 cpsr=0x60000000]
+SMP launchd t4 kern [state=0x1 cont=0xfffffe0007388530 (unslid 0xfffffe0007388530) wait_event=0xfffffe0007008fb8 wr=-1 rsn=0x0 block_hint=0x6 pending=0x0]
+SWEET TOUCH: X676C report error=5 status=0x1
+SWEET TOUCH: X676C report error=5 status=0x1
+SWEET FB: swap 9 layer 0 surface 2 1080x2400 fmt 0x42475241 bpr 4352 a 0,0 1080x2400 b 0,0 1080x2400
+CRASH assetsd[240] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x102d24000
+CRASH assetsd pc 0x213a27198 lr 0x222fb65f8 sp 0x16d392cd0 fp 0x16d392cf0 far 0x230282e28
+CRASH assetsd bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def7fd48 0x1def7f480 0x1def8cc68
+CRASH assetsd reason ns 2 code 0x6: (none)
+SWEET SURF: SpringBoard create id 11 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET FB: swap 10 layer 0 surface 1 1080x2400 fmt 0x42475241 bpr 4320 a 0,0 1080x2400 b 0,0 1080x2400
+SWEET TOUCH: X676C report erroò=5 status=0x1
+CRASH ScreeîTimeWidget[256] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104e48000
+CRASH ScreenTimeWidget pc 0x213a27198 lr 0x222fb65f8 sp 0x16afb5e90 fp 0x16afb5eb0 far 0x230282e28
+CRASH ScreenTimeWidget bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH ScreenTimeWidget reason ns 2 code 0x6: (none)
+SWEET FB: swap 11 layer 0 surface 2 1080x2400 fmt 0x42475241 bpr 4352 a 0,0 1080x2400 b 0,0 1080x2400
+SWEET SURF: SpringBoard create id 12 90x200 fmt 0x42475241 bpe 4 bpr 384 planes 0 size 81920 keys 12 -> 0x0
+SWEET SURF: SpringBoard create id 13 270x600 fmt 0x42475241 bpe 4 bpr 1088 planes 0 size 655360 keys 12 -> 0x0
+SWEET SURF: SpringBoard trap 1
+SWEET SURF: SpringBoard create id 14 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: SpringBoard create id 15 90x200 fmt 0x42475241 bpe 4 bpr 384 planes 0 size 81920 keys 12 -> 0x0
+SWEET SURF: SpringBoard create id 16 270x600 fmt 0x42475241 bpe 4 bpr 1088 planes 0 size 655360 keys 12 -> 0x0
+SWEET FB: swap 12 layer 0 surface 1 1080x2400 fmt 0x42475241 bpr 4320 a 0,0 1080x2400 b 0,0 1080x2400
+SWEET TOUCH: X676C report error=5 status=0x1
+SWEET TOUCH: X676C report error=5 status=0x1
+SWEET TOUCH: X676C report error=5 status=0x1
+SWEET TOUCH: X676C report error=5 status=0x1
+SWEET TOUCH: X676C report error=5 status=0x1
+SWEET TOUCH: X676C report error=5 status=0x1
+SWEET FB: swap 13 layer 0 surface 2 1080x2400 fmt 0x42475241 bpr 4352 a 0,0 1080x2400 b 0,0 1080x2400
+SWEET TOUCH: X676C report error=5 status=0x1
+SWEET TOUCH: X676C report error=5 status=0x1
+SWEET HID: touch 0 down at 142,1083
+SWEET HID: touch 1 down at 78,1572
+SWEET HID: touch 2 down at 58,753
+SWEET HID: touch 1 up
+SWEET HID: touch 1 down at 62,1660
+SWEET HID: touch 1 up
+SWEET HID: touch 0 up
+SWEET HID: touch 2 up
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET HID: key 0x30 down
+SWEET KEYS: key=0 (Power) down=1 mem1=0xffff top=0xc
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+SWEET HID: key 0x30 up
+SWEET KEYS: key=0 (Power) down=0 mem1=0xffff top=0xe
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+CRASH mediaserverd[29] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100518000
+CRASH mediaserverd pc 0x213a27198 lr 0x222fb65f8 sp 0x16fb9ec60 fp 0x16fb9ec80 far 0x230282e28
+CRASH mediaserverd bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def836fc 0x1def841e4 0x1def8cc68
+CRASH mediaserverd reason ns 2 code 0x6: (none)
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET HID: touch 0 down at 1079,922
+SWEET HID: touch 0 up
+CRASH backboardd[57] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104cec000
+CRASH backboardd pc 0x213a2e8c0 lr 0x213a4fb48 sp 0x16b6ef970 fp 0x16b6ef9b0 far 0x11fcb0000
+CRASH backboardd bt 0x213a4fb78 0x1d9791ef8 0x1d96dbf64 0x1d96e5658 0x1d9713454 0x1d970e7b8 0x1d96de5c0 0x1d96e4ed8 0x1d96ffb68 0x1d96e8bf8
+CRASH backboardd reason ns 13 code 0x4: Metal failed to build render pipeline
+|backboardd| objc[295]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10623ee20) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin|backboardd| ock4HIDServicePlugin (0x106262bc0). One of the two will be used. Which one is undefined.
+|backboardd| objc[295]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10623ee70) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDServicePlugin.|backboardd| ck4HIDServicePlugin (0x106262c10). One of the two will be used. Which one is undefined.
+|backboardd| objc[295]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10623eec0) and /System/Library/HIDPlugins/ServicePlugins/DualShock4HIDSe|backboardd| ugin/DualShock4HIDServicePlugin (0x106262cb0). One of the two will be used. Which one is undefined.
+|backboardd| objc[295]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10623eec0) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadH|backboardd| n.plugin/GenericGamepadHIDServicePlugin (0x106286a88). One of the two will be used. Which one is undefined.
+|backboardd| objc[295]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10623ee70) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePlu|backboardd| ericGamepadHIDServicePlugin (0x106286ad8). One of the two will be used. Which one is undefined.
+|backboardd| objc[295]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10623ee20) and /System/Library/HIDPlugins/ServicePlugins/GenericGamepadHIDServicePl|backboardd| nericGamepadHIDServicePlugin (0x106286b78). One of the two will be used. Which one is undefined.
+|backboardd| objc[295]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10623eec0) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServic|backboardd| /JoyConHIDServicePlugin (0x1062e6ba0). One of the two will be used. Which one is undefined.
+|backboardd| objc[295]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10623ee70) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plug|backboardd| rvicePlugin (0x1062e6bf0). One of the two will be used. Which one is undefined.
+|backboardd| objc[295]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10623ee20) and /System/Library/HIDPlugins/ServicePlugins/JoyConHIDServicePlugin.plu|backboardd| ervicePlugin (0x1062e6c40). One of the two will be used. Which one is undefined.
+|backboardd| objc[295]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10623ee20) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugi|backboardd| cePlugin (0x1062a2628). One of the two will be used. Which one is undefined.
+|backboardd| objc[295]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10623ee70) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServicePlugin.plugin|backboardd| ePlugin (0x1062a2678). One of the two will be used. Which one is undefined.
+|backboardd| objc[295]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10623eec0) and /System/Library/HIDPlugins/ServicePlugins/LunaHIDServiceP|backboardd| unaHIDServicePlugin (0x1062a2718). One of the two will be used. Which one is undefined.
+|backboardd| objc[295]: Class _GCHapticEvent is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10623ee20) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.pl|backboardd| DServicePlugin (0x106306780). One of the two will be used. Which one is undefined.
+|backboardd| objc[295]: Class GCHapticMotor is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10623ee70) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServicePlugin.plu|backboardd| ServicePlugin (0x1063067d0). One of the two will be used. Which one is undefined.
+|backboardd| objc[295]: Class GCGamepadHIDServicePlugin is implemented in both /System/Library/HIDPlugins/ServicePlugins/DualSenseHIDServicePlugin.plugin/DualSenseHIDServicePlugin (0x10623eec0) and /System/Library/HIDPlugins/ServicePlugins/XboxOneHIDServi|backboardd| n/XboxOneHIDServicePlugin (0x106306870). One of the two will be used. Which one is undefined.
+SWEET HID: SweetHIDTouch open by IOHIDEventServiceUserClient -> 1
+SWEET HID: SweetHIDButtons open by IOHIDEventServiceUserClient -> 1
+SWEET FB: backboardd sel 79 in 2/0 out 0/1580 -> 0x0
+SWEET FB: backboardd sel 74 in 1/0 out 1/64 -> 0x0
+|backboardd| MESA: info: panvk: gpu_id 0x90930010 variant 0 arch v9 model Mali-G57 texture_features 0xf7fe03fe 0xc3fff7ff 0xbfe1ff9f 0x10c6
+|backboardd| MESA: info: panvk: BC emulation on (native compressed mask 0xf7fe03fe)
+|backboardd| WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+|backboardd| 1969-12-31 16:04:45.-590 backboardd[295:3834] 
+|backboardd| [MaliMetal] Experimental native MPS Common device=0x105815db0 class=MaliMetalDevice node=0x10800e800 readback=0x10800e800 shared=32768 layers=1; validation wrappers unqualified
+|backboardd| 
+SWEET FB: display on
+SWEET FB: backboardd sel 79 in 2/0 out 0/40 -> 0x0
+SWEET FB: backboardd sel 84 in 0/4 out 0/0 -> 0x0
+SWEET FB: backboardd sel 68 in 1/8 out 0/0 -> 0x0
+SWEET SURF: backboardd create id 17 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 11 -> 0x0
+SWEET FB: backboardd sel 68 in 1/8 out 0/0 -> 0x0
+SWEET FB: swap 15 layer 0 surface 17 1080x2400 fmt 0x42475241 bpr 4352 a 0,0 1080x2400 b 0,0 1080x2400
+SWEET FB: swap 16 layer 0 surface 1 1080x2400 fmt 0x42475241 bpr 4320 a 0,0 1080x2400 b 0,0 1080x2400
+SWEET FB: swap 17 layer 0 surface 17 1080x2400 fmt 0x42475241 bpr 4352 a 0,0 1080x2400 b 0,0 1080x2400
+SWEET FB: swap 18 layer 0 surface 1 1080x2400 fmt 0x42475241 bpr 4320 a 0,0 1080x2400 b 0,0 1080x2400
+SWEET FB: swap 19 layer 0 surface 17 1080x2400 fmt 0x42475241 bpr 4352 a 0,0 1080x2400 b 0,0 1080x2400
+SWEET FB: swap 20 layer 0 surface 1 1080x2400 fmt 0x42475241 bpr 4320 a 0,0 1080x2400 b 0,0 1080x2400
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+SWEET AKS: securityd sel 10 arg0 0 in 2/32 out 1/40 -> 0xe00002c7
+CRASH SiriTTSSynthesiz[306] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1008fc000
+CRASH SiriTTSSynthesiz pc 0x213a27198 lr 0x222fb65f8 sp 0x16f501ea0 fp 0x16f501ec0 far 0x230282e28
+CRASH SiriTTSSynthesiz bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH SiriTTSSynthesiz reason ns 2 code 0x6: (none)
+CRASH MacinTalkAUSP[307] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100124000
+CRASH MacinTalkAUSP pc 0x213a27198 lr 0x222fb65f8 sp 0x16fcd9ec0 fp 0x16fcd9ee0 far 0x230282e28
+CRASH MacinTalkAUSP bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH MacinTalkAUSP reason ns 2 code 0x6: (none)
+CRASH SiriTTSSynthesiz[309] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100680000
+CRASH SiriTTSSynthesiz pc 0x213a27198 lr 0x222fb65f8 sp 0x16f77dea0 fp 0x16f77dec0 far 0x230282e28
+CRASH SiriTTSSynthesiz bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH SiriTTSSynthesiz reason ns 2 code 0x6: (none)
+CRASH MacinTalkAUSP[310] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x10496c000
+CRASH MacinTalkAUSP pc 0x213a27198 lr 0x222fb65f8 sp 0x16b491ec0 fp 0x16b491ee0 far 0x230282e28
+CRASH MacinTalkAUSP bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH MacinTalkAUSP reason ns 2 code 0x6: (none)
+SWEET FB: display off
+CRASH assetsd[246] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104818000
+CRASH assetsd pc 0x213a27198 lr 0x222fb65f8 sp 0x16b786cd0 fp 0x16b786cf0 far 0x230282e28
+CRASH assetsd bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def7fd48 0x1def7f480 0x1def8cc68
+CRASH assetsd reason ns 2 code 0x6: (none)
+SWEET AKS: SpringBoard sel 32 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+CRASH SiriTTSSynthesiz[320] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104e28000
+CRASH SiriTTSSynthesiz pc 0x213a27198 lr 0x222fb65f8 sp 0x16afd5ea0 fp 0x16afd5ec0 far 0x230282e28
+CRASH SiriTTSSynthesiz bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH SiriTTSSynthesiz reason ns 2 code 0x6: (none)
+SWEET AKS: SpringBoard sel 32 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET FB: display on
+SWEET FB: backboardd sel 79 in 2/0 out 0/40 -> 0x0
+SWEET SURF: SpringBoard create id 18 272x184 fmt 0x42475241 bpe 4 bpr 1088 planes 0 size 212992 keys 6 -> 0x0
+SWEET SURF: SpringBoard create id 19 312x202 fmt 0x4c413038 bpe 2 bpr 640 planes 0 size 131072 keys 6 -> 0x0
+SWEET SURF: SpringBoard create id 20 230x186 fmt 0x4c413038 bpe 2 bpr 480 planes 0 size 98304 keys 6 -> 0x0
+SWEET SURF: SpringBoard create id 21 105x144 fmt 0x4c413038 bpe 2 bpr 224 planes 0 size 32768 keys 6 -> 0x0
+SWEET SURF: SpringBoard create id 22 102x144 fmt 0x4c413038 bpe 2 bpr 224 planes 0 size 32768 keys 6 -> 0x0
+SWEET SURF: SpringBoard create id 23 360x246 fmt 0x4c413038 bpe 2 bpr 736 planes 0 size 196608 keys 6 -> 0x0
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET SURF: chronod create id 24 423x423 fmt 0x42475241 bpe 4 bpr 1792 planes 0 size 770048 keys 10 -> 0x0
+CRASH chronod[214] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104784000
+CRASH chronod pc 0x213a27198 lr 0x222fb65f8 sp 0x16b7027a0 fp 0x16b7027c0 far 0x22e409a70
+CRASH chronod bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def836fc 0x1def841b0 0x1def8df14
+CRASH chronod reason ns 2 code 0x6: (none)
+Process[214] crashed: chronod. Too many corpses being created.
+CRASH assetsd[312] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100714000
+CRASH assetsd pc 0x213a27198 lr 0x222fb65f8 sp 0x16fabacd0 fp 0x16fabacf0 far 0x230282e28
+CRASH assetsd bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def7fd48 0x1def7f480 0x1def8cc68
+CRASH assetsd reason ns 2 code 0x6: (none)
+SWEET SURF: SpringBoard create id 25 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+CRASH MacinTalkAUSP[330] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100914000
+CRASH MacinTalkAUSP pc 0x213a27198 lr 0x222fb65f8 sp 0x16f4e9ec0 fp 0x16f4e9ee0 far 0x230282e28
+CRASH MacinTalkAUSP bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH MacinTalkAUSP reason ns 2 code 0x6: (none)
+CRASH SiriTTSSynthesiz[331] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100e64000
+CRASH SiriTTSSynthesiz pc 0x213a27198 lr 0x222fb65f8 sp 0x16ef99ea0 fp 0x16ef99ec0 far 0x230282e28
+CRASH SiriTTSSynthesiz bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH SiriTTSSynthesiz reason ns 2 code 0x6: (none)
+CRASH MacinTalkAUSP[333] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x102698000
+CRASH MacinTalkAUSP pc 0x213a27198 lr 0x222fb65f8 sp 0x16d765ec0 fp 0x16d765ee0 far 0x230282e28
+CRASH MacinTalkAUSP bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH MacinTalkAUSP reason ns 2 code 0x6: (none)
+CRASH SiriTTSSynthesiz[334] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x102d04000
+CRASH SiriTTSSynthesiz pc 0x213a27198 lr 0x222fb65f8 sp 0x16d0f9ea0 fp 0x16d0f9ec0 far 0x230282e28
+CRASH SiriTTSSynthesiz bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH SiriTTSSynthesiz reason ns 2 code 0x6: (none)
+Process[334] crashed: SiriTTSSynthesiz. Too many corpses being created.
+CRASH MacinTalkAUSP[335] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100198000
+CRASH MacinTalkAUSP pc 0x213a27198 lr 0x222fb65f8 sp 0x16fc65ec0 fp 0x16fc65ee0 far 0x230282e28
+CRASH MacinTalkAUSP bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH MacinTalkAUSP reason ns 2 code 0x6: (none)
+Process[335] crashed: MacinTalkAUSP. Too many corpses being created.
+CRASH assetsd[336] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100880000
+CRASH assetsd pc 0x213a27198 lr 0x222fb65f8 sp 0x16f9dacd0 fp 0x16f9dacf0 far 0x230282e28
+CRASH assetsd bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def7fd48 0x1def7f480 0x1def8cc68
+CRASH assetsd reason ns 2 code 0x6: (none)
+CRASH SiriTTSSynthesiz[339] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100e94000
+CRASH SiriTTSSynthesiz pc 0x213a27198 lr 0x222fb65f8 sp 0x16ef69ea0 fp 0x16ef69ec0 far 0x100fa0248
+CRASH SiriTTSSynthesiz bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH SiriTTSSynthesiz reason ns 2 code 0x6: (none)
+CRASH MacinTalkAUSP[340] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x10225c000
+CRASH MacinTalkAUSP pc 0x213a27198 lr 0x222fb65f8 sp 0x16dba1ec0 fp 0x16dba1ee0 far 0x230282e28
+CRASH MacinTalkAUSP bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH MacinTalkAUSP reason ns 2 code 0x6: (none)
+CRASH assetsd[342] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104150000
+CRASH assetsd pc 0x213a27198 lr 0x222fb65f8 sp 0x16bff2cd0 fp 0x16bff2cf0 far 0x230282e28
+CRASH assetsd bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def7fd48 0x1def7f480 0x1def8cc68
+CRASH assetsd reason ns 2 code 0x6: (none)
+CRASH AegirPoster[344] sig 9 code 0x0 sub 0x0 slide 0x51410000 mh 0x10296c000
+CRASH AegirPoster pc 0x213a21030 lr 0x213a32b18 sp 0x16d493380 fp 0x16d4933d0 far 0x233208934
+CRASH AegirPoster bt 0x213a32db8 0x213a21524 0x1d9763128 0x1d96bcbd8 0x1d9722f60 0x1d9779f74 0x1da5043b8 0x1dae14958 0x1da503fb0 0x238e552c8
+CRASH AegirPoster reason ns 7 code 0x3: extension check-in timeout
+CRASH AegirPoster[345] sig 9 code 0x0 sub 0x0 slide 0x51410000 mh 0x1025f0000
+CRASH AegirPoster pc 0x213a21030 lr 0x213a32b18 sp 0x16d80f380 fp 0x16d80f3d0 far 0x233208934
+CRASH AegirPoster bt 0x213a32db8 0x213a21524 0x1d9763128 0x1d96bcbd8 0x1d9722f60 0x1d9779f74 0x1da5043b8 0x1dae14958 0x1da503fb0 0x238e552c8
+CRASH AegirPoster reason ns 7 code 0x3: extension check-in timeout
+CRASH SiriTTSSynthesiz[349] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104f04000
+CRASH SiriTTSSynthesiz pc 0x213a27198 lr 0x222fb65f8 sp 0x16aef9ea0 fp 0x16aef9ec0 far 0x230282e28
+CRASH SiriTTSSynthesiz bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH SiriTTSSynthesiz reason ns 2 code 0x6: (none)
+CRASH MacinTalkAUSP[350] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104640000
+CRASH MacinTalkAUSP pc 0x213a27198 lr 0x222fb65f8 sp 0x16b7bdec0 fp 0x16b7bdee0 far 0x230282e28
+CRASH MacinTalkAUSP bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH MacinTalkAUSP reason ns 2 code 0x6: (none)
+CRASH MacinTalkAUSP[351] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x102ab8000
+CRASH MacinTalkAUSP pc 0x213a27198 lr 0x222fb65f8 sp 0x16d345ec0 fp 0x16d345ee0 far 0x230282e28
+CRASH MacinTalkAUSP bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH MacinTalkAUSP reason ns 2 code 0x6: (none)
+CRASH SiriTTSSynthesiz[352] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104f00000
+CRASH SiriTTSSynthesiz pc 0x213a27198 lr 0x222fb65f8 sp 0x16aefdea0 fp 0x16aefdec0 far 0x230282e28
+CRASH SiriTTSSynthesiz bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH SiriTTSSynthesiz reason ns 2 code 0x6: (none)
+CRASH AegirPoster[354] sig 9 code 0x0 sub 0x0 slide 0x51410000 mh 0x1027bc000
+CRASH AegirPoster pc 0x213a21030 lr 0x213a32b18 sp 0x16d643380 fp 0x16d6433d0 far 0x233208934
+CRASH AegirPoster bt 0x213a32db8 0x213a21524 0x1d9763128 0x1d96bcbd8 0x1d9722f60 0x1d9779f74 0x1da5043b8 0x1dae14958 0x1da503fb0 0x238e552c8
+CRASH AegirPoster reason ns 7 code 0x3: extension check-in timeout
+CRASH MacinTalkAUSP[356] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100c3c000
+CRASH MacinTalkAUSP pc 0x213a27198 lr 0x222fb65f8 sp 0x16f1c1ec0 fp 0x16f1c1ee0 far 0x230282e28
+CRASH MacinTalkAUSP bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH MacinTalkAUSP reason ns 2 code 0x6: (none)
+CRASH SiriTTSSynthesiz[357] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104f1c000
+CRASH SiriTTSSynthesiz pc 0x213a27198 lr 0x222fb65f8 sp 0x16aee1ea0 fp 0x16aee1ec0 far 0x230282e28
+CRASH SiriTTSSynthesiz bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH SiriTTSSynthesiz reason ns 2 code 0x6: (none)
+CRASH AegirPoster[359] sig 9 code 0x0 sub 0x0 slide 0x51410000 mh 0x10215c000
+CRASH AegirPoster pc 0x213a21030 lr 0x213a32b18 sp 0x16dca3380 fp 0x16dca33d0 far 0x233208934
+CRASH AegirPoster bt 0x213a32db8 0x213a21524 0x1d9763128 0x1d96bcbd8 0x1d9722f60 0x1d9779f74 0x1da5043b8 0x1dae14958 0x1da503fb0 0x238e552c8
+CRASH AegirPoster reason ns 7 code 0x3: extension check-in timeout
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET SURF: SpringBoard create id 26 90x200 fmt 0x42475241 bpe 4 bpr 384 planes 0 size 81920 keys 12 -> 0x0
+SWEET SURF: SpringBoard create id 27 270x600 fmt 0x42475241 bpe 4 bpr 1088 planes 0 size 655360 keys 12 -> 0x0
+SWEET SURF: SpringBoard create id 28 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: SpringBoard create id 29 90x200 fmt 0x42475241 bpe 4 bpr 384 planes 0 size 81920 keys 12 -> 0x0
+SWEET SURF: SpringBoard create id 30 270x600 fmt 0x42475241 bpe 4 bpr 1088 planes 0 size 655360 keys 12 -> 0x0
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET AKS: SpringBoard sel 8 arg0 0 in 1/0 out 0/0 -> 0xe00002c7
+SWEET SURF: AegirPoster create id 31 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0x0
+CRASH AegirPoster[362] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1003b0000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16fa4e560 fp 0x16fa4e580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: PosterBoard create id 32 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+CRASH MacinTalkAUSP[364] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100128000
+CRASH MacinTalkAUSP pc 0x213a27198 lr 0x222fb65f8 sp 0x16fcd5ec0 fp 0x16fcd5ee0 far 0x230282e28
+CRASH MacinTalkAUSP bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH MacinTalkAUSP reason ns 2 code 0x6: (none)
+CRASH SiriTTSSynthesiz[365] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100324000
+CRASH SiriTTSSynthesiz pc 0x213a27198 lr 0x222fb65f8 sp 0x16fad9ea0 fp 0x16fad9ec0 far 0x230282e28
+CRASH SiriTTSSynthesiz bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH SiriTTSSynthesiz reason ns 2 code 0x6: (none)
+CRASH MacinTalkAUSP[366] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104df8000
+CRASH MacinTalkAUSP pc 0x213a27198 lr 0x222fb65f8 sp 0x16b005ec0 fp 0x16b005ee0 far 0x230282e28
+CRASH MacinTalkAUSP bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH MacinTalkAUSP reason ns 2 code 0x6: (none)
+CRASH SiriTTSSynthesiz[367] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1000cc000
+CRASH SiriTTSSynthesiz pc 0x213a27198 lr 0x222fb65f8 sp 0x16fd31ea0 fp 0x16fd31ec0 far 0x230282e28
+CRASH SiriTTSSynthesiz bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH SiriTTSSynthesiz reason ns 2 code 0x6: (none)
+SWEET SURF: PosterBoard create id 33 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET FB: display off
+SWEET SURF: PosterBoard create id 34 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 35 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: AegirPoster create id 36 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0x0
+CRASH AegirPoster[370] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1024b4000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16d94a560 fp 0x16d94a580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: PosterBoard create id 37 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 38 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 39 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 40 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: AegirPoster create id 41 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0x0
+CRASH AegirPoster[371] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1028b0000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16d54e560 fp 0x16d54e580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: PosterBoard create id 42 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 43 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 44 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 45 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 46 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+CRASH MacinTalkAUSP[372] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1021b0000
+CRASH MacinTalkAUSP pc 0x213a27198 lr 0x222fb65f8 sp 0x16dc4dec0 fp 0x16dc4dee0 far 0x230282e28
+CRASH MacinTalkAUSP bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH MacinTalkAUSP reason ns 2 code 0x6: (none)
+CRASH SiriTTSSynthesiz[373] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104be4000
+CRASH SiriTTSSynthesiz pc 0x213a27198 lr 0x222fb65f8 sp 0x16b219ea0 fp 0x16b219ec0 far 0x230282e28
+CRASH SiriTTSSynthesiz bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH SiriTTSSynthesiz reason ns 2 code 0x6: (none)
+SWEET SURF: PosterBoard create id 47 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 48 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 49 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SÕRV: AegirPoster create id 50 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0x0
+CRASH AegirPoster[376] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104ab0000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16b34e560 fp 0x16b34e580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: PosterBoard create id 51 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 52 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 53 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 54 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 55 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: AegirPoster create id 56 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0x0
+CRASH AegirPoster[377] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1000ec000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16fd12560 fp 0x16fd12580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: PosterBoard create id 57 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 58 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 59 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 60 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 61 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 62 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: AegirPoster create id 63 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0x0
+CRASH AegirPoster[380] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x10450c000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16b8f2560 fp 0x16b8f2580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: PosterBoard create id 64 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+SWEET SURF: PosterBoard create id 65 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0x0
+CRASH AegirPoster[381] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1022e4000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16db1a560 fp 0x16db1a580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH MacinTalkAUSP[382] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104bd4000
+CRASH MacinTalkAUSP pc 0x213a27198 lr 0x222fb65f8 sp 0x16b229ec0 fp 0x16b229ee0 far 0x230282e28
+CRASH MacinTalkÁUSP bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH MacinTalkAUSP reason ns 2 code 0x6: (none)
+CRASH SiriTTSSynthesiz[383] syg 6pcode 0x0 sub 0x0 slide 0x51410000 mh 0x104704000
+CRASH SiriTTSSynthesiz pc 0x213a27198 lr 0x222fb65f8 sp 0x16b6f9ea0 fp 0x16b6f9ec0 far 0x230282e28
+CRASH SiriTTSSynthesiz bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH SiriTTSSynthesiz reason ns 2 code 0x6: (none)
+CRASH MacinTalkAUSP[384] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104e28000
+CRASH MacinTalkAUSP pc 0x213a27198 lr 0x222fb65f8 sp 0x16afd5ec0 fp 0x16afd5ee0 far 0x230282e28
+CRASH MacinTalkAUSP bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH MacinTalkAUSP reason ns 2 code 0x6: (none)
+CRASH SiriTTSSynthesiz[386] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x10264c000
+CRASH SiriTTSSynthesiz pc 0x213a27198 lr 0x222fb65f8 sp 0x16d7b1ea0 fp 0x16d7b1ec0 far 0x230282e28
+CRASH SiriTTSSynthesiz bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH SiriTTSSynthesiz reason ns 2 code 0x6: (none)
+CRASH AegirPoster[388] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1000fc000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16fd02560 fp 0x16fd02580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[389] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100a5c000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16f3a2560 fp 0x16f3a2580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+process vmd[185] thread 1673 caught burning CPU! It used more than 50% CPU over 180 seconds
+  (actual recent usage: 51% over ~175 seconds)
+  Thread lifetime cpu usage 137.765194s, (108.118734 user, 29.646460 sys)
+  Ledger balance: 1170000468; mabs credit: 1648694718; mabs debit: 478694250
+  mabs limit: 1170000000; mabs period: 180000000000 ns; last refill: 175455934846 ns.
+CRASH MacinTalkAUSP[390] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104304000
+CRASH MacinTalkAUSP pc 0x213a27198 lr 0x222fb65f8 sp 0x16baf9ec0 fp 0x16baf9ee0 far 0x230282e28
+CRASH MacinTalkAUSP bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH MacinTalkAUSP reason ns 2 code 0x6: (none)
+CRASH SiriTTSSynthesiz[392] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x102348000
+CRASH SiriTTSSynthesiz pc 0x213a27198 lr 0x222fb65f8 sp 0x16dab5ea0 fp 0x16dab5ec0 far 0x230282e28
+CRASH SiriTTSSynthesiz bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH SiriTTSSynthesiz reason ns 2 code 0x6: (none)
+CRASH AegirPoster[394] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x10244c000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16d9b2560 fp 0x16d9b2580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+Failed to open swap file 2
+SWEET SURF: CollectionsPoster sel 21
+SWEET SURF: CollectionsPoster sel 20
+CRASH AegirPoster[396] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x102174000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16dc8a560 fp 0x16dc8a580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET Sandbox: dasd privilege 1002 denied
+CRASH SiriTTSSynthesiz[403] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1020a0000
+CRASH SiriTTSSynthesiz pc 0x213a27198 lr 0x222fb65f8 sp 0x16dd5dea0 fp 0x16dd5dec0 far 0x230282e28
+CRASH SiriTTSSynthesiz bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH SiriTTSSynthesiz reason ns 2 code 0x6: (none)
+CRASH MacinTalkAUSP[404] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x102030000
+CRASH MacinTalkAUSP pc 0x213a27198 lr 0x222fb65f8 sp 0x16ddcdec0 fp 0x16ddcdee0 far 0x230282e28
+CRASH MacinTalkAUSP bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH MacinTalkAUSP reason ns 2 code 0x6: (none)
+CRASH SiriTTSSynthesiz[405] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x102ef0000
+CRASH SiriTTSSynthesiz pc 0x213a27198 lr 0x222fb65f8 sp 0x16cf0dea0 fp 0x16cf0dec0 far 0x230282e28
+CRASH SiriTTSSynthesiz bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH SiriTTSSynthesiz reason ns 2 code 0x6: (none)
+CRASH MacinTalkAUSP[406] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100614000
+CRASH MacinTalkAUSP pc 0x213a27198 lr 0x222fb65f8 sp 0x16f7e9ec0 fp 0x16f7e9ee0 far 0x230282e28
+CRASH MacinTalkAUSP bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH MacinTalkAUSP reason ns 2 code 0x6: (none)
+CRASH AegirPoster[409] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1002d4000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16fb2a560 fp 0x16fb2a580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[410] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x10029c000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16fb62560 fp 0x16fb62580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH SiriTTSSynthesiz[411] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x102114000
+CRASH SiriTTSSynthesiz pc 0x213a27198 lr 0x222fb65f8 sp 0x16dce9ea0 fp 0x16dce9ec0 far 0x230282e28
+CRASH SiriTTSSynthesiz bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH SiriTTSSynthesiz reason ns 2 code 0x6: (none)
+CRASH MacinTalkAUSP[412] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1028b0000
+CRASH MacinTalkAUSP pc 0x213a27198 lr 0x222fb65f8 sp 0x16d54dec0 fp 0x16d54dee0 far 0x230282e28
+CRASH MacinTalkAUSP bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222ef0da0 0x222ef0d60 0x1d14ddd58 0x1d82e3704 0x1fc349d5c
+CRASH MacinTalkAUSP reason ns 2 code 0x6: (none)
+CRASH AegirPoster[415] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x102b44000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16d2ba560 fp 0x16d2ba580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[416] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104184000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16bc7a560 fp 0x16bc7a580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[419] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104388000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16ba76560 fp 0x16ba76580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[420] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x10408c000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16bd72560 fp 0x16bd72580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[423] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104260000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16bb9e560 fp 0x16bb9e580 far 0x1146c0000
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[424] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1025b0000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16d84e560 fp 0x16d84e580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[427] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104bf0000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16b20e560 fp 0x16b20e580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[428] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1000cc000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16fd32560 fp 0x16fd32580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[431] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1040d8000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16bd26560 fp 0x16bd26580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[432] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104b4c000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16b2b2560 fp 0x16b2b2580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[435] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100344000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16faba560 fp 0x16faba580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[436] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1028f0000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16d50e560 fp 0x16d50e580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[439] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1042fc000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16bb02560 fp 0x16bb02580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[440] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1046ec000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16b712560 fp 0x16b712580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[443] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100b8c000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16f272560 fp 0x16f272580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[444] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x102370000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16da8e560 fp 0x16da8e580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[447] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x102c60000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16d19e560 fp 0x16d19e580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[448] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104864000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16b59a560 fp 0x16b59a580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+ufshci: UPIU 0x01 OCS 0xf (try 0)
+CRASH AegirPoster[451] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104da0000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16b05e560 fp 0x16b05e580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[452] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1023d4000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16da2a560 fp 0x16da2a580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+CRASH AegirPoster[455] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1002c0000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16fb3e560 fp 0x16fb3e580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+CRASH AegirPoster[456] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x10486c000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16b592560 fp 0x16b592580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: CollectionsPoster create id 0 1326x1326 fmt 0x42475241 bpe 4 bpr 6144 planes 0 size 9437184 keys 11 -> 0xe00002bd
+SWEET SURF: CollectionsPoster create id 0 1326x1326 fmt 0x4c303038 bpe 1 bpr 1536 planes 1 size 2359296 keys 11 -> 0xe00002bd
+SWEET SURF: CollectionsPoster create id 0 1326x1326 fmt 0x4c303038 bpe 1 bpr 1536 planes 1 size 2359296 keys 11 -> 0xe00002bd
+SWEET SURF: CollectionsPoster create id 0 1271x1823 fmt 0x4c303038 bpe 1 bpr 1536 planes 1 size 3145728 keys 11 -> 0xe00002bd
+SWEET SURF: CollectionsPoster create id 0 1271x1823 fmt 0x4c303038 bpe 1 bpr 1536 planes 1 size 3145728 keys 11 -> 0xe00002bd
+SWEET SURF: CollectionsPoster create id 0 1271x1823 fmt 0x4c303038 bpe 1 bpr 1536 planes 1 size 3145728 keys 11 -> 0xe00002bd
+SWEET SURF: CollectionsPoster create id 0 650x683 fmt 0x4c303038 bpe 1 bpr 656 planes 1 size 458752 keys 11 -> 0xe00002bd
+SWEET SURF: CollectionsPoster create id 0 650x684 fmt 0x4c303038 bpe 1 bpr 704 planes 1 size 491520 keys 11 -> 0xe00002bd
+SWEET SURF: CollectionsPoster create id 0 650x684 fmt 0x4c303038 bpe 1 bpr 704 planes 1 size 491520 keys 11 -> 0xe00002bd
+SWEET SURF: CollectionsPoster create id 0 1105x1160 fmt 0x34323066 bpe 4 bpr 4480 planes 2 size 5210112 keys 9 -> 0xe00002bd
+SWEET SURF: CollectionsPoster create id 0 1105x1160 fmt 0x42475241 bpe 4 bpr 6144 planes 0 size 9437184 keys 11 -> 0xe00002bd
+SWEET SURF: CollectionsPoster create id 0 1105x1160 fmt 0x42475241 bpe 4 bpr 6144 planes 0 size 9437184 keys 11 -> 0xe00002bd
+SWEET SURF: CollectionsPoster create id 0 1105x1160 fmt 0x42475241 bpe 4 bpr 6144 planes 0 size 9437184 keys 11 -> 0xe00002bd
+SWEET SURF: CollectionsPoster create id 0 1326x1160 fmt 0x4c303038 bpe 1 bpr 1536 planes 1 size 2359296 keys 11 -> 0xe00002bd
+SWEET SURF: CollectionsPoster create id 0 1326x1160 fmt 0x4c303038 bpe 1 bpr 1536 planes 1 size 2359296 keys 11 -> 0xe00002bd
+SWEET SURF: CollectionsPoster create id 0 1326x1160 fmt 0x4c303038 bpe 1 bpr 1536 planes 1 size 2359296 keys 11 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: AegirPoster create id 0 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0xe00002bd
+CRASH AegirPoster[459] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100a88000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16f376560 fp 0x16f376580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: AegirPoster create id 0 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0xe00002bd
+CRASH AegirPoster[460] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100c60000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16f19e560 fp 0x16f19e580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: AegirPoster create id 0 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0xe00002bd
+CRASH AegirPoster[462] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x10480c000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16b5f2560 fp 0x16b5f2580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: AegirPoster create id 0 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0xe00002bd
+CRASH AegirPoster[464] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1048f0000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16b50e560 fp 0x16b50e580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: AegirPoster create id 0 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0xe00002bd
+CRASH AegirPoster[466] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x104a5c000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16b3a2560 fp 0x16b3a2580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: AegirPoster create id 0 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0xe00002bd
+CRASH AegirPoster[468] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1004c8000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16f936560 fp 0x16f936580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: AegirPoster create id 0 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0xe00002bd
+CRASH AegirPoster[470] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x10278c000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16d672560 fp 0x16d672580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: AegirPoster create id 0 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0xe00002bd
+CRASH AegirPoster[472] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x10075c000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16f6a2560 fp 0x16f6a2580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: AegirPoster create id 0 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0xe00002bd
+CRASH AegirPoster[474] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100d3c000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16f0c2560 fp 0x16f0c2580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: AegirPoster create id 0 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0xe00002bd
+CRASH AegirPoster[476] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100934000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16f4ca560 fp 0x16f4ca580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: AegirPoster create id 0 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0xe00002bd
+CRASH AegirPoster[478] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x102234000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16dbca560 fp 0x16dbca580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: AegirPoster create id 0 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0xe00002bd
+CRASH AegirPoster[480] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100578000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16f886560 fp 0x16f886580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create i¤ 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: AegirPoster create id 0 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0xe00002bd
+CRASH AegirPoster[482] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1004ac000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16f952560 fp 0x16f952580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: AegirPoster create id 0 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0xe00002bd
+CRASH AegirPoster[484] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1020a0000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16dd5e560 fp 0x16dd5e580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: AegirPoster create id 0 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0xe00002bd
+CRASH AegirPoster[486] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x100944000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16f4ba560 fp 0x16f4ba580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: PosterBoard create id 0 1080x2400 fmt 0x42475241 bpe 4 bpr 4352 planes 0 size 10452992 keys 10 -> 0xe00002bd
+SWEET SURF: AegirPoster create id 0 1080x2400 fmt 0x41303038 bpe 1 bpr 1088 planes 0 size 2621440 keys 5 -> 0xe00002bd
+CRASH AegirPoster[488] sig 6 code 0x0 sub 0x0 slide 0x51410000 mh 0x1048f0000
+CRASH AegirPoster pc 0x213a27198 lr 0x222fb65f8 sp 0x16b50e560 fp 0x16b50e580 far 0x230282e28
+CRASH AegirPoster bt 0x1df06c4b8 0x222eeef54 0x222edfa4c 0x1d14e2afc 0x222eee424 0x222eee3d4 0x1defa8794 0x1def802d0 0x1ecd30410 0x1ecd3004c
+CRASH AegirPoster reason ns 2 code 0x6: (none)
+SWEET BOOT: syncing filesystems before diagnostic reset
+SWEET BOOT: diagnostic TOPRGU software reset
+SWEET BOOT: TOPRGU software reset returned

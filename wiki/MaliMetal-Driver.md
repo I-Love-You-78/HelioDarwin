@@ -248,6 +248,11 @@ report their individual reason. Both observed D8F18H specializations pass offlin
 compilation and SPIR-V validation; GPU dispatch, pixels and performance still
 require a new device run.
 
+The 23:17:49 run did not repeat the D8F18H rejection. Native memory
+creation and a missing texture-layout API are now observed blockers.
+Successful hardware completion was not separately logged; buffer swaps
+alone do not establish that a particular frame was GPU-rendered.
+
 ## Remaining coverage and validation
 
 Patched coherent color tile reads, native depth/stencil/MSAA helpers, views and

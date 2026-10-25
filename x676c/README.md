@@ -48,6 +48,12 @@ payload and generated ADT stay outside Git; dumps summarize the cache instead
 of printing its entries. Payload validation does not prove runtime admission.
 
 
+The latest [signed-cache run](../logs/boot-0202-run-40219933214-ui-signed-cache.log) admitted the original
+trust set and served real membership queries. PosterBoard started, but
+missing texture layout, native memory failures and incomplete rendering
+remain. The user returned manually; automatic recovery is not established
+for that run.
+
 ## Boot layout
 
 LK loads a boot image v4 containing the shim and kernel payload. The host builder
