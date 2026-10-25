@@ -1,5 +1,17 @@
 # Device boot logs
 
+The [19:51:55 MPS/watchdog run](boot-0200-run-40200328350-ui-mps-common.log)
+on 2026-10-25 used kernel `40200328350` and userspace `ec1806d`. The 79,206-byte
+original console reaches the 600-second sync/reset sequence and automatic
+Android return. TOPRGU reports an enabled 30-second timeout and initial service
+gaps near one second. Native MPS Common cache construction/readback passed in
+backboardd; no prior SpringBoard abort appears. The sampled shell instead waits
+on LaunchServices initialization. Journal recovery's MobileGestalt identity query
+entered the missing Wi-Fi-controller fallback; the poster query timed out.
+Separate logs retain native geometry `match=1`. A complete GPU frame, Gaussian
+pixels and wallpaper delivery remain unconfirmed; physical display-off was not
+exercised in this capture.
+
 The [18:14:02 draw/geometry retry](boot-0199-run-40127381401-ui-render-geometry.log)
 on 2026-10-25 used kernel `40127381401` and userspace `4c3a670`. Its original
 65,739-byte console was captured after self-reset; Android reported Watchdog.

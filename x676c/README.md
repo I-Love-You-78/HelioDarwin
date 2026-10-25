@@ -14,6 +14,25 @@ need device validation; SpringBoard and several services currently encounter a
 shared-cache metadata failure under investigation.
 See [engineering status](../NOTES.md) and the [wiki](../wiki/Home.md).
 
+The latest diagnostic completed its 600-second window and returned to Android.
+Native MPS Common registration and display-context readback succeeded, but no
+complete rendered UI is established. LaunchServices recovery waited on
+MobileGestalt's device-ID inputs: absent Wi-Fi metadata led to probing an
+unimplemented network controller. Boot preparation now captures actual factory
+Wi-Fi and provisioned Bluetooth data from rooted Android B into a private file,
+then emits their canonical six-byte `/chosen` properties. It rejects randomized
+interface addresses, reviewed vendor defaults and unrelated firmware layouts.
+This supplies hardware metadata, not working wireless drivers or Apple identity
+authentication; existing virtual ECID/version policy remains unchanged.
+
+`boot-xnu.ps1` captures that file automatically before building the ADT. An
+explicit `-DeviceIdentity PRIVATE_JSON` must contain both addresses and match
+the connected device serial; root and slot B are checked for both routes.
+`mkadt.py --device-identity PRIVATE_JSON` can also build an ADT offline; without
+that option its prior tree is unchanged. Dumps redact the private properties.
+Keep identity files and generated ADTs out of Git; the default `shim/out/` is
+ignored. Runtime identity lookup and database seeding still require a device run.
+
 ## Boot layout
 
 LK loads a boot image v4 containing the shim and kernel payload. The host builder

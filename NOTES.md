@@ -76,6 +76,15 @@ exact framework ABI; it does not advertise an Apple GPU family. Patch 0200 also
 separates hardware-watchdog service from display refresh. New-kernel liveness,
 actual MPS registration/dispatch, pixels and performance require device evidence.
 
+The subsequent full diagnostic reached the 600-second reset and returned
+automatically to Android. Native MPS Common registration/readback passed in
+backboardd, while SpringBoard waited on LaunchServices database initialization.
+The sampled installation-journal path requested MobileGestalt identity and waited
+for missing Wi-Fi metadata. Private provisioned Wi-Fi/Bluetooth inputs now feed
+the ADT; runtime identity lookup, seeding, rendered frames and wallpaper delivery
+remain the next checks. No wireless-driver or authentic Apple hardware identity
+claim is implied.
+
 ## Priorities
 
 1. Validate the assembled native display/input/MaliMetal candidate, recording

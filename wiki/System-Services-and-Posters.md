@@ -117,6 +117,17 @@ proven display-off service coupling; its runtime liveness is still pending.
 The registration log remained at LaunchServices, and an actual timeout or
 successful provider delivery has not been established.
 
+The later full diagnostic reached the intended 600-second reset. Native MPS
+Common construction/cache readback succeeded in backboardd, and no prior
+SpringBoard abort appeared in that capture; Gaussian output remains unverified.
+The helper timed out on its real ExtensionKit query. Sampled `lsd` was restoring
+installation journals: InstalledContentLibrary requested UniqueDeviceID, then
+MobileGestalt waited for Wi-Fi identity through an IONetworkController match.
+The direct `/chosen` factory-address property was absent. Boot preparation now
+supplies verified private Wi-Fi and Bluetooth metadata without creating a network
+driver or changing identity-version policy. The resulting seeding/query/provider
+delivery is a new runtime check, not yet a completed wallpaper milestone.
+
 ## Remaining contracts
 
 Persistent AppleKeyStore key wrapping/unwrapping, bag lifecycle and access control remain missing prerequisites for real keychain persistence. SEP-backed protection, biometric/NFC/secure-element interfaces, modem transport, Wi-Fi/Bluetooth controllers and the USB PTP function require separate implementations. Search, ScreenTime and pass services also retain storage, account and keybag dependencies. These changes do not establish blanket daemon or hardware functionality.

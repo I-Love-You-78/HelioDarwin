@@ -1,5 +1,18 @@
 # Boot and Shim
 
+The X676C deployment helper captures factory Wi-Fi and provisioned Bluetooth
+metadata from rooted Android slot B before ADT construction. A private JSON file
+supplies canonical six-byte `/chosen/mac-address-wifi0` and
+`/chosen/mac-address-bluetooth0` properties; dumps redact them. Explicit identity
+files must match the connected device, and the helper never substitutes a current
+randomized interface address. Values are not embedded in repository source.
+
+The Bluetooth reader validates the reviewed MediaTek vendor libraries, record
+layout, checksum and byte order. This is provisioned controller metadata, not an
+independent eFuse read. No Wi-Fi/Bluetooth driver, ECID/version change or Apple
+authentication follows from these properties. This closes a demonstrated missing
+MobileGestalt input; runtime LaunchServices recovery remains to be validated.
+
 HelioDarwin boots XNU on the Infinix Note 12 2023 (X676C / MT6789) through the stock MediaTek boot chain. The shim is packaged as an Android boot image v4; it supplies the Apple Device Tree (ADT), boot arguments and kernel entry state that this XNU port expects.
 
 ```text

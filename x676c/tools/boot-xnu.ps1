@@ -10,6 +10,7 @@ param(
     [Parameter(Mandatory)] [ValidatePattern('^[0-9]+$')] [string]$Run,
     [string]$Adb = "adb",
     [string]$Serial = "",
+    [string]$DeviceIdentity = "",
     [ValidatePattern('^(?:/[A-Za-z0-9_.-]+)+$|^[A-Za-z0-9_.-]+$')] [string]$Su = "su",
     [ValidateRange(1, 120)] [int]$ReturnWaitMinutes = 20,
     [string]$BootArgs = "debug=0xc serial=3 cpus=6 keepsyms=1 -v -enable_kprintf_spam wdt=-1 wdt_test=no_user_checkin rd=ufs ufsroot=iosroot ufsrw=iosroot unentitled_ios_sim_launch=1 ignition_level=1 launchd_unsecure_cache=1 sweetsample=- ufsbeat=64 sweetscan=backboardd,SpringBoard,PosterBoard sweetnull=launchd,dyld,init,backboardd,SpringBoard,lsd,containermanagerd sweetfb_noconsole=1 sweetfb_native=1 sweetfb_stayon=1"
@@ -43,7 +44,33 @@ if (-not (Test-Path "$k\kernel.development.sweet")) {
 # 2. ADT, payload, boot image
 python -I (Join-Path $x676c "tools\verify-startup.py") "$k\kernel.development.sweet"
 if ($LASTEXITCODE) { throw "Kernel startup policy verification failed" }
-python -I (Join-Path $x676c "tools\mkadt.py") "$out\x676c.adt"
+& $adb @adbArguments wait-for-device
+if ($LASTEXITCODE) { throw "ADB identity capture wait failed" }
+if (((Phone 'id -u') -join '').Trim() -ne '0' -or
+    ((Phone 'getprop ro.boot.slot_suffix') -join '').Trim() -ne '_b') {
+    throw "Boot identity and deployment require rooted Android slot B"
+}
+if (-not $DeviceIdentity) {
+    $DeviceIdentity = Join-Path $out 'device-identity.json'
+    $identityArguments = @('--adb', $adb, '--su', $Su, '--out', $DeviceIdentity)
+    if ($Serial) { $identityArguments += @('--serial', $Serial) }
+    python -I (Join-Path $x676c "tools\read-device-identity.py") @identityArguments
+    if ($LASTEXITCODE) { throw "Factory identity unavailable; no boot image flashed" }
+}
+try {
+    $identityData = Get-Content -LiteralPath $DeviceIdentity -Raw -ErrorAction Stop |
+        ConvertFrom-Json -ErrorAction Stop
+} catch {
+    throw "Private device identity could not be read; no boot image flashed"
+}
+if (-not $identityData.wifi_mac -or -not $identityData.bluetooth_mac -or -not $identityData.device_serial) {
+    throw "Boot identity must contain both provisioned addresses and device binding"
+}
+$connectedIdentitySerial = & $adb @adbArguments get-serialno
+if ($LASTEXITCODE -or $connectedIdentitySerial.Trim() -ne $identityData.device_serial) {
+    throw "Private identity belongs to another device; no boot image flashed"
+}
+python -I (Join-Path $x676c "tools\mkadt.py") "$out\x676c.adt" --device-identity $DeviceIdentity
 if ($LASTEXITCODE) { throw "ADT build failed" }
 python -I (Join-Path $x676c "tools\mkpayload.py") "$k\kernel.development.sweet" "$out\x676c.adt" "$out\payload.bin" --cmdline $BootArgs
 if ($LASTEXITCODE) { throw "payload build failed" }
@@ -53,6 +80,9 @@ if ($LASTEXITCODE) { throw "boot image build failed" }
 # 3. boot_a + slot A with one try (misc boot_control, see tools/bootctl_block.py)
 & $adb @adbArguments wait-for-device
 if ($LASTEXITCODE) { throw "ADB wait failed" }
+if (((Phone 'getprop ro.boot.slot_suffix') -join '').Trim() -ne '_b') {
+    throw "Android fallback slot changed; no boot image flashed"
+}
 Phone "dd if=/dev/block/by-name/misc of=/data/local/tmp/bctl.bin bs=1 skip=2048 count=32 2>/dev/null"
 & $adb @adbArguments pull /data/local/tmp/bctl.bin "$out\bctl_now.bin" | Out-Null
 if ($LASTEXITCODE) { throw "boot control read failed" }

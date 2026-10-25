@@ -2,17 +2,17 @@
 """Build the minimal Apple Device Tree the xnu kernel needs on the X676C.
 
 Port of tools/mkadt.py (topaz) to the Infinix Note 12 2023 (MediaTek MT6789).
-Every address comes from the X676C live FDT (see x676c/README.md). Only what
-the early boot path reads is here; peripherals (UFS, touch, keys, battery,
-wlan) get nodes once their drivers are ported. Usage:
+Every address comes from the X676C live FDT (see x676c/README.md). Early boot
+nodes and optional verified factory metadata are provided here; peripheral
+service nodes depend on their ported drivers. Usage:
 
-  mkadt.py OUT.adt [--dump] [--d22ap PATH]
+  mkadt.py OUT.adt [--dump] [--d22ap PATH] [--device-identity PRIVATE_JSON]
 
 The kernel still matches the topaz class names (SweetPlatformExpert matches
 'xiaomi,sweet', CPU nubs 'qcom,kryo470'), so those compatible strings stay
 until the kernel side is renamed.
 """
-import argparse, hashlib, os, struct, sys
+import argparse, hashlib, json, os, re, struct, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import adt  # noqa: E402
@@ -39,8 +39,8 @@ VTIMER_INTID = 16 + 11
 UFS, UFS_SIZE, UFS_SPI = 0x11270000, 0x2300, 137
 INFRACFG_AO = 0x10001000
 
-# Visible top layer LK leaves on the command-mode panel (OVL0 L1); the shim's
-# display pump on CPU 0x700 pushes it to the glass.
+# Visible top layer LK leaves on the command-mode panel (OVL0 L1). The shim
+# passes this framebuffer to XNU, whose MTK display driver owns panel updates.
 FB, FB_SIZE = 0xfeabe000, 0xa00000
 FB_W, FB_H, FB_STRIDE = 1080, 2400, 1080 * 4
 
@@ -48,8 +48,7 @@ X676C_ECID = 0x5836373643000001  # 'X676C' + 1, synthetic
 BOOT_MANIFEST_HASH = hashlib.sha384(b'x676c boot manifest').digest()
 
 # CPUs xnu may use: the six Cortex-A55 (MPIDR 0x000-0x500, one cluster).
-# 0x600 (A76) is left off for now: mixing core types needs the AMP topology.
-# 0x700 (A76) runs the shim's display pump and must never be listed.
+# Both A76 cores (0x600 and 0x700) remain off pending AMP topology support.
 CPU_MPIDRS = [0x000, 0x100, 0x200, 0x300, 0x400, 0x500]
 
 D22AP_ADT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../research/d22ap.adt')
@@ -79,7 +78,48 @@ def d22ap_product(path):
     raise SystemExit(f'{path}: no /product node')
 
 
-def build(seed=None, d22ap=D22AP_ADT):
+def factory_address(value, label):
+    if not isinstance(value, str) or not re.fullmatch(r'(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}', value):
+        raise ValueError(f'Factory {label} identity must contain six colon-separated octets')
+    address = bytes.fromhex(value.replace(':', ''))
+    if address in (bytes(6), b'\xff' * 6) or address[0] & 3:
+        raise ValueError(f'Factory {label} identity must be a non-placeholder globally assigned unicast address')
+    return address
+
+
+def factory_device_identity(path):
+    """Read private factory metadata without publishing identifiers in diagnostics."""
+    try:
+        with open(path, encoding='utf-8') as stream:
+            identity = json.load(stream)
+    except (OSError, ValueError) as error:
+        raise ValueError('Cannot read private device identity JSON') from error
+    if (not isinstance(identity, dict) or
+            not {'wifi_mac', 'source'} <= identity.keys() or
+            identity.keys() - {'schema_version', 'wifi_mac', 'source', 'device_serial', 'captured_utc',
+                               'bluetooth_mac', 'bluetooth_source'} or
+            ('schema_version' in identity and
+             (type(identity['schema_version']) is not int or identity['schema_version'] != 1)) or
+            identity['source'] != 'android:dumpsys_wifi_factory' or
+            any(name in identity and not isinstance(identity[name], str)
+                for name in ('device_serial', 'captured_utc'))):
+        raise ValueError('Unsupported private device identity schema or provenance')
+    properties = {'mac-address-wifi0': factory_address(identity['wifi_mac'], 'Wi-Fi')}
+    if ('bluetooth_mac' in identity) != ('bluetooth_source' in identity):
+        raise ValueError('Private Bluetooth identity requires both address and provenance')
+    if 'bluetooth_mac' in identity:
+        if identity['bluetooth_source'] != 'android:mtk_nvram_btradio_v1':
+            raise ValueError('Unsupported private Bluetooth identity provenance')
+        properties['mac-address-bluetooth0'] = factory_address(identity['bluetooth_mac'], 'Bluetooth')
+    return properties
+
+
+def factory_wifi_identity(path):
+    return factory_device_identity(path)['mac-address-wifi0']
+
+
+def build(seed=None, d22ap=D22AP_ADT, device_identity=None):
+    factory_identity = factory_device_identity(device_identity) if device_identity is not None else {}
     seed = seed if seed is not None else os.urandom(64)
     phandle = iter(range(1, 1000))
     ph = lambda: ('AAPL,phandle', u32(next(phandle)))
@@ -104,6 +144,10 @@ def build(seed=None, d22ap=D22AP_ADT):
         ('effective-security-mode-sep', u32(1)),
     ], [node('memory-map', [ph()]),
         node('asmb', [ph(), ('lp-sip0', u64(0x6f)), ('lp-sip1', u32(1))])])
+    for name, value in factory_identity.items():
+        # MobileGestalt reads factory addresses directly from /chosen, before
+        # probing drivers. Hardware metadata is independent of radio services.
+        chosen.props.append((name, 0, value))
 
     cpu_nodes = []
     for i, mpidr in enumerate(CPU_MPIDRS):
@@ -208,9 +252,18 @@ if __name__ == '__main__':
     ap.add_argument('out')
     ap.add_argument('--dump', action='store_true')
     ap.add_argument('--d22ap', default=D22AP_ADT, help='iPhone X DeviceTree (for /product)')
+    ap.add_argument('--device-identity', help='private JSON containing Android factory hardware metadata')
     a = ap.parse_args()
-    blob = adt.serialize(build(d22ap=a.d22ap))
+    try:
+        blob = adt.serialize(build(d22ap=a.d22ap, device_identity=a.device_identity))
+    except ValueError as error:
+        ap.error(str(error))
     open(a.out, 'wb').write(blob)
     if a.dump:
-        adt.dump(adt.parse(blob)[0])
+        displayed = adt.parse(blob)[0]
+        if a.device_identity is not None:
+            chosen = next(child for child in displayed.children if child.name == 'chosen')
+            chosen.props = [(name, flags, b'<private factory identity>\0' if name in ('mac-address-wifi0', 'mac-address-bluetooth0') else value)
+                            for name, flags, value in chosen.props]
+        adt.dump(displayed)
     print(f'{a.out}: {len(blob)} bytes', file=sys.stderr)
