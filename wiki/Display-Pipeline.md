@@ -18,6 +18,10 @@ The software vsync timer requests refresh at approximately 60 Hz. That cadence
 does not prove sustained 60 FPS, tear-free presentation or GPU acceleration.
 Framebuffer copies and cache cleaning still consume CPU time.
 
+Patch 0200 services the inherited TOPRGU watchdog on a separate timer/workloop;
+display-off and a busy DSI path cannot skip that service. Its configuration is
+preserved. Runtime service gaps and display-off liveness remain validation gates.
+
 ## Serialized DSI refresh
 
 Patch 0190 follows the inspected MediaTek DRM trigger ordering:

@@ -1,0 +1,226 @@
+x676c: service the inherited TOPRGU watchdog independently of scanout
+
+Display-off must not stop the armed hardware watchdog heartbeat. Use a separate
+workloop and timer, bound its interval from the inherited LENGTH, preserve
+MODE/LENGTH and report the initial registers and first service gaps. Own and
+quiesce the MMIO mapping and callback lifetime. The diagnostic reset is unchanged.
+
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -81,11 +81,18 @@
+ 
+ static volatile uint32_t *sMtkDsi = NULL;
+ static volatile uint32_t *sMtkMutex = NULL;
+-static volatile uint32_t *sMtkWdt = NULL;
+ static volatile UInt32 sMtkPushActive;
+ static uint64_t sMtkBusySince;
+ static uint32_t sMtkRecoveries;
+ 
++static uint32_t
++mtk_display_read(volatile uint32_t *base, uint32_t offset)
++{
++	uint32_t value = base[offset / 4];
++	__asm__ volatile("dsb sy" ::: "memory");
++	return value;
++}
++
+ static void
+ mtk_display_write(volatile uint32_t *base, uint32_t offset, uint32_t value)
+ {
+@@ -106,12 +113,6 @@
+ 	}
+ 	if (sMtkMutex == NULL) {
+ 		sMtkMutex = (volatile uint32_t *)ml_io_map(0x14001000, 0x1000);
+-	}
+-	if (sMtkWdt == NULL) {
+-		sMtkWdt = (volatile uint32_t *)ml_io_map(0x10007000, 0x1000);
+-	}
+-	if (sMtkWdt != NULL) {
+-		sMtkWdt[0x08 / 4] = 0x1971; /* Kick MTK TOPRGU watchdog */
+ 	}
+ 	if (sMtkDsi != NULL && sMtkMutex != NULL) {
+ 		uint32_t status = sMtkDsi[0x0c / 4];
+@@ -254,6 +255,18 @@
+ 
+ 	IOWorkLoop         *fWorkLoop;
+ 	IOTimerEventSource *fVsync;
++	/* TOPRGU liveness must survive display-off and stalled scanout work. */
++	IOWorkLoop         *fWdtWorkLoop;
++	IOTimerEventSource *fWdtTimer;
++	IOMemoryMap        *fWdtMap;
++	volatile uint32_t  *fWdtRegisters;
++	bool                fWdtAttached;
++	uint32_t            fWdtIntervalUS, fWdtTimeoutUS, fWdtServices;
++	uint64_t            fWdtLastService;
++	bool startWatchdog(void);
++	void stopWatchdog(void);
++	static IOReturn stopWatchdogAction(OSObject *owner, void *, void *, void *, void *);
++	static void watchdogFired(OSObject *owner, IOTimerEventSource *sender);
+ 	uint64_t            fVsyncCount;
+ 
+ 	static void vsyncFired(OSObject *owner, IOTimerEventSource *sender);
+@@ -305,6 +318,8 @@
+ 	void          fadeStep(const uint8_t *src, uint32_t srcStride, uint32_t step);
+ 
+ 	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
++	void stop(IOService *provider) APPLE_KEXT_OVERRIDE;
++	void free(void) APPLE_KEXT_OVERRIDE;
+ 	IOReturn setProperties(OSObject *properties) APPLE_KEXT_OVERRIDE;
+ 	/* topaz panel brightness: DCS 0x51 over DSI0 (MakrSas/topaz-woa TopazGpuW disp.c) */
+ 	volatile uint8_t *fDsi;
+@@ -424,11 +439,132 @@
+ OSDefineMetaClassAndStructors(IOMobileFramebufferUserClient, IOUserClient);
+ 
+ bool
++AppleCLCD::startWatchdog(void)
++{
++	if (!sweet_board_x676c()) {
++		return true;
++	}
++	IOMemoryDescriptor *memory = IOMemoryDescriptor::withPhysicalAddress(
++	    0x10007000, 0x1000, kIODirectionInOut);
++	fWdtMap = memory != NULL ? memory->map(kIOMapAnywhere | kIOMapInhibitCache) : NULL;
++	OSSafeReleaseNULL(memory);
++	if (fWdtMap == NULL || fWdtMap->getLength() < 0x18 || fWdtMap->getVirtualAddress() == 0) {
++		IOLog("SWEET TOPRGU: heartbeat MMIO mapping failed\n");
++		stopWatchdog();
++		return false;
++	}
++	fWdtRegisters = (volatile uint32_t *)(uintptr_t)fWdtMap->getVirtualAddress();
++	uint32_t mode = mtk_display_read(fWdtRegisters, 0x00);
++	uint32_t length = mtk_display_read(fWdtRegisters, 0x04);
++	uint32_t status = mtk_display_read(fWdtRegisters, 0x0c);
++	/* LENGTH[15:5] counts 1/64-second units; vendor seconds use << 11.
++	 * Never change the inherited MODE, LENGTH, or reset/status registers. */
++	uint32_t counts = (length & 0xffe0u) >> 5;
++	if (mode == UINT32_MAX || length == UINT32_MAX || ((mode & 1u) && counts == 0)) {
++		IOLog("SWEET TOPRGU: invalid inherited mode %#x length %#x status %#x\n",
++		    mode, length, status);
++		stopWatchdog();
++		return false;
++	}
++	fWdtTimeoutUS = counts * 1000000u / 64u;
++	fWdtIntervalUS = (mode & 1u) ? fWdtTimeoutUS / 4u : 1000000u;
++	if (fWdtIntervalUS > 1000000u) {
++		fWdtIntervalUS = 1000000u;
++	}
++	mtk_display_write(fWdtRegisters, 0x08, 0x1971);
++	fWdtLastService = mach_absolute_time();
++	fWdtServices = 1;
++	IOLog("SWEET TOPRGU: inherited mode %#x length %#x status %#x; enabled %u timeout_us %u heartbeat_us %u\n",
++	    mode, length, status, mode & 1u, fWdtTimeoutUS, fWdtIntervalUS);
++	fWdtWorkLoop = IOWorkLoop::workLoop();
++	fWdtTimer = IOTimerEventSource::timerEventSource(this, &AppleCLCD::watchdogFired);
++	if (fWdtWorkLoop == NULL || fWdtTimer == NULL ||
++	    fWdtWorkLoop->addEventSource(fWdtTimer) != kIOReturnSuccess) {
++		IOLog("SWEET TOPRGU: heartbeat event setup failed; inherited watchdog unchanged\n");
++		stopWatchdog();
++		return false;
++	}
++	fWdtAttached = true;
++	if (fWdtTimer->setTimeoutUS(fWdtIntervalUS) != kIOReturnSuccess) {
++		IOLog("SWEET TOPRGU: initial heartbeat scheduling failed\n");
++		stopWatchdog();
++		return false;
++	}
++	return true;
++}
++
++void
++AppleCLCD::watchdogFired(OSObject *owner, IOTimerEventSource *sender)
++{
++	AppleCLCD *fb = (AppleCLCD *)owner;
++	uint64_t now = mach_absolute_time(), elapsed_ns;
++	mtk_display_write(fb->fWdtRegisters, 0x08, 0x1971);
++	absolutetime_to_nanoseconds(now - fb->fWdtLastService, &elapsed_ns);
++	fb->fWdtLastService = now;
++	if (fb->fWdtServices < 4) {
++		IOLog("SWEET TOPRGU: heartbeat %u gap_us %llu inherited_timeout_us %u\n",
++		    ++fb->fWdtServices, elapsed_ns / NSEC_PER_USEC, fb->fWdtTimeoutUS);
++	}
++	if (sender->setTimeoutUS(fb->fWdtIntervalUS) != kIOReturnSuccess) {
++		IOLog("SWEET TOPRGU: heartbeat rearm failed; service stopped\n");
++	}
++}
++
++IOReturn
++AppleCLCD::stopWatchdogAction(OSObject *owner, void *, void *, void *, void *)
++{
++	AppleCLCD *fb = (AppleCLCD *)owner;
++	/* runAction serializes with timer MMIO users and invalidates queued calls. */
++	fb->fWdtTimer->disable();
++	fb->fWdtTimer->cancelTimeout();
++	return kIOReturnSuccess;
++}
++
++void
++AppleCLCD::stopWatchdog(void)
++{
++	if (fWdtTimer != NULL) {
++		if (fWdtAttached) {
++			(void)fWdtWorkLoop->runAction(&AppleCLCD::stopWatchdogAction, this);
++			fWdtWorkLoop->removeEventSource(fWdtTimer);
++			fWdtAttached = false;
++		} else {
++			fWdtTimer->disable();
++			fWdtTimer->cancelTimeout();
++		}
++		OSSafeReleaseNULL(fWdtTimer);
++	}
++	OSSafeReleaseNULL(fWdtWorkLoop);
++	if (fWdtServices != 0 && fWdtMap != NULL) {
++		IOLog("SWEET TOPRGU: heartbeat removed; inherited watchdog configuration unchanged\n");
++	}
++	fWdtRegisters = NULL;
++	OSSafeReleaseNULL(fWdtMap);
++}
++
++void
++AppleCLCD::stop(IOService *provider)
++{
++	stopWatchdog();
++	IOService::stop(provider);
++}
++
++void
++AppleCLCD::free(void)
++{
++	stopWatchdog();
++	IOService::free();
++}
++
++bool
+ AppleCLCD::start(IOService *provider)
+ {
+ 	PE_Video video;
+ 
+ 	if (!IOService::start(provider)) {
++		return false;
++	}
++	if (!startWatchdog()) {
+ 		return false;
+ 	}
+ 	if (!sweet_board_x676c()) {
+@@ -442,6 +578,7 @@
+ 	fRowBytes = (uint32_t)video.v_rowBytes;
+ 	if (fPhys == 0 || fWidth == 0 || fHeight == 0 || fRowBytes < fWidth * 4) {
+ 		IOLog("SWEET FB: no boot framebuffer\n");
++		stopWatchdog();
+ 		return false;
+ 	}
+ 	int native = 0;
+@@ -464,11 +601,13 @@
+ 		IOLog("SWEET FB: setup failed\n");
+ 		OSSafeReleaseNULL(fSurface);    /* stays published: also held by the table */
+ 		OSSafeReleaseNULL(fWorkLoop);
++		stopWatchdog();
+ 		return false;
+ 	}
+ 	fVsync = IOTimerEventSource::timerEventSource(this, &AppleCLCD::vsyncFired);
+ 	if (fVsync == NULL || fWorkLoop->addEventSource(fVsync) != kIOReturnSuccess) {
+ 		IOLog("SWEET FB: no vsync timer\n");
++		stopWatchdog();
+ 		return false;
+ 	}
+ 	/*

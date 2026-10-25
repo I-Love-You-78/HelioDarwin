@@ -18,6 +18,21 @@ With `sweetreboot=N`, where `1 <= N <= 1800`, the X676C kernel starts a diagnost
 
 This is a tested software-reset path, not an unconditional hardware watchdog: it needs UFS startup, kernel scheduling and completion of sync. It cannot guarantee recovery from an earlier boot failure or a kernel-wide hang. Without the boot argument, no diagnostic reset deadline is armed.
 
+## Inherited hardware watchdog
+
+The platform can also enter XNU with TOPRGU already armed. Earlier source fed it
+only during display pushes; display-off skipped that path. A subsequent early
+return reported `Watchdog` in Android, with display-off in the preceding console
+and no diagnostic-reset or panic marker. The service coupling is proven; the
+precise inherited timeout and reset subtype were not captured in that boot.
+
+Patch 0200 moves the existing restart write to a dedicated timer and workloop,
+independent of display power and scanout. It preserves inherited MODE/LENGTH,
+derives its cadence from that timeout and logs the initial registers and first
+service gaps. It does not disable the watchdog or change the 600-second
+diagnostic reset. Source/object/patch checks pass; hardware liveness through
+display-off and the intended reset still require a new-kernel boot.
+
 ## Deployment helpers
 
 ```powershell
