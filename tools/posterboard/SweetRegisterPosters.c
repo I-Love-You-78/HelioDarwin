@@ -170,11 +170,16 @@ main(int argc, char **argv)
         0x8d,0x42,0x10,0x3d,0xbd,0x59,0x30,0x8d,
         0x9d,0x2c,0x20,0x82,0xb3,0x97,0x38,0xe7,
     };
-    if (!verified_image("/System/Library/Frameworks/CoreServices.framework/CoreServices", core_uuid)) {
-        fprintf(stderr, "Unverified CoreServices UUID; refusing private registration API\n");
+    static const unsigned char extension_uuid[16] = {
+        0xf1,0x10,0x0c,0xe5,0x49,0xb1,0x34,0xbd,
+        0xaa,0xfd,0x30,0xcf,0xb2,0x46,0x6b,0x47,
+    };
+    if (!verified_image("/System/Library/Frameworks/CoreServices.framework/CoreServices", core_uuid) ||
+        !verified_image("/System/Library/Frameworks/ExtensionFoundation.framework/ExtensionFoundation", extension_uuid)) {
+        fprintf(stderr, "Unverified CoreServices/ExtensionFoundation UUID; refusing private registration/query APIs\n");
         return 1;
     }
-    checkpoint("CoreServices UUID verified; resolving runtime contract");
+    checkpoint("CoreServices/ExtensionFoundation UUIDs verified; resolving runtime contract");
     void *(*klass)(const char *) = dlsym(RTLD_DEFAULT, "objc_getClass");
     void *(*sel)(const char *) = dlsym(RTLD_DEFAULT, "sel_registerName");
     void *(*class_method)(void *, void *) = dlsym(RTLD_DEFAULT, "class_getClassMethod");
@@ -185,6 +190,7 @@ main(int argc, char **argv)
     void *(*send_index)(void *, void *, unsigned long) = dlsym(RTLD_DEFAULT, "objc_msgSend");
     const char *(*send_cstring)(void *, void *) = dlsym(RTLD_DEFAULT, "objc_msgSend");
     unsigned char (*send_bool)(void *, void *, void *) = dlsym(RTLD_DEFAULT, "objc_msgSend");
+    unsigned char (*query_authorized)(void *, void *, void *, void **) = dlsym(RTLD_DEFAULT, "objc_msgSend");
     void *(*pool_push)(void) = dlsym(RTLD_DEFAULT, "objc_autoreleasePoolPush");
     void (*pool_pop)(void *) = dlsym(RTLD_DEFAULT, "objc_autoreleasePoolPop");
     void *(*url_create)(void *, const unsigned char *, long, unsigned char) =
@@ -193,19 +199,21 @@ main(int argc, char **argv)
     void (*release)(void *) = dlsym(RTLD_DEFAULT, "CFRelease");
     if (!klass || !sel || !class_method || !instance_method || !send0 || !send1 ||
         !send_count || !send_index || !send_cstring || !send_bool || !pool_push ||
-        !pool_pop || !url_create || !string_create || !release) {
+        !pool_pop || !url_create || !string_create || !release || !query_authorized) {
         fprintf(stderr, "Required registration/query runtime symbols are unavailable\n");
         return 1;
     }
     void *workspace_class = klass("LSApplicationWorkspace");
     void *query_class = klass("_EXQuery");
     void *controller = klass("_EXQueryController");
+    void *discovery_class = klass("_EXDiscoveryController");
     void *array_class = klass("NSArray");
-    if (!workspace_class || !query_class || !controller || !array_class ||
+    if (!workspace_class || !query_class || !controller || !discovery_class || !array_class ||
         !class_method(workspace_class, sel("defaultWorkspace")) ||
         !instance_method(workspace_class, sel("registerPlugin:")) ||
         !instance_method(query_class, sel("initWithExtensionPointIdentifier:")) ||
         !class_method(controller, sel("executeQueries:")) ||
+        !class_method(discovery_class, sel("canRunQuery:error:")) ||
         !class_method(array_class, sel("arrayWithObject:"))) {
         fprintf(stderr, "Required registration/query selectors are unavailable\n");
         return 1;
@@ -217,6 +225,22 @@ main(int argc, char **argv)
         void *query = point ? send1(send0(query_class, sel("alloc")),
                                    sel("initWithExtensionPointIdentifier:"), point) : NULL;
         void *queries = query ? send1(array_class, sel("arrayWithObject:"), query) : NULL;
+        void *query_error = NULL;
+        checkpoint("checking authorization for ExtensionKit provider query");
+        /* executeQueries: returns an empty set even when canRunQuery: denies
+         * this host. That is unavailable discovery, not evidence of missing
+         * providers: registerPlugin: would first unregister genuine records. */
+        if (!query || !queries ||
+            !query_authorized(discovery_class, sel("canRunQuery:error:"), query, &query_error)) {
+            const char *message = query_error ?
+                send_cstring(send0(query_error, sel("description")), sel("UTF8String")) : NULL;
+            fprintf(stderr, "ExtensionKit provider query %s%s%s; refusing registration/prewarm\n",
+                    query && queries ? "authorization denied" : "construction failed",
+                    message ? ": " : "", message ? message : "");
+            if (query) send0(query, sel("release"));
+            if (point) release(point);
+            return 4u;
+        }
         checkpoint("executing ExtensionKit provider query");
         void *results = queries ? send1(controller, sel("executeQueries:"), queries) : NULL;
         checkpoint("ExtensionKit provider query returned");
@@ -273,7 +297,8 @@ main(int argc, char **argv)
         visible = query_visible();
     }
     if (visible != 3) {
-        fprintf(stderr, "Required LegacyPoster/CollectionsPoster identities are not both visible\n");
+        fprintf(stderr, "%s\n", (visible & 4) ? "Required provider visibility is unavailable" :
+                "Required LegacyPoster/CollectionsPoster identities are not both visible");
         failed = 1;
     }
     if (prewarming && !failed) failed = prewarm_posters();

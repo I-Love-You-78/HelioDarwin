@@ -141,7 +141,7 @@ def remove_poster_injection(environment):
 
 
 def prepare_posters(root, build):
-    """Install explicit, UUID-gated readiness and real provider preparation."""
+    """Install UUID-gated readiness and an explicitly invoked query diagnostic."""
     if os.name != 'posix':
         raise ValueError('Poster preparation requires an offline POSIX root shell')
     root, build = Path(root), Path(build)
@@ -252,15 +252,18 @@ def prepare_posters(root, build):
     poster_job.setdefault('StandardErrorPath', POSTER_LOG)
     job = {
         'Label': 'org.heliodarwin.prepare-posters', 'UserName': 'mobile',
-        'ProgramArguments': ['/usr/local/libexec/SweetRegisterPosters', '--register', '--prewarm'],
-        'RunAtLoad': True, 'KeepAlive': False, 'ProcessType': 'Background',
+        # This helper is not an entitled PosterKit host. Native PosterBoard
+        # owns discovery and prewarm; a denied helper query cannot justify
+        # unregistering and replacing its genuine provider records at boot.
+        'ProgramArguments': ['/usr/local/libexec/SweetRegisterPosters'],
+        'RunAtLoad': False, 'KeepAlive': False, 'ProcessType': 'Background',
         'StandardOutPath': '/private/var/mobile/Library/Logs/SweetRegisterPosters.log',
         'StandardErrorPath': '/private/var/mobile/Library/Logs/SweetRegisterPosters.log',
     }
     write(root / preparation_key.lstrip('/'), job, mode=0o644)
     cache['LaunchDaemons'][preparation_key] = job
     write(cache_path, cache, mode=state.st_mode & 0o7777, owner=(state.st_uid, state.st_gid))
-    print('Poster preparation installed; provider visibility, prewarm and dylib loading still require runtime readback')
+    print('Poster readiness installed; helper retained for explicit diagnostics; native services own discovery and prewarm')
 
 
 def remove_poster_preparation(root):
@@ -320,7 +323,7 @@ def main():
     parser.add_argument('root', type=Path)
     parser.add_argument('--restore', metavar='LABEL')
     parser.add_argument('--prepare-posters', type=Path, metavar='BUILD_DIR',
-                        help='opt in to verified local poster tools and real registration/prewarm at next boot')
+                        help='opt in to verified poster readiness and an explicitly invoked query diagnostic')
     parser.add_argument('--remove-poster-preparation', action='store_true',
                         help='restore the original PosterBoard job and remove the preparation job')
     parser.add_argument('--source-cache', type=Path,
