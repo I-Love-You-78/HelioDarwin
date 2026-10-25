@@ -7,8 +7,9 @@ from iPhone X `D22AP`) and iOS 16 userland on the **MediaTek Helio G99
 
 This is experimental bring-up on physical hardware. Booting the system, displaying
 its interface, and executing graphics on the GPU are separate milestones. The
-latest observed clock/interface uses the system's software rendering fallback;
-the new MaliMetal GPU execution path has not yet been validated on the phone.
+earlier clock/interface used the system's software rendering fallback. The
+2026-10-26 capture confirms native Mali JM completion, including fragment jobs;
+correct UI pixels, wallpaper and performance remain unvalidated.
 Userspace configuration changes and optional compatibility adapters are described
 in the [system services documentation](wiki/System-Services-and-Posters.md).
 
@@ -20,8 +21,8 @@ in the [system services documentation](wiki/System-Services-and-Posters.md).
 | Storage | Native UFS reads the `iosroot` HFS+ volume and has performed writes and journal replay. Root-volume backups must be kept separately. |
 | Display | Patch 0190 serializes the vendor DSI refresh sequence. A subsequent phone boot showed the clock/interface and no sampled DSI busy condition. A 60 Hz software timer is not a measured frame-rate guarantee. [Display Pipeline](wiki/Display-Pipeline.md). |
 | UIKit geometry | Physical scanout is 1080×2400. Native cutout, safe-area and status-bar compatibility work is separate from scanout and requires runtime validation. |
-| GPU | Power-on is confirmed: PMIC rail-enable readbacks, MFG power status and GPU ID `0x90930010` were observed. Native Vulkan device creation also succeeded. GPU jobs and rendering remain unvalidated; full DVFS is unfinished. [GPU power sequence](wiki/MT6789-GPU-Power-Sequence.md). |
-| MaliMetal | Metal objects, native AIR translation, a Vulkan backend and an arm64 iOS PanVK port are implemented for a bounded feature set. Selected real CoreAnimation shaders pass offline translation checks. End-to-end GPU execution and broader Metal support remain unverified/incomplete. [Driver details](wiki/MaliMetal-Driver.md). |
+| GPU | Power-on is confirmed: PMIC rail-enable readbacks, MFG power status and GPU ID `0x90930010` were observed. Native Vulkan device creation also succeeded. Ten native JM completions, including fragment jobs, are recorded in run `40224078640`. Correct rendered frames, performance and full DVFS remain unvalidated or unfinished. [GPU power sequence](wiki/MT6789-GPU-Power-Sequence.md). |
+| MaliMetal | Metal objects, native AIR translation, a Vulkan backend and an arm64 iOS PanVK port are implemented for a bounded feature set. Selected real CoreAnimation shaders pass offline translation checks. Hardware JM execution is confirmed; correct UI presentation and broader Metal support remain unverified/incomplete. [Driver details](wiki/MaliMetal-Driver.md). |
 | Touch & keys | Kernel HID logs contain real touch and power/volume-key press/release events; touch interaction was confirmed on the phone. Multi-touch, volume behavior and display sleep/wake still need validation. [Input and HID](wiki/Input-and-HID.md). |
 | System services | PosterBoard startup preparation and reversible job management are available. Disabled services are not considered working merely because their definitions are restored. [Services and posters](wiki/System-Services-and-Posters.md). |
 | Reset & fallback | The opt-in X676C TOPRGU reset returned a diagnostic boot to Android slot B. A/B retry metadata alone cannot reset a hung system. [Dual-boot safety](wiki/Dual-Boot-Safety.md). |
@@ -64,7 +65,9 @@ along with canonical per-draw/dispatch binding and native resource, graphics,
 synchronization and API modules. The integrated ABI 4/compute ABI 2 bundle passes
 strict linking and static review, with phone validation pending. A separate shared-cache
 metadata failure affects SpringBoard and several services and remains under
-investigation. These milestones do not establish GPU job completion or rendering.
+investigation. Those earlier milestones did not establish job completion; the
+later [00:26:36 capture](logs/boot-0205-run-40224078640-ui-texture-layout.log) records successful hardware JM work.
+Correct rendered UI output remains unconfirmed.
 
 Compilation and offline shader validation do not prove that the stock Metal loader,
 PanVK, kernel GPU transport and presentation work together on the phone. Full

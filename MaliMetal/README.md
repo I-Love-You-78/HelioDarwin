@@ -8,6 +8,50 @@ Mali-G57 MC2, using a Vulkan backend and an XNU Job Manager transport.
 The source builds for arm64 iOS. End-to-end GPU rendering with this driver has
 not been validated on the phone, and Metal or Vulkan conformance is not claimed.
 
+The 00:26:36 run on 2026-10-26 used kernel `40224078640` (`1c09edc`)
+and userspace `3e97131`. The 141,245-byte console records ten successful native
+JM terminal results, including fragment jobs, after hardware completion polling
+and cache handling. Their captured JS/MMU/GPU status fields are zero. This is
+phone evidence of GPU job execution; it does not establish correct pixels,
+numerical FP16, frame rate or complete Metal/Vulkan support.
+
+The next renderer failure is now precise: backboardd reaches the adapter's
+128-live-BO limit before native allocation, refusing requests of 64, 69,632 and
+135,168 bytes with ENOSPC. This is not an observed device-memory allocation
+failure. Released surface owners now show falling wired-byte snapshots; no
+surface NoMemory failure is retained in this console. A bounded suballocation
+remedy is under development, with kernel memory limits preserved.
+
+PosterBoard still traps while initializing/publishing a configuration with nil
+paths. Both helper registrations are accepted, but its provider query is denied
+by the real host-entitlement policy: zero results are not evidence of absence.
+Native PosterBoard initially discovers nine providers. The helper's standalone
+legacy registration replaces two valid records without their capability
+metadata; PosterBoard rejects them and loses its defaults. The custom repair
+job is being corrected; original providers and user data must be preserved.
+
+The console reaches the 600-second reset and the new vendor retry loop, followed
+by Android B return around 00:39. The user still reported only the Sakura image;
+a complete rendered UI and wallpaper remain unconfirmed.
+
+The current adapter packs small logical BOs into genuine native backing
+slabs. On this 16 KiB CPU-page target, each slab contains 64 cells (1 MiB);
+eligible requests up to 16 cells (256 KiB) use a contiguous slice. Larger and
+ALLOC_ON_FAULT requests stay direct. EXEC permissions and exclusive VM ownership
+remain separate. Mesa identities are unique local IDs; every native allocation,
+mapping, sync and submission uses the real backing handle and checked offset.
+
+The all-resident submit list still contains at most 128 native backings, and the
+kernel's per-object and total-byte limits are unchanged. Rounded reused slices
+are zeroed and synchronized before publication. Cleanup precedes recycling;
+lost or uncertain native ownership is quarantined. Empty slabs are released.
+This addresses the observed count amplification without assuming unlimited
+memory or complete per-submit resource tracking. Fragmentation, many large
+allocations and real kernel-budget exhaustion can still fail. Diagnostics count
+logical objects and known owned backings separately; Vulkan logical heap usage
+is not an exact measure of wired memory. Device packing and continued execution
+still require a new phone run.
+
 The integrated render/compiler interface is ABI 4; compute dispatch is ABI 2.
 The current bundle passed strict arm64 iOS linking, source/component checks and
 independent static review. Runtime GPU, shared-event and source-compiler checks
@@ -109,7 +153,7 @@ paths are not considered implemented by those results.
 - **Vulkan backend:** buffer/image operations, command recording, render pipelines
   and specialized compute pipelines are implemented. The pinned native PanVK
   port builds as an arm64 iOS ICD with strict symbol resolution. Its execution
-  on the phone and broader shader coverage remain unvalidated. Device creation
+  now has recorded hardware JM completion; correct pixels and broader shader coverage remain unvalidated. Device creation
   fails when the required ICD or capabilities are unavailable.
 - **Presentation:** IOSurface access preserves ownership, locking and row stride.
   The observed phone clock/interface uses the system's software rendering

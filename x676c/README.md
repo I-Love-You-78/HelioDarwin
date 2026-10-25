@@ -54,6 +54,38 @@ missing texture layout, native memory failures and incomplete rendering
 remain. The user returned manually; automatic recovery is not established
 for that run.
 
+The 00:26:36 run on 2026-10-26 used kernel `40224078640` (`1c09edc`)
+and userspace `3e97131`. The 141,245-byte console records ten successful native
+JM terminal results, including fragment jobs, after hardware completion polling
+and cache handling. Their captured JS/MMU/GPU status fields are zero. This is
+phone evidence of GPU job execution; it does not establish correct pixels,
+numerical FP16, frame rate or complete Metal/Vulkan support.
+
+The next renderer failure is now precise: backboardd reaches the adapter's
+128-live-BO limit before native allocation, refusing requests of 64, 69,632 and
+135,168 bytes with ENOSPC. This is not an observed device-memory allocation
+failure. Released surface owners now show falling wired-byte snapshots; no
+surface NoMemory failure is retained in this console. A bounded suballocation
+remedy is under development, with kernel memory limits preserved.
+
+PosterBoard still traps while initializing/publishing a configuration with nil
+paths. Both helper registrations are accepted, but its provider query is denied
+by the real host-entitlement policy: zero results are not evidence of absence.
+Native PosterBoard initially discovers nine providers. The helper's standalone
+legacy registration replaces two valid records without their capability
+metadata; PosterBoard rejects them and loses its defaults. The custom repair
+job is being corrected; original providers and user data must be preserved.
+
+The console reaches the 600-second reset and the new vendor retry loop, followed
+by Android B return around 00:39. The user still reported only the Sakura image;
+a complete rendered UI and wallpaper remain unconfirmed.
+
+The following userspace candidate adds bounded BO suballocation and removes
+the custom helper's boot registration/prewarm action. It reuses successful
+kernel `40224078640`; kernel inputs and ABI are unchanged. Strict source,
+artifact and static reviews pass; packing and wallpaper recovery remain
+the next device checks.
+
 ## Boot layout
 
 LK loads a boot image v4 containing the shim and kernel payload. The host builder

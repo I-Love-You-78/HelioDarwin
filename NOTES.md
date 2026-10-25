@@ -12,7 +12,8 @@ This page summarizes the current implementation and observed milestones.
   driver and executes launchd. Captures include SpringBoard and backboardd.
 - XNU has read Mali `GPU_ID=0x90930010` and availability registers. Register
   access and verified PMIC/MFG power-on establish the GPU power-on path.
-  Shader execution remains unverified.
+  Ten hardware JM completions, including fragment jobs, were recorded in
+  the 2026-10-26 run; pixel and numerical correctness remain unverified.
 - Following patch 0190, the physical panel displayed the clock/interface.
   A bounded diagnostic boot also returned automatically to Android B using
   TOPRGU. The observed UI used system software rendering.
@@ -26,7 +27,8 @@ The old secondary-core display pump and its lifetime timer are not started.
 The GPU source uses the shared split-SWINF PMIC interface, preserves inherited
 voltage selectors and implements a versioned JM memory/submission/completion
 transport. Rail-enable readbacks and native Vulkan device creation have been
-observed on the phone. GPU page walks, execution and recovery still require
+observed on the phone. Native JM work has completed on mapped GPU memory.
+Isolation, fault recovery, numerical correctness and rendered pixels still require
 validation. Full DVFS and dynamic GPU power management remain open.
 
 Input source targets the confirmed FT5452J controller over I2C0/APDMA, the PMIC
@@ -169,7 +171,68 @@ buffer binding errors without changing allocation policy.
 Patch 0205 follows the inspected MT6789 vendor restart loop: repeat the
 SWRST command every 5 ms without returning. It preserves MODE, LENGTH and the
 independent watchdog heartbeat. Compilation, patch composition and instruction
-checks pass; hardware return with this retry remains unvalidated.
+checks pass. The 00:26:36 run subsequently reached this retry and returned to
+Android B around 00:39. Recovery from other hangs remains unvalidated.
+
+The 00:26:36 run on 2026-10-26 used kernel `40224078640` (`1c09edc`)
+and userspace `3e97131`. The 141,245-byte console records ten successful native
+JM terminal results, including fragment jobs, after hardware completion polling
+and cache handling. Their captured JS/MMU/GPU status fields are zero. This is
+phone evidence of GPU job execution; it does not establish correct pixels,
+numerical FP16, frame rate or complete Metal/Vulkan support.
+
+The next renderer failure is now precise: backboardd reaches the adapter's
+128-live-BO limit before native allocation, refusing requests of 64, 69,632 and
+135,168 bytes with ENOSPC. This is not an observed device-memory allocation
+failure. Released surface owners now show falling wired-byte snapshots; no
+surface NoMemory failure is retained in this console. A bounded suballocation
+remedy is under development, with kernel memory limits preserved.
+
+PosterBoard still traps while initializing/publishing a configuration with nil
+paths. Both helper registrations are accepted, but its provider query is denied
+by the real host-entitlement policy: zero results are not evidence of absence.
+Native PosterBoard initially discovers nine providers. The helper's standalone
+legacy registration replaces two valid records without their capability
+metadata; PosterBoard rejects them and loses its defaults. The custom repair
+job is being corrected; original providers and user data must be preserved.
+
+The console reaches the 600-second reset and the new vendor retry loop, followed
+by Android B return around 00:39. The user still reported only the Sakura image;
+a complete rendered UI and wallpaper remain unconfirmed.
+
+The current adapter packs small logical BOs into genuine native backing
+slabs. On this 16 KiB CPU-page target, each slab contains 64 cells (1 MiB);
+eligible requests up to 16 cells (256 KiB) use a contiguous slice. Larger and
+ALLOC_ON_FAULT requests stay direct. EXEC permissions and exclusive VM ownership
+remain separate. Mesa identities are unique local IDs; every native allocation,
+mapping, sync and submission uses the real backing handle and checked offset.
+
+The all-resident submit list still contains at most 128 native backings, and the
+kernel's per-object and total-byte limits are unchanged. Rounded reused slices
+are zeroed and synchronized before publication. Cleanup precedes recycling;
+lost or uncertain native ownership is quarantined. Empty slabs are released.
+This addresses the observed count amplification without assuming unlimited
+memory or complete per-submit resource tracking. Fragmentation, many large
+allocations and real kernel-budget exhaustion can still fail. Diagnostics count
+logical objects and known owned backings separately; Vulkan logical heap usage
+is not an exact measure of wired memory. Device packing and continued execution
+still require a new phone run.
+
+The custom poster helper now checks the stock query-authorization method
+before discovery interpretation or any registration/prewarm action. Its installed
+binary has no poster-host entitlement; denial is reported as failure, never as
+proof that providers are missing. No entitlement is added. Its managed job is
+diagnostic-only: helper-only arguments, RunAtLoad=false and KeepAlive=false.
+Native PosterBoard discovery, readiness and SpringBoard prewarm remain intact.
+
+The captured legacy registration path first unregisters a provider, then passes
+a flat installation dictionary where a plugin-identifier map is expected. The
+replacement can report success while losing genuine signing/capability metadata.
+Stopping that custom boot action preserves the stock registration path. Removed
+provider stores remain in DeletedExtensions; stock discovery has a verified
+restore path for them. The next run must establish valid provider identities,
+restored coordinators, nonnil publisher paths and visible wallpaper. No cache
+wipe or custom store is used; user data and original capability metadata are preserved.
 
 ## Priorities
 

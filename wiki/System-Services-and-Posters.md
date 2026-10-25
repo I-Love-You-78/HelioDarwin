@@ -1,6 +1,6 @@
 # System Services and Posters
 
-HelioDarwin includes reversible launchd policy and opt-in PosterBoard preparation for **iOS 16.7.16, build 20H392**. The native helpers compile to arm64 iOS artifacts with strict compiler warnings and source/binary hash checks. **They are installed in the integrated phone root, but their runtime behavior is not yet validated.** A present launchd job does not establish that its service works.
+HelioDarwin includes reversible launchd policy and opt-in PosterBoard preparation for **iOS 16.7.16, build 20H392**. The native helpers compile to arm64 iOS artifacts with strict compiler warnings and source/binary hash checks. **Native loading and publisher activity have been observed; complete wallpaper delivery remains unvalidated.** A present launchd job does not establish that its service works.
 
 ## Service policy
 
@@ -26,7 +26,22 @@ Activation preparation now merges missing build/migration metadata while preserv
 
 An early active-wallpaper read can lazily create a switcher configuration before the first extension initialization. A later prewarm then reaches an assertion requiring that configuration to be absent. The readiness guard leaves initialization and assertions intact: it returns unavailable before initialization and calls the original getter afterward. Returning unavailable alone does not ensure eventual wallpaper delivery.
 
-`SweetRegisterPosters`, running as `mobile` (UID 501), queries the real ExtensionKit provider list. With `--register`, it registers only missing LegacyPoster and CollectionsPoster identities, avoiding repeated unregister/register churn. Both exact identities must be visible before optional `--prewarm` invokes the original PosterBoard service. Registration/query failures, an actual prewarm `NSError`, and a 120-second completion timeout produce failure.
+The custom poster helper now checks the stock query-authorization method
+before discovery interpretation or any registration/prewarm action. Its installed
+binary has no poster-host entitlement; denial is reported as failure, never as
+proof that providers are missing. No entitlement is added. Its managed job is
+diagnostic-only: helper-only arguments, RunAtLoad=false and KeepAlive=false.
+Native PosterBoard discovery, readiness and SpringBoard prewarm remain intact.
+
+The captured legacy registration path first unregisters a provider, then passes
+a flat installation dictionary where a plugin-identifier map is expected. The
+replacement can report success while losing genuine signing/capability metadata.
+Stopping that custom boot action preserves the stock registration path. Removed
+provider stores remain in DeletedExtensions; stock discovery has a verified
+restore path for them. The next run must establish valid provider identities,
+restored coordinators, nonnil publisher paths and visible wallpaper. No cache
+wipe or custom store is used; user data and original capability metadata are preserved.
+
 
 Private API use is restricted by loaded framework UUIDs and runtime contract checks:
 
@@ -34,6 +49,7 @@ Private API use is restricted by loaded framework UUIDs and runtime contract che
 | --- | --- |
 | PosterBoard | `fbd32eac-fbbf-3f56-a0ba-5bd44d2e2725` |
 | CoreServices | `8d42103d-bd59-308d-9d2c-2082b39738e7` |
+| ExtensionFoundation | `f1100ce5-49b1-34bd-aafd-30cfb2466b47` |
 | PosterBoardServices | `4fc96a43-1b54-348b-9b78-13485197e086` |
 
 Build both artifacts into the same directory using [the builder](https://github.com/squeeeezy/HelioDarwin/blob/x676c/tools/posterboard/build.py), once normally and once with `--registration-helper`. It requires Zig's Clang and a matching iOS library sysroot. The Windows/WSL linker option is `--wsl --linker /usr/bin/ld64.lld-18`.
@@ -45,7 +61,7 @@ sudo python3 tools/sweet_daemons.py MOUNTED_ROOT --prepare-posters POSTER_BUILD
 sudo python3 tools/sweet_daemons.py MOUNTED_ROOT --remove-poster-preparation
 ```
 
-Preparation verifies the target build, current sources and arm64/iOS artifacts, preserves the original PosterBoard job, retains its scoped readiness environment, and installs a mobile startup registration/prewarm job. The exact supported PosterBoard executable receives a normal dependency on the guard library; the library has a verified strong dependency on the matching PosterBoard framework. Registration emits unbuffered phase checkpoints and a bounded failure timeout. Dylib loading, entitlement access, provider visibility, prewarm completion and visible wallpaper still need device validation. This does not establish complete wallpaper-gallery support.
+Preparation verifies the target build, current sources and arm64/iOS artifacts, preserves the original native PosterBoard job and scoped readiness environment, and installs the custom helper only for explicit diagnostics. Its managed job has no boot registration/prewarm flags and does not run automatically. The supported PosterBoard executable retains its normal dependency on the guard library and the matching framework. Provider metadata, coordinator restoration, native prewarm and visible wallpaper require the next device readback; complete wallpaper-gallery support is not established.
 
 Dependency installation is restricted to pinned executable hashes and UUIDs for this root. Both originals are already ad-hoc signed. The installer appends a load command in verified unused header space, preserving existing dependency ordinals, code/data sections, XML/DER entitlements and signature metadata, then recomputes the existing CodeDirectory page hashes. It retains original bytes and filesystem metadata for rollback and refuses unrelated executable changes. Rollback restores the executable before removing its required component or managed job settings. Current SWEET signature/platform policy remains unchanged; full Apple AMFI validation is not claimed.
 
@@ -177,6 +193,32 @@ VideoToolbox alignment reader expects a dictionary for
 a number. Other captured extension/daemon aborts still need their own
 contract analysis. These services are not considered repaired by AMFI
 membership or the texture-layout implementation.
+
+The 00:26:36 run on 2026-10-26 used kernel `40224078640` (`1c09edc`)
+and userspace `3e97131`. The 141,245-byte console records ten successful native
+JM terminal results, including fragment jobs, after hardware completion polling
+and cache handling. Their captured JS/MMU/GPU status fields are zero. This is
+phone evidence of GPU job execution; it does not establish correct pixels,
+numerical FP16, frame rate or complete Metal/Vulkan support.
+
+The next renderer failure is now precise: backboardd reaches the adapter's
+128-live-BO limit before native allocation, refusing requests of 64, 69,632 and
+135,168 bytes with ENOSPC. This is not an observed device-memory allocation
+failure. Released surface owners now show falling wired-byte snapshots; no
+surface NoMemory failure is retained in this console. A bounded suballocation
+remedy is under development, with kernel memory limits preserved.
+
+PosterBoard still traps while initializing/publishing a configuration with nil
+paths. Both helper registrations are accepted, but its provider query is denied
+by the real host-entitlement policy: zero results are not evidence of absence.
+Native PosterBoard initially discovers nine providers. The helper's standalone
+legacy registration replaces two valid records without their capability
+metadata; PosterBoard rejects them and loses its defaults. The custom repair
+job is being corrected; original providers and user data must be preserved.
+
+The console reaches the 600-second reset and the new vendor retry loop, followed
+by Android B return around 00:39. The user still reported only the Sakura image;
+a complete rendered UI and wallpaper remain unconfirmed.
 
 ## Remaining contracts
 

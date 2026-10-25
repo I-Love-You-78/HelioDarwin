@@ -38,7 +38,8 @@ is not established for that run.
 Patch 0205 follows the inspected MT6789 vendor restart loop: repeat the
 SWRST command every 5 ms without returning. It preserves MODE, LENGTH and the
 independent watchdog heartbeat. Compilation, patch composition and instruction
-checks pass; hardware return with this retry remains unvalidated.
+checks pass. The 00:26:36 run subsequently reached this retry and returned to
+Android B around 00:39. Recovery from other hangs remains unvalidated.
 
 ## Deployment helpers
 

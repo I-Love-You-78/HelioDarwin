@@ -3,8 +3,35 @@
 MaliMetal implements a bounded Metal-to-Vulkan path for iOS 16.7.16 (`20H392`)
 on the X676C Mali-G57 MC2. The source and native dependencies compile for arm64
 iOS. Selected real CoreAnimation render and compute shaders translate to
-validated SPIR-V. **Assembled GPU execution on the phone is not yet validated.**
+validated SPIR-V. **Hardware JM completion, including fragment work, is now confirmed on the phone.**
+Correct rendered output remains unvalidated.
 Full Metal or Vulkan conformance is not claimed.
+
+The 00:26:36 run on 2026-10-26 used kernel `40224078640` (`1c09edc`)
+and userspace `3e97131`. The 141,245-byte console records ten successful native
+JM terminal results, including fragment jobs, after hardware completion polling
+and cache handling. Their captured JS/MMU/GPU status fields are zero. This is
+phone evidence of GPU job execution; it does not establish correct pixels,
+numerical FP16, frame rate or complete Metal/Vulkan support.
+
+The next renderer failure is now precise: backboardd reaches the adapter's
+128-live-BO limit before native allocation, refusing requests of 64, 69,632 and
+135,168 bytes with ENOSPC. This is not an observed device-memory allocation
+failure. Released surface owners now show falling wired-byte snapshots; no
+surface NoMemory failure is retained in this console. A bounded suballocation
+remedy is under development, with kernel memory limits preserved.
+
+PosterBoard still traps while initializing/publishing a configuration with nil
+paths. Both helper registrations are accepted, but its provider query is denied
+by the real host-entitlement policy: zero results are not evidence of absence.
+Native PosterBoard initially discovers nine providers. The helper's standalone
+legacy registration replaces two valid records without their capability
+metadata; PosterBoard rejects them and loses its defaults. The custom repair
+job is being corrected; original providers and user data must be preserved.
+
+The console reaches the 600-second reset and the new vendor retry loop, followed
+by Android B return around 00:39. The user still reported only the Sakura image;
+a complete rendered UI and wallpaper remain unconfirmed.
 
 ## First integrated device observation
 
@@ -29,13 +56,13 @@ and closes that owned connection when the logical device is destroyed. The
 physical-device query connection remains borrowed from its caller. Transport
 initialization failures use `VK_ERROR_INITIALIZATION_FAILED`; allocation failures
 retain their allocation error. The later boot with run `40090751567` created
-the native device; GPU execution remains unvalidated.
+the native device; that capture did not record GPU completion.
 
 The first retry of that path reached IOKit service discovery and returned
 `kIOReturnUnsupported` (`0xe00002c7`). The kernel user client inherited
 `IOUserClient::getService`, which returns `NULL`. Patch 0195 returns the attached
 GPU provider, completing the connection-discovery contract. The next boot passed
-service discovery; GPU execution still needs validation.
+service discovery; no GPU-completion evidence was retained in that capture.
 
 Run `40089627425` passed service discovery, then panicked during GPU-buffer
 cache-mode setup. `pmap_sync_page_attributes_phys` shifted a 32-bit page number
@@ -85,8 +112,8 @@ the static adapter's refusal of Whole/signed buffer windows.
 The current integrated candidate replaces static binding guesses with canonical
 per-draw planning, including logical resource bounds, typed views, sampler facts,
 pushes and actual pipeline variants. The render/provider ABI is 4 and compute
-dispatch ABI is 2. Its strict native bundle and static review pass; target GPU
-execution remains unverified.
+dispatch ABI is 2. Its strict native bundle and static review pass; the later
+00:26:36 capture records hardware JM completion. Pixel correctness remains unverified.
 
 The 2026-10-25 phone capture confirms selected Vulkan 1.3, buffer device
 addresses, dynamic rendering and `VK_EXT_shader_tile_image` color reads.
@@ -281,6 +308,24 @@ execution; cancellation, fault or timeout records do not. A successful job alone
 does not establish correct pixels or identify the spinner's frame producer.
 The Vulkan/Darwin transport also distinguishes allocation, host mapping and
 buffer binding errors without changing allocation policy.
+
+The current adapter packs small logical BOs into genuine native backing
+slabs. On this 16 KiB CPU-page target, each slab contains 64 cells (1 MiB);
+eligible requests up to 16 cells (256 KiB) use a contiguous slice. Larger and
+ALLOC_ON_FAULT requests stay direct. EXEC permissions and exclusive VM ownership
+remain separate. Mesa identities are unique local IDs; every native allocation,
+mapping, sync and submission uses the real backing handle and checked offset.
+
+The all-resident submit list still contains at most 128 native backings, and the
+kernel's per-object and total-byte limits are unchanged. Rounded reused slices
+are zeroed and synchronized before publication. Cleanup precedes recycling;
+lost or uncertain native ownership is quarantined. Empty slabs are released.
+This addresses the observed count amplification without assuming unlimited
+memory or complete per-submit resource tracking. Fragmentation, many large
+allocations and real kernel-budget exhaustion can still fail. Diagnostics count
+logical objects and known owned backings separately; Vulkan logical heap usage
+is not an exact measure of wired memory. Device packing and continued execution
+still require a new phone run.
 
 ## Remaining coverage and validation
 

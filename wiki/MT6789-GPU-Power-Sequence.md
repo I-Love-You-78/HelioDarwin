@@ -2,7 +2,7 @@
 
 The Infinix X676C has a Mali-G57 MC2, Valhall v9 **Job Manager (JM)** GPU. It does not use the newer CSF submission interface.
 
-## Current status — 2026-10-24
+## Current status — 2026-10-26
 
 **GPU power-on is confirmed on the phone.** XNU has verified the VGPU and
 VSRAM_GPU enable bits, observed the MFG power-domain status and read Mali
@@ -12,18 +12,19 @@ identification registers. Power-on is separate from rendering validation.
 | --- | --- |
 | GPU power-on and register access | Confirmed on physical X676C boots. |
 | Native Vulkan device creation | Succeeded after the IOKit and cache-address fixes. |
-| GPU job completion and rendering | Not yet confirmed. |
+| GPU job completion | Ten successful JM terminal records, including fragment work, in run `40224078640`. |
+| Correct rendered frames and performance | Remain unvalidated. |
 | Full DVFS and dynamic power-off | Remain unfinished. |
 
 XNU diagnostic boots have read `GPU_ID = 0x90930010`, `AS_PRESENT = 0xff`, and `JS_PRESENT = 0x7`. Android identifies the device as Mali-G57 r0p1 and reports shader/core mask `0x5`: two cores at bits 0 and 2.
 
-The GPU memory and submission transport compiles to arm64 XNU objects; **GPU job execution is not yet confirmed on the phone**. Display output is covered separately in [Display Pipeline](https://github.com/squeeeezy/HelioDarwin/wiki/Display-Pipeline); its working framebuffer path does not establish Metal or Vulkan rendering.
+The GPU memory and submission transport compiles to arm64 XNU objects; **hardware JM completion is confirmed on the phone**, including fragment work. Display output is covered separately in [Display Pipeline](https://github.com/squeeeezy/HelioDarwin/wiki/Display-Pipeline); its working framebuffer path does not establish Metal or Vulkan rendering.
 
 ## Evidence and scope
 
 The power/register definitions were checked against the shipped `mtk_gpufreq_mt6789.ko`, `mali_kbase_mt6789.ko`, `mtk-pmic-wrap.ko`, `mt6358-regulator.ko`, and MediaTek clock drivers. Descriptor layouts use the pinned Mesa v9 XML. Vendor implementation details and offline compilation are evidence about the source; they do not validate the new XNU path under GPU load.
 
-The current implementation preserves the existing SPM/MFG sequence. It uses split-SWINF PWRAP transactions, checks regulator-enable readback in the source, and implements GPU address spaces and JM submission. Run `39972968304` verified both rail-enable readbacks, with inherited selector values `0x38`/`0x38`. GPU submission still requires device validation.
+The current implementation preserves the existing SPM/MFG sequence. It uses split-SWINF PWRAP transactions, checks regulator-enable readback in the source, and implements GPU address spaces and JM submission. Run `39972968304` verified both rail-enable readbacks, with inherited selector values `0x38`/`0x38`. The 2026-10-26 capture subsequently records successful hardware JM completion.
 
 ## Register bases
 
@@ -124,4 +125,4 @@ Observed on the device: readable GPU identification and availability registers, 
 
 Checked offline: vendor register/protocol definitions, Mesa descriptor layouts, arm64 kernel compilation, and composition of the GPU, shared PWRAP, display, and input patches.
 
-The integrated boot validated the revised SWINF enable/readback path and native PanVK loading. Later fixes passed the CPU cache-type query, IOKit connection discovery and GPU-buffer cache-mode setup; run `40090751567` created the native Vulkan device. Still unvalidated on the phone: GPU page walks, shader execution, JM completion and recovery, and assembled Metal-to-Vulkan rendering. No Metal or Vulkan conformance is claimed. See [MaliMetal Driver](https://github.com/squeeeezy/HelioDarwin/wiki/MaliMetal-Driver) for the userspace implementation and its supported-path limits.
+The integrated boot validated the revised SWINF enable/readback path and native PanVK loading. Later fixes passed the CPU cache-type query, IOKit connection discovery and GPU-buffer cache-mode setup; run `40090751567` created the native Vulkan device. Run `40224078640` then records ten hardware JM completions on native GPU mappings. Still unvalidated: fault recovery, isolation, numerical correctness, correct rendered pixels and sustained performance. No Metal or Vulkan conformance is claimed. See [MaliMetal Driver](https://github.com/squeeeezy/HelioDarwin/wiki/MaliMetal-Driver) for the userspace implementation and its supported-path limits.

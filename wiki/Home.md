@@ -11,8 +11,9 @@ The observed interface uses the system's software rendering fallback.
 
 **GPU power-on is already confirmed:** PMIC rail-enable readbacks, MFG power
 status and readable GPU identification have been observed. Native Vulkan device
-creation has also succeeded. GPU job completion/rendering and full DVFS are
-separate milestones that remain unvalidated or unfinished.
+creation has also succeeded. Run `40224078640` records ten hardware JM
+completions, including fragment jobs. Correct rendered frames, performance and
+full DVFS remain unvalidated or unfinished.
 
 The new MaliMetal source includes Metal objects, native AIR translation, an
 arm64 iOS PanVK build and a versioned XNU GPU transport. Offline compilation
@@ -28,19 +29,24 @@ passed Metal registration and reached CoreAnimation shader loading; the observed
 function-descriptor API gap passed a phone check and exposed missing MRT/blending.
 The integrated ABI 4/compute ABI 2 candidate now uses canonical per-draw and
 dispatch planning, with native graphics/resource/synchronization modules and
-declared compiler patches. Strict linking/static review pass; target GPU execution
-and expanded API behavior still require validation.
+declared compiler patches. Strict linking/static review pass and hardware
+JM completion is recorded; expanded API behavior and correct pixels still require validation.
 Later diagnostics identified MPS compute-descriptor, signed extension-cache
 registration and HFS file-protection query gaps. The current candidate addresses
 those bounded contracts; runtime acceptance remains pending. Touch interaction was confirmed and kernel HID
-logs include physical power/volume-key events. GPU jobs, multi-touch, volume and
+logs include physical power/volume-key events. GPU pixel correctness, multi-touch, volume and
 sleep/wake behavior, and the installed PosterBoard/native display adapters still
 require runtime validation.
 
-The latest [signed-cache capture](https://github.com/squeeeezy/HelioDarwin/blob/x676c/logs/boot-0202-run-40219933214-ui-signed-cache.log)
+The preceding [signed-cache capture](https://github.com/squeeeezy/HelioDarwin/blob/x676c/logs/boot-0202-run-40219933214-ui-signed-cache.log)
 records successful AMFI membership queries and PosterBoard startup.
 Texture-layout and native memory failures still prevent a confirmed
 rendered UI; the user returned manually to Android.
+
+The [00:26:36 capture](https://github.com/squeeeezy/HelioDarwin/blob/x676c/logs/boot-0205-run-40224078640-ui-texture-layout.log)
+on 2026-10-26 records ten hardware JM completions, then identifies the
+adapter's 128-live-BO refusal and PosterBoard configuration failures.
+Correct UI output and wallpaper remain unconfirmed.
 
 ## Documentation boundaries
 
