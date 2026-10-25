@@ -1,0 +1,131 @@
+SWEET Mali: record bounded allocation and hardware job-result diagnostics
+
+Preserve allocation policy and error codes; identify the failing stage
+without logging task or GPU addresses or changing memory limits.
+Record the first four terminal job results per client after hardware
+completion/fault polling and cache handling, without inferring pixels.
+
+diff --git a/iokit/Kernel/arm/SweetMaliUserClient.inc b/iokit/Kernel/arm/SweetMaliUserClient.inc
+--- a/iokit/Kernel/arm/SweetMaliUserClient.inc
++++ b/iokit/Kernel/arm/SweetMaliUserClient.inc
+@@ -292,7 +292,7 @@
+ 	task_t owner;
+ 	SweetMaliBO bos[MMK_MAX_BOS];
+ 	SweetMaliTable *tables, *root;
+-	uint32_t tableCount, nextHandle, as, jobSlot;
++	uint32_t tableCount, nextHandle, as, jobSlot, allocationFailureLogs, jobResultLogs;
+ 	uint64_t allocated, sequence, jobDeadline;
+ 	uint32_t jobHandles[MMK_MAX_SUBMIT_BOS], jobBOCount;
+ 	MMKWaitResult result;
+@@ -489,6 +489,17 @@
+ 				 toGPU);
+ 		return kIOReturnSuccess;
+ 	}
++	IOReturn allocationFailure(const char *stage, IOReturn error, uint64_t size)
++	{
++		if (allocationFailureLogs < 8) {
++			++allocationFailureLogs;
++			IOLog("SWEET GPU: BO allocation failed stage %s status 0x%x size %llu "
++			      "allocated %llu tables %u time_ns %llu\n",
++			      stage, (uint32_t)error, size, allocated, tableCount,
++			      sweet_mali_now_ns());
++		}
++		return error;
++	}
+ 	IOReturn allocate(uint64_t address, uint64_t size, uint32_t flags, bool imported,
+ 			  MMKBOInfo *out)
+ 	{
+@@ -497,7 +508,7 @@
+ 		    nextHandle >= 0xffffefffu ||
+ 		    (flags & ~(MMK_BO_READ | MMK_BO_WRITE | MMK_BO_EXEC | MMK_BO_CPU_CACHED)) ||
+ 		    !(flags & MMK_BO_READ)) {
+-			return kIOReturnBadArgument;
++			return allocationFailure("request-or-byte-limit", kIOReturnBadArgument, size);
+ 		}
+ 		if (gpu->active == this) {
+ 			return kIOReturnBusy;
+@@ -508,11 +519,11 @@
+ 		}
+ 		size = (size + page_size - 1) & ~(uint64_t)(page_size - 1);
+ 		if (allocated > 2 * limit - size) {
+-			return kIOReturnNoResources;
++			return allocationFailure("aligned-byte-limit", kIOReturnNoResources, size);
+ 		}
+ 		uint64_t gpuVA = freeGPUVA(size);
+ 		if (!gpuVA) {
+-			return kIOReturnNoResources;
++			return allocationFailure("gpu-virtual-range", kIOReturnNoResources, size);
+ 		}
+ 		SweetMaliBO *b = NULL;
+ 		for (unsigned i = 0; i < MMK_MAX_BOS; ++i) {
+@@ -522,7 +533,7 @@
+ 			}
+ 		}
+ 		if (!b) {
+-			return kIOReturnNoResources;
++			return allocationFailure("object-limit", kIOReturnNoResources, size);
+ 		}
+ 		/* Imported mappings retain the task's cache mode; never change live aliases. */
+ 		if (imported && !(flags & MMK_BO_CPU_CACHED)) {
+@@ -539,12 +550,12 @@
+ 							       : kIOMapWriteCombineCache),
+ 			      size, page_size);
+ 		if (!md) {
+-			return kIOReturnNoMemory;
++			return allocationFailure("memory-descriptor", kIOReturnNoMemory, size);
+ 		}
+ 		IOReturn ret = md->prepare();
+ 		if (ret != kIOReturnSuccess) {
+ 			md->release();
+-			return ret;
++			return allocationFailure("prepare", ret, size);
+ 		}
+ 		IOMemoryMap *map = md->map(
+ 		    kIOMapAnywhere |
+@@ -552,7 +563,7 @@
+ 		if (!map) {
+ 			md->complete();
+ 			md->release();
+-			return kIOReturnNoMemory;
++			return allocationFailure("kernel-map", kIOReturnNoMemory, size);
+ 		}
+ 		b->memory = md;
+ 		b->kernelMap = map;
+@@ -570,9 +581,13 @@
+ 			if (!pa || (pa & (MMK_GPU_PAGE_SIZE - 1)) ||
+ 			    (pa >> MALI_GPU_PHYSICAL_BITS) || contiguous < MMK_GPU_PAGE_SIZE ||
+ 			    !e || *e) {
++				const char *stage = !e ? "page-table-allocation" :
++				    (!pa || (pa & (MMK_GPU_PAGE_SIZE - 1)) ||
++				     (pa >> MALI_GPU_PHYSICAL_BITS) || contiguous < MMK_GPU_PAGE_SIZE)
++				    ? "physical-page" : "page-table-collision";
+ 				clearPages(b);
+ 				dropBO(b);
+-				return kIOReturnNoMemory;
++				return allocationFailure(stage, kIOReturnNoMemory, size);
+ 			}
+ 			/* AS mode6 AArch64 page: AF + valid; AP RW/RO; NX unless executable. */
+ 			*e = pa | MALI_PTE_VALID_AF |
+@@ -638,6 +653,14 @@
+ 			jobBOCount = 0;
+ 			gpu->active = NULL;
+ 		}
++		if (jobResultLogs < 4) {
++			++jobResultLogs;
++			IOLog("SWEET GPU: JM terminal result as %u slot %u sequence %llu "
++			      "state %u js_status 0x%x mmu_status 0x%x gpu_status 0x%x "
++			      "time_ns %llu\n", as, jobSlot, sequence, result.state,
++			      result.exception, result.fault_status, result.gpu_fault_status,
++			      sweet_mali_now_ns());
++		}
+ 	}
+ 	void pollJob()
+ 	{
+@@ -731,6 +754,7 @@
+ 		gpu = NULL;
+ 		tables = root = NULL;
+ 		tableCount = 0;
++		allocationFailureLogs = jobResultLogs = 0;
+ 		nextHandle = 1;
+ 		as = ~0u;
+ 		allocated = sequence = 0;

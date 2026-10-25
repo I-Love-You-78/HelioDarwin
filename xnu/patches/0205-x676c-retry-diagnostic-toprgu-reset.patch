@@ -1,0 +1,46 @@
+x676c: keep retrying the vendor diagnostic TOPRGU software reset
+
+The exact MT6789 vendor restart writes SWRST 0x1209, waits 5000 microseconds
+and repeats without returning. Keep the existing diagnostic deadline, filesystem
+sync, board guard and mapping check; preserve MODE, LENGTH and the independent
+watchdog heartbeat. Log once, then retry rather than abandon the reset thread.
+Hardware reset completion remains to be validated.
+
+diff --git a/bsd/dev/sweet_sample.c b/bsd/dev/sweet_sample.c
+--- a/bsd/dev/sweet_sample.c
++++ b/bsd/dev/sweet_sample.c
+@@ -54,6 +54,21 @@
+ 	return false;
+ }
+ 
++static void __attribute__((noreturn))
++sweet_diagnostic_reset(volatile uint32_t *wdt)
++{
++	/* The exact vendor restart is non-returning: __const_udelay(0x147aeb8)
++	 * is udelay(5000), since ARM64 Linux scales microseconds by 0x10c7.
++	 * Retry only SWRST; leave MODE, LENGTH and the heartbeat unchanged. */
++	printf("SWEET BOOT: diagnostic TOPRGU software reset; retrying every 5000 us\n");
++	for (;;) {
++		__asm__ volatile("dsb sy" ::: "memory");
++		wdt[0x14 / 4] = 0x1209;
++		__asm__ volatile("dsb sy" ::: "memory");
++		delay(5000);
++	}
++}
++
+ /* Opt-in timed diagnostic boot; the normal boot has no reset deadline. */
+ static void
+ sweet_reboot_thread(void *arg, __unused wait_result_t wr)
+@@ -76,11 +91,7 @@
+ 		printf("SWEET BOOT: cannot map diagnostic reset controller\n");
+ 		return;
+ 	}
+-	printf("SWEET BOOT: diagnostic TOPRGU software reset\n");
+-	__asm__ volatile("dsb sy" ::: "memory");
+-	wdt[0x14 / 4] = 0x1209;
+-	__asm__ volatile("dsb sy" ::: "memory");
+-	printf("SWEET BOOT: TOPRGU software reset returned\n");
++	sweet_diagnostic_reset(wdt);
+ }
+ 
+ static bool

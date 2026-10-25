@@ -1,0 +1,81 @@
+SWEET IOSurface: retain only the state mapping for a released view
+
+The released-view quarantine retained SweetSurface as well as its state map,
+keeping every pixel buffer wired until eviction. Drop that released owner while
+keeping the existing state-page lifetime and all genuine peer/display/port
+owners. Report bounded allocation-stage and retirement snapshots without
+changing budgets or treating allocation failure as success.
+
+diff --git a/iokit/Kernel/arm/SweetSurface.cpp b/iokit/Kernel/arm/SweetSurface.cpp
+--- a/iokit/Kernel/arm/SweetSurface.cpp
++++ b/iokit/Kernel/arm/SweetSurface.cpp
+@@ -45,6 +45,7 @@
+ #include <libkern/c++/OSUnserialize.h>
+ #include <libkern/c++/OSSerialize.h>
+ #include <sys/proc.h>
++#include <mach/mach_time.h>
+ #include "SweetSharedEvent.h"
+ 
+ enum {
+@@ -95,6 +96,8 @@
+ static uint32_t      sweet_surface_next_id = 1;
+ static uint32_t      sweet_surface_creates_logged;
+ static uint64_t      sweet_surface_wired;       /* bytes of buffer surfaces */
++static volatile SInt32 sweet_surface_alloc_failures_logged;
++static volatile SInt32 sweet_surface_retirements_logged;
+ #define SWEET_SURFACE_WIRED_MAX         (1536ull << 20)
+ 
+ /* topaz scanout: at most 6 contiguous 16 MiB surfaces */
+@@ -888,13 +891,21 @@
+ 	}
+ 	if (ret == kIOReturnSuccess && s->memory == NULL) {
+ 		IOBufferMemoryDescriptor *mem = NULL;
+-		if ((uint64_t)OSAddAtomic64(s->allocSize, (volatile SInt64 *)&sweet_surface_wired) +
+-		    s->allocSize <= SWEET_SURFACE_WIRED_MAX) {
++		uint64_t wired_before = (uint64_t)OSAddAtomic64(s->allocSize,
++		    (volatile SInt64 *)&sweet_surface_wired);
++		bool within_budget = wired_before <= SWEET_SURFACE_WIRED_MAX &&
++		    s->allocSize <= SWEET_SURFACE_WIRED_MAX - wired_before;
++		if (within_budget) {
+ 			mem = IOBufferMemoryDescriptor::inTaskWithOptions(kernel_task,
+ 			    kIODirectionInOut | kIOMemoryKernelUserShared, s->allocSize, page_size);
+ 		}
+ 		if (mem == NULL) {
+ 			OSAddAtomic64(-(SInt64)s->allocSize, (volatile SInt64 *)&sweet_surface_wired);
++			if (OSAddAtomic(1, &sweet_surface_alloc_failures_logged) < 8) {
++				IOLog("SWEET SURF: pixel allocation failed stage %s size %u wired_before %llu cap %llu abstime %llu\n",
++				    within_budget ? "IOBuffer" : "wired-cap", s->allocSize, wired_before,
++				    SWEET_SURFACE_WIRED_MAX, mach_absolute_time());
++			}
+ 			ret = kIOReturnNoMemory;
+ 		} else {
+ 			bzero(mem->getBytesNoCopy(), s->allocSize);
+@@ -1477,6 +1488,7 @@
+ 		ref = findRef((uint32_t)(uintptr_t)id, &index);
+ 	}
+ 	if (ref != NULL && --ref->count == 0) {
++		uint32_t released_id = ref->surface->id;
+ 		/*
+ 		 * The pixels are unmapped now; the state page (read-only) stays mapped a while.
+ 		 * In backboardd another IOSurface object can still hold a framework client of
+@@ -1489,12 +1501,20 @@
+ 		sweet_surface_put(ref->surface);
+ 		ref->released = true;
+ 		ref->detached = false;
++		/* The state mapping owns its memory descriptor independently. Keeping
++		 * the full surface here also kept its pixel buffer wired until eviction. */
++		OSSafeReleaseNULL(ref->surface);
+ 		if (fZombies != NULL && fZombies->setObject(ref)) {
+ 			if (fZombies->getCount() > 256) {
+ 				fZombies->removeObject(0);
+ 			}
+ 		}
+ 		fRefs->removeObject(index);
++		if (OSAddAtomic(1, &sweet_surface_retirements_logged) < 8) {
++			IOLog("SWEET SURF: released pixel owner id %u wired_now %llu abstime %llu\n",
++			    released_id, (uint64_t)OSAddAtomic64(0, (volatile SInt64 *)&sweet_surface_wired),
++			    mach_absolute_time());
++		}
+ 	}
+ 	IOLockUnlock(fLock);
+ 	return ref != NULL ? kIOReturnSuccess : kIOReturnNotFound;
