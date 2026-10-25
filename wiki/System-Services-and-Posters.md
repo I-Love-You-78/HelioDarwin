@@ -180,7 +180,7 @@ Separate helper logs identify the missing
 creation failed with NoMemory. No new driverkitd per-process-limit report was
 retained; the exact mmap branch and memory-failure cause remain unproven.
 
-The user saw Sakura with artifacts and a spinner, then black screens, and
+The user saw the bootloader image with artifacts and a spinner, then black screens, and
 returned manually to Android. The console reaches sync and the single diagnostic
 reset write; its subsequent `reset returned` print also occurs in earlier
 automatic-return captures, so it does not identify the reset failure by itself.
@@ -217,7 +217,7 @@ metadata; PosterBoard rejects them and loses its defaults. The custom repair
 job is being corrected; original providers and user data must be preserved.
 
 The console reaches the 600-second reset and the new vendor retry loop, followed
-by Android B return around 00:39. The user still reported only the Sakura image;
+by Android B return around 00:39. The user still reported only the bootloader image;
 a complete rendered UI and wallpaper remain unconfirmed.
 
 ## Remaining contracts
