@@ -141,85 +141,67 @@ index 5e4b82e..f7fa6e5 100644
  	 * sweet: TrustZone owns GIC Group 0, so the timer and IPIs that other
  	 * ARM64 targets take as FIQs arrive here as Group 1 IRQs.
 diff --git a/pexpert/arm/pe_fiq.c b/pexpert/arm/pe_fiq.c
-index 6089db9..6f97a91 100644
+index 6089db9..1c3d9bc 100644
 --- a/pexpert/arm/pe_fiq.c
 +++ b/pexpert/arm/pe_fiq.c
-@@ -13,12 +13,14 @@
- #include <pexpert/arm64/board_config.h>
- 
- 
--#if HAS_GIC_V3
-+#if HAS_GIC_V3 || defined(ZENLTE)
- #define GICR_WAKE_TIMEOUT_NS (1000000000ULL) // timeout for redistributor wakeup (default 1s)
- MACHINE_TIMEOUT(gicr_wake_timeout_ns, "gicr-wake-timeout", GICR_WAKE_TIMEOUT_NS, MACHINE_TIMEOUT_UNIT_NSEC, NULL);
- 
--#if defined(SWEET)
--/* Phone default; QEMU virt wires the architected virtual timer to INTID 27. */
-+#if defined(SWEET) || defined(ZENLTE)
-+/* Phone default; QEMU virt wires the architected virtual timer to INTID 27.
-+ * ZENLTE never evaluates this: its interrupt path is GIC-400, and the GICv3
-+ * code below is unreachable (pe_init_fiq returns earlier). */
- SECURITY_READ_ONLY_LATE(uint32_t) sweet_vtimer_intid = SWEET_VTIMER_INTID;
- #endif
- 
-@@ -79,6 +81,48 @@ pe_init_fiq()
+@@ -79,6 +79,7 @@ pe_init_fiq()
  	int error;
  	DTEntry entry;
  
-+#if defined(ZENLTE)
-+	/*
-+	 * Exynos 7420: GIC-400. This is a GICv2 part, so none of the GICv3 work
-+	 * below applies: there are no redistributors to wake, no ICC_* system
-+	 * registers, and no ARE_NS / EnableGrp1A bits. The whole init is four
-+	 * memory-mapped register groups on fixed physical addresses taken from
-+	 * the vendor device tree (exynos7420.dtsi).
-+	 *
-+	 * Group 0 belongs to TrustZone. Non-secure writes to it are ignored, so
-+	 * this only ever touches Group 1, which then arrives as a normal IRQ.
-+	 */
-+	{
-+		/* Distributor at 0x11001000: forward Group 1. */
-+		zenlte_gicd_write32(ZENLTE_GICD_CTLR,
-+		    zenlte_gicd_read32(ZENLTE_GICD_CTLR) | ZENLTE_GICD_CTLR_ENABLEGRP1);
-+
-+		/*
-+		 * CPU interface at 0x11002000, banked per core: Group 1 on,
-+		 * split EOI off (one write ends the interrupt), full priority
-+		 * mask, binary point 0.
-+		 */
-+		zenlte_gicc_write32(ZENLTE_GICC_CTLR,
-+		    (zenlte_gicc_read32(ZENLTE_GICC_CTLR) & ~ZENLTE_GICC_CTLR_EOIMODE)
-+		    | ZENLTE_GICC_CTLR_ENABLEGRP1);
-+		zenlte_gicc_write32(ZENLTE_GICC_PMR, 0xFF);
-+		zenlte_gicc_write32(ZENLTE_GICC_BPR, 0);
-+
-+		/*
-+		 * SGIs and PPIs share the low 32-bit bank of ISENABLER0 and of
-+		 * the priority registers; a write here lands in this core's
-+		 * bank. Enable the timer PPI and the IPI SGI.
-+		 */
-+		zenlte_gicd_write32(ZENLTE_GICD_IPRIORITYR + (ZENLTE_VTIMER_INTID & ~3U),
-+		    0xA0A0A0A0);
-+		zenlte_gicd_write32(ZENLTE_GICD_ISENABLER,
-+		    (1U << ZENLTE_VTIMER_INTID) | (1U << ZENLTE_IPI_SGI));
-+
-+		__builtin_arm_isb(ISB_SY);
-+	}
-+	return;
-+#endif /* ZENLTE */
 +
  	// gicd_base is 0x0 only before it's initialized by the boot processor.
  	// Avoid calling SecureDT* routines on secondary processors to avoid
  	// race conditions because they are not thread-safe.
-@@ -102,7 +146,7 @@ pe_init_fiq()
- 			panic("%s: incorrect reg property size in GIC DT node; expecting 32 bytes but got %u bytes", __func__, prop_size);
- 		}
- 
--#if defined(SWEET)
-+#if defined(SWEET) || defined(ZENLTE)
- 		/* Read only on the boot CPU, before the GIC and RO-late lockdown. */
- 		void const *timer_prop;
- 		unsigned int timer_size;
+@@ -228,3 +229,49 @@ pe_init_fiq()
+ {
+ }
+ #endif
++
++#ifdef ARM64_BOARD_CONFIG_ZENLTE
++/*
++ * Samsung Exynos 7420 (Galaxy S6 / S6 Edge / S6 Edge+ / Note 5): GIC-400.
++ *
++ * A GICv2 part, so none of the GICv3 work above applies: no redistributors
++ * to wake, no ICC_* system registers, and no ARE_NS / EnableGrp1A bits. The
++ * whole initialisation is a few memory-mapped writes at fixed physical
++ * addresses taken from the vendor device tree (exynos7420.dtsi).
++ *
++ * Group 0 belongs to TrustZone. The boot loader hands the SoC to us at EL1
++ * with the secure side configured, and non-secure writes to Group 0 are
++ * ignored, so this only ever touches Group 1 - which then arrives as a normal
++ * IRQ (see sleh_irq in osfmk/arm64/sleh.c).
++ */
++void
++pe_init_fiq()
++{
++	/* Distributor (0x11001000): forward Group 1. */
++	zenlte_gicd_write32(ZENLTE_GICD_CTLR,
++	    zenlte_gicd_read32(ZENLTE_GICD_CTLR) | ZENLTE_GICD_CTLR_ENABLEGRP1);
++
++	/*
++	 * CPU interface (0x11002000), banked per core: Group 1 on, split EOI
++	 * off so one EOIR write ends the interrupt, binary point 0, and a
++	 * priority mask that lets every priority through.
++	 */
++	zenlte_gicc_write32(ZENLTE_GICC_CTLR,
++	    (zenlte_gicc_read32(ZENLTE_GICC_CTLR) & ~ZENLTE_GICC_CTLR_EOIMODE)
++	    | ZENLTE_GICC_CTLR_ENABLEGRP1);
++	zenlte_gicc_write32(ZENLTE_GICC_BPR, 0);
++	zenlte_gicc_write32(ZENLTE_GICC_PMR, 0xFF);
++
++	/*
++	 * SGIs and PPIs share the low 32-bit bank of both ISENABLER0 and the
++	 * priority registers, and a write lands in this core's bank. Enable
++	 * the timer PPI and the IPI SGI.
++	 */
++	zenlte_gicd_write32(ZENLTE_GICD_IPRIORITYR + (ZENLTE_VTIMER_INTID & ~3U),
++	    0xA0A0A0A0);
++	zenlte_gicd_write32(ZENLTE_GICD_ISENABLER,
++	    (1U << ZENLTE_VTIMER_INTID) | (1U << ZENLTE_IPI_SGI));
++
++	isb();
++}
++#endif /* ARM64_BOARD_CONFIG_ZENLTE */
 diff --git a/pexpert/pexpert/arm64/Makefile b/pexpert/pexpert/arm64/Makefile
 index c7d274f..644854d 100644
 --- a/pexpert/pexpert/arm64/Makefile
