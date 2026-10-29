@@ -861,3 +861,101 @@ index e7b918f..4a5dda2 100644
  	/*
  	 * Splash framebuffer and pstore: one 32MB Device block each in the
  	 * EXISTING V=P L2 table. Both blocks and RAM use L1 index 0 (16K pages:
+diff --git a/bsd/sweet_hfs/AppleKeyStore/AppleKeyStoreFSServices.h b/bsd/sweet_hfs/AppleKeyStore/AppleKeyStoreFSServices.h
+new file mode 100644
+index 0000000..9d89804
+--- /dev/null
++++ b/bsd/sweet_hfs/AppleKeyStore/AppleKeyStoreFSServices.h
+@@ -0,0 +1,40 @@
++/*
++ * Stand-in for Apple's closed <AppleKeyStore/AppleKeyStoreFSServices.h>.
++ *
++ * The open-source HFS kext includes this unconditionally (core/hfs_iokit.h),
++ * because on Apple platforms HFS asks AppleKeyStore to wrap and unwrap file
++ * keys. None of that is available here: SWEET has no AppleKeyStore kext, the
++ * header is not in the open-source drop, and the cp_* content-protection API
++ * it belongs to is closed too.
++ *
++ * So this header declares only the handful of types hfs_iokit.h names in its
++ * prototypes, and omits everything that would actually do key management.
++ * CONFIG_PROTECT is cleared in sweet_hfs_compat.h, so hfs_cprotect.c compiles
++ * to nothing and no caller of these HFS entry points is built.
++ *
++ * Found via -I bsd/sweet_hfs (bsd/conf/Makefile.template), so the include
++ * path <AppleKeyStore/AppleKeyStoreFSServices.h> resolves to this file.
++ */
++#ifndef _APPLEKEYSTORE_FSSERVICES_STUB_H
++#define _APPLEKEYSTORE_FSSERVICES_STUB_H
++
++#include <sys/cdefs.h>
++#include <sys/types.h>
++#include <mach/boolean.h>
++
++__BEGIN_DECLS
++
++/*
++ * Opaque handles. hfs_iokit.h passes them by value in its prototypes, so they
++ * only have to be complete enough to name; nothing here ever dereferences one.
++ */
++typedef struct aks_cred *aks_cred_t;
++typedef struct aks_wrapped_key *aks_wrapped_key_t;
++typedef struct aks_raw_key *aks_raw_key_t;
++
++/* Content-protection key class, as named by HFS's prototypes. */
++typedef uint32_t cp_key_class_t;
++
++__END_DECLS
++
++#endif /* _APPLEKEYSTORE_FSSERVICES_STUB_H */
+diff --git a/bsd/sweet_hfs/sweet_hfs_compat.h b/bsd/sweet_hfs/sweet_hfs_compat.h
+index df55151..ccc82f8 100644
+--- a/bsd/sweet_hfs/sweet_hfs_compat.h
++++ b/bsd/sweet_hfs/sweet_hfs_compat.h
+@@ -2,13 +2,37 @@
+  * Compile Apple's HFS kext sources inside SWEET the way the kext is built:
+  * with the kext (KPI) view of the kernel headers, and with only HFS's own
+  * kext-config.h deciding features. The kernel's -DCONFIG_* options are not
+- * visible to a kext build, so the ones HFS tests are cleared first. SWEET
+- * has no AppleKeyStore, so content protection stays off.
++ * visible to a kext build, so they are cleared.
++ *
++ * Order matters. core/kext-config.h is Apple's own feature file and it
++ * *defines* CONFIG_PROTECT, CONFIG_SEARCHFS, CONFIG_HFS_DIRLINK,
++ * CONFIG_SECLUDED_RENAME, FIFO, NAMEDSTREAMS and HFS_COMPRESSION. Undefining
++ * before including it had no effect: the include put every one of them back,
++ * so the tree still built HFS's content-protection path (hfs_cprotect.c,
++ * hfs_cprotect.h, the cp_* calls in hfs_readwrite.c) against a kernel with no
++ * AppleKeyStore and no closed cp_* API. That surfaced as
++ *
++ *   hfs_iokit.h:34: fatal error: 'AppleKeyStore/AppleKeyStoreFSServices.h'
++ *   file not found
++ *   hfs_readwrite.c:198: error: call to undeclared function 'cp_handle_vnop'
++ *   hfs_readwrite.c:198: error: use of undeclared identifier 'CP_READ_ACCESS'
++ *
++ * Include the feature file first, then clear the features this kernel cannot
++ * provide. HFS still gets its kext view of the headers either way.
+  */
+ #ifndef SWEET_HFS_COMPAT_H
+ #define SWEET_HFS_COMPAT_H
+ #undef BSD_KERNEL_PRIVATE
+ #undef XNU_KERNEL_PRIVATE
++
++/* Apple's feature selection for the HFS kext. */
++#include "core/kext-config.h"
++
++/*
++ * SWEET has no AppleKeyStore and this kernel does not ship the closed
++ * AppleKeyStore/AppleKeyStoreFSServices.h or the cp_* content-protection API,
++ * so every feature that needs them is off.
++ */
+ #undef CONFIG_PROTECT
+ #undef CONFIG_SEARCHFS
+ #undef CONFIG_HFS_DIRLINK
+@@ -19,7 +43,6 @@
+ #undef NAMEDSTREAMS
+ #undef FIFO
+ #undef HFS_COMPRESSION
+-#include "core/kext-config.h"
+ 
+ /* Built in, not a loadable kext (see sweet_hfs_iokit.c). */
+ #define OSKextGetCurrentLoadTag sweet_hfs_current_load_tag
