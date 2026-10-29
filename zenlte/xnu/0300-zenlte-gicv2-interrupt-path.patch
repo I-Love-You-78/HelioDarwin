@@ -57,6 +57,25 @@ index 7a7cf4d..fbf70b7 100644
  
  
  #
+diff --git a/osfmk/arm64/proc_reg.h b/osfmk/arm64/proc_reg.h
+index 94a67a0..5bad9ed 100644
+--- a/osfmk/arm64/proc_reg.h
++++ b/osfmk/arm64/proc_reg.h
+@@ -213,6 +213,14 @@
+ /* D-Cache. */
+ #define MMU_CLINE   6
+ 
++#elif defined (ZENLTE) /* Samsung Exynos 7420: Cortex-A57 + Cortex-A53 */
++
++/* I-Cache. */
++#define MMU_I_CLINE 6
++
++/* D-Cache. */
++#define MMU_CLINE   6
++
+ #elif defined (SWEET) /* Qualcomm Kryo 470: Cortex-A76 + Cortex-A55 */
+ 
+ /* I-Cache. */
 diff --git a/osfmk/arm64/sleh.c b/osfmk/arm64/sleh.c
 index 5e4b82e..f7fa6e5 100644
 --- a/osfmk/arm64/sleh.c
@@ -201,83 +220,126 @@ index 6089db9..6f97a91 100644
  		/* Read only on the boot CPU, before the GIC and RO-late lockdown. */
  		void const *timer_prop;
  		unsigned int timer_size;
+diff --git a/pexpert/pexpert/arm64/board_config.h b/pexpert/pexpert/arm64/board_config.h
+index fee661e..3409c4a 100644
+--- a/pexpert/pexpert/arm64/board_config.h
++++ b/pexpert/pexpert/arm64/board_config.h
+@@ -108,6 +108,17 @@
+ 
+ #endif  /* ARM64_BOARD_CONFIG_SWEET */
+ 
++#ifdef ARM64_BOARD_CONFIG_ZENLTE
++#include <pexpert/arm64/zenlte.h>
++
++#define MAX_L2_CLINE                   6
++#define MAX_CPUS                       8
++#define MAX_CPU_CLUSTERS               2
++
++#define CORE_NCTRS                     8 /* Placeholder; KPC is not enabled for this target */
++
++#endif  /* ARM64_BOARD_CONFIG_ZENLTE */
++
+ #ifdef ARM64_BOARD_CONFIG_VMAPPLE
+ #include <pexpert/arm64/VMAPPLE.h>
+ 
 diff --git a/pexpert/pexpert/arm64/zenlte.h b/pexpert/pexpert/arm64/zenlte.h
 new file mode 100644
-index 0000000..a4914c4
+index 0000000..dafd038
 --- /dev/null
 +++ b/pexpert/pexpert/arm64/zenlte.h
-@@ -0,0 +1,101 @@
+@@ -0,0 +1,122 @@
 +/*
-+ * Samsung Exynos 7420 (Galaxy S6 / S6 Edge / S6 Edge+ / Note 5).
++ * Board config for the Samsung Galaxy S6 Edge+ ("zenlte", SM-G928F) and the
++ * other Exynos 7420 boards (S6, S6 Edge, Note 5): Cortex-A57 x4 + A53 x4,
++ * ARMv8.0-A, no PAN.
 + *
-+ * GIC-400 (GICv2), ARMv8.0-A, 24 MHz architected timer.
++ * Generic ARM like BCM2837 (no APPLE_ARM64_ARCH_FAMILY: none of Apple's
++ * implementation-defined system registers exist), 16K pages. Unlike every
++ * other phone board here this SoC has a GIC-400, not a GICv3: no
++ * redistributors, no ICC_* system registers, one memory-mapped CPU interface
++ * frame banked per core. Group 0 belongs to TrustZone, so every interrupt the
++ * kernel owns is a Group 1 IRQ taken through sleh_irq().
 + *
-+ * Every address is from the vendor kernel device tree:
-+ * samsungexynos7420/android_kernel_samsung_universal7420,
-+ * arch/arm64/boot/dts/exynos7420.dtsi.
++ * All addresses are from the vendor device tree:
++ *   samsungexynos7420/android_kernel_samsung_universal7420,
++ *   arch/arm64/boot/dts/exynos7420.dtsi (lineage-19.1)
 + *
 + * Untested on hardware.
 + */
-+#ifndef _PEXPERT_ARM64_ZENLTE_H_
-+#define _PEXPERT_ARM64_ZENLTE_H_
 +
-+#define ZENLTE                            1
++#ifndef _PEXPERT_ARM64_ZENLTE_H
++#define _PEXPERT_ARM64_ZENLTE_H
++
++#define NO_MONITOR                1
++#define NO_ECORE                  1
++
++#define ZENLTE                    1
++
++/* Four A57 (cluster 0) and four A53 (cluster 1), PSCI CPU_ON. */
++#define ZENLTE_SMP_MAX_CPUS       8
 +
 +#define ARM_ARCH_TIMER
-+#define __ARM_ARCH__                      8
-+#define __ARM_VMSA__                      8
-+#define __ARM_VFP__                       4
-+#define __ARM_COHERENT_CACHE__            1
-+#define __ARM_DEBUG__                     7
-+#define __ARM_ENABLE_SWAP__               1
-+#define __ARM_16K_PG__                    1
++#define __ARM_ARCH__              8
++#define __ARM_VMSA__              8
++#define __ARM_VFP__               4
++#define __ARM_COHERENT_CACHE__    1
++#define __ARM_DEBUG__             7
++#define __ARM_ENABLE_SWAP__       1
++/*
++ * ARMv8.0-A: no crypto extension and no PAN. Defining either would emit
++ * instructions these cores do not have.
++ */
++#define __ARM_16K_PG__            1
++
++/* GICv2, not GICv3. */
++#define HAS_GIC_V2                1
++
++#ifndef ASSEMBLER
++#define PLATFORM_PANIC_LOG_DISABLED
++#endif /* ! ASSEMBLER */
 +
 +/*
-+ * GICv2. No redistributors: the CPU interface is one frame, banked per core.
-+ * Group 0 belongs to TrustZone, so everything the kernel owns is Group 1 and
-+ * arrives as a normal IRQ.
++ * The PPIs are the usual 13/14/11/10 (secure physical, physical, virtual,
++ * hypervisor). XNU drives the physical timer, so INTID 14.
 + */
-+#define HAS_GIC_V2                        1
++#define ZENLTE_VTIMER_INTID       14
++#define ZENLTE_IPI_SGI            1
++#define ZENLTE_SPURIOUS_INTID     1023
 +
 +/*
-+ * Architected timer PPIs in the vendor numbering:
-+ *   <1 13> secure physical, <1 14> non-secure physical,
-+ *   <1 11> virtual,         <1 10> hypervisor.
-+ * XNU drives the physical timer: INTID 14.
++ * Aliases for the names pe_fiq.c and sleh.c use inside their sweet-shaped
++ * code. Those paths are unreachable under ZENLTE (both take the GIC-400 path
++ * first) but still have to compile.
 + */
-+#define ZENLTE_VTIMER_INTID               14
-+/* Only so the unreachable GICv3 initialisers still compile under ZENLTE. */
-+#define SWEET_VTIMER_INTID                ZENLTE_VTIMER_INTID
-+#define SWEET_IPI_SGI                     ZENLTE_IPI_SGI
-+#define ZENLTE_IPI_SGI                    1
-+#define ZENLTE_SPURIOUS_INTID             1023
++#define SWEET_VTIMER_INTID        ZENLTE_VTIMER_INTID
++#define SWEET_IPI_SGI             ZENLTE_IPI_SGI
 +
-+/* GIC-400 frames (exynos7420.dtsi gic node) */
-+#define ZENLTE_GICD_PA                    0x11001000UL
-+#define ZENLTE_GICC_PA                    0x11002000UL
++/* GIC-400 frames, exynos7420.dtsi gic node. */
++#define ZENLTE_GICD_PA            0x11001000UL
++#define ZENLTE_GICC_PA            0x11002000UL
 +
-+/* GICv2 register offsets (Arm IHI 0048) */
-+#define ZENLTE_GICD_CTLR                  0x0000
-+#define ZENLTE_GICD_TYPER                 0x0004
-+#define ZENLTE_GICD_IGROUPR               0x0080
-+#define ZENLTE_GICD_ISENABLER             0x0100
-+#define ZENLTE_GICD_ICENABLER             0x0180
-+#define ZENLTE_GICD_ICPENDR               0x0280
-+#define ZENLTE_GICD_IPRIORITYR            0x0400
-+#define ZENLTE_GICD_ITARGETSR             0x0800
-+#define ZENLTE_GICD_SGIR                  0x0F00
-+#define ZENLTE_GICC_CTLR                  0x0000
-+#define ZENLTE_GICC_PMR                   0x0004
-+#define ZENLTE_GICC_BPR                   0x0008
-+#define ZENLTE_GICC_IAR                   0x000C
-+#define ZENLTE_GICC_EOIR                  0x0010
++/* GICv2 register offsets (Arm IHI 0048). */
++#define ZENLTE_GICD_CTLR          0x000
++#define ZENLTE_GICD_TYPER         0x004
++#define ZENLTE_GICD_IGROUPR       0x080
++#define ZENLTE_GICD_ISENABLER     0x100
++#define ZENLTE_GICD_ICENABLER     0x180
++#define ZENLTE_GICD_ICPENDR       0x280
++#define ZENLTE_GICD_IPRIORITYR    0x400
++#define ZENLTE_GICD_ITARGETSR     0x800
++#define ZENLTE_GICD_SGIR          0xF00
++#define ZENLTE_GICC_CTLR          0x000
++#define ZENLTE_GICC_PMR           0x004
++#define ZENLTE_GICC_BPR           0x008
++#define ZENLTE_GICC_IAR           0x00C
++#define ZENLTE_GICC_EOIR          0x010
 +
-+/* GIC-400 control bits. There is no ARE_NS and no RWP. */
-+#define ZENLTE_GICD_CTLR_ENABLEGRP0       0x1
-+#define ZENLTE_GICD_CTLR_ENABLEGRP1       0x2
-+#define ZENLTE_GICC_CTLR_ENABLEGRP0       0x1
-+#define ZENLTE_GICC_CTLR_ENABLEGRP1       0x2
-+#define ZENLTE_GICC_CTLR_EOIMODE          0x2
++/* GIC-400 control bits. No ARE_NS and no RWP on a GICv2. */
++#define ZENLTE_GICD_CTLR_ENABLEGRP0  0x1
++#define ZENLTE_GICD_CTLR_ENABLEGRP1  0x2
++#define ZENLTE_GICC_CTLR_ENABLEGRP0  0x1
++#define ZENLTE_GICC_CTLR_ENABLEGRP1  0x2
++#define ZENLTE_GICC_CTLR_EOIMODE     0x2
 +
 +#ifndef ASSEMBLER
 +
@@ -305,6 +367,6 @@ index 0000000..a4914c4
 +	*(volatile uint32_t *)(ZENLTE_GICC_PA + off) = val;
 +}
 +
-+#endif /* !ASSEMBLER */
++#endif /* ! ASSEMBLER */
 +
-+#endif /* ! _PEXPERT_ARM64_ZENLTE_H_ */
++#endif /* ! _PEXPERT_ARM64_ZENLTE_H */
