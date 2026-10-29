@@ -1,0 +1,741 @@
+diff --git a/0019-stage-libpthread.sh b/0019-stage-libpthread.sh
+index d7d5adf..9c6fe70 100644
+--- a/0019-stage-libpthread.sh
++++ b/0019-stage-libpthread.sh
+@@ -2,7 +2,7 @@
+ # dxb runs patches/*.sh from the XNU source root before applying *.patch.
+ set -euo pipefail
+ 
+-[[ "${MACHINE_CONFIG:-}" == SWEET ]] || exit 0
++[[ "${MACHINE_CONFIG:-}" == SWEET || "${MACHINE_CONFIG:-}" == ZENLTE ]] || exit 0
+ [[ "${MACOS_VERSION:-}" == 13.5 ]] || {
+     echo 'SWEET libpthread integration requires xnu-8796.141.3 (macOS 13.5)' >&2
+     exit 1
+diff --git a/0020-stage-bearssl.sh b/0020-stage-bearssl.sh
+index 7b93682..01f2905 100644
+--- a/0020-stage-bearssl.sh
++++ b/0020-stage-bearssl.sh
+@@ -1,7 +1,7 @@
+ #!/bin/bash
+ # Pinned, portable constant-time AES for the SWEET legacy CBC/ECB API.
+ set -euo pipefail
+-[[ "${MACHINE_CONFIG:-}" == SWEET ]] || exit 0
++[[ "${MACHINE_CONFIG:-}" == SWEET || "${MACHINE_CONFIG:-}" == ZENLTE ]] || exit 0
+ [[ -f libkern/crypto/corecrypto_aes.c ]] || exit 1
+ bearssl_sha=7bea48e5e850ab4cafbe68d3765cdaba13a86d6f
+ bearssl_tmp=$(mktemp -d)
+diff --git a/0026-stage-hfs.sh b/0026-stage-hfs.sh
+index 5ad899a..cb3f347 100755
+--- a/0026-stage-hfs.sh
++++ b/0026-stage-hfs.sh
+@@ -3,7 +3,7 @@
+ # dxb runs patches/*.sh from the XNU source root before applying *.patch.
+ set -euo pipefail
+ 
+-[[ "${MACHINE_CONFIG:-}" == SWEET ]] || exit 0
++[[ "${MACHINE_CONFIG:-}" == SWEET || "${MACHINE_CONFIG:-}" == ZENLTE ]] || exit 0
+ [[ "${MACOS_VERSION:-}" == 13.5 ]] || {
+     echo 'SWEET HFS integration requires xnu-8796.141.3 (macOS 13.5)' >&2
+     exit 1
+diff --git a/iokit/Kernel/arm/SweetCPU.cpp b/iokit/Kernel/arm/SweetCPU.cpp
+index 41227c3..893de2a 100644
+--- a/iokit/Kernel/arm/SweetCPU.cpp
++++ b/iokit/Kernel/arm/SweetCPU.cpp
+@@ -234,6 +234,23 @@ SweetCPU::signalCPU(IOCPU *target)
+ 	if (aff0 >= 16) {
+ 		panic("SWEET CPU: SGI target requires unsupported range selector");
+ 	}
++#if defined(ZENLTE) && defined(HAS_GIC_V2)
++	/*
++	 * GIC-400: there is no ICC_SGI1R_EL1 here. That is a GICv3 system
++	 * register, and executing it on a GICv2 part raises an
++	 * undefined-instruction exception. Software generated interrupts go
++	 * through the distributor's GICD_SGIR instead:
++	 *   [25:24] target list filter, 0b10 = the CPUs named in the mask
++	 *   [23:16] target CPU mask, used with that filter; a single Aff0 here
++	 *   [15]    NSATT, 0, so the interrupt stays in the kernel's group
++	 *   [3:0]   the SGI number
++	 */
++	uint32_t sgir = (0x2u << 24) | (1u << aff0) |
++	    ((uint32_t)ZENLTE_IPI_SGI & 0xf);
++	__builtin_arm_dsb(DSB_ISHST);
++	zenlte_gicd_write32(ZENLTE_GICD_SGIR, sgir);
++	__builtin_arm_isb(ISB_SY);
++#else
+ 	uint64_t sgi = (((mpidr >> 32) & 0xff) << 48) |
+ 	    (((mpidr >> 16) & 0xff) << 32) |
+ 	    (((mpidr >> 8) & 0xff) << 16) |
+@@ -241,6 +258,7 @@ SweetCPU::signalCPU(IOCPU *target)
+ 	__builtin_arm_dsb(DSB_ISHST);
+ 	__builtin_arm_wsr64("ICC_SGI1R_EL1", sgi);
+ 	__builtin_arm_isb(ISB_SY);
++#endif
+ }
+ 
+ kern_return_t
+diff --git a/makedefs/MakeInc.def b/makedefs/MakeInc.def
+index 7a7cf4d..beb8e3e 100644
+--- a/makedefs/MakeInc.def
++++ b/makedefs/MakeInc.def
+@@ -29,7 +29,7 @@ SUPPORTED_ARM64_MACHINE_CONFIGS = NONE
+ else ifneq ($(findstring _host,$(RC_ProjectName)),)
+ SUPPORTED_ARM64_MACHINE_CONFIGS = NONE
+ else
+-SUPPORTED_ARM64_MACHINE_CONFIGS = BCM2837 T6000 T8101 T8103 VMAPPLE SWEET
++SUPPORTED_ARM64_MACHINE_CONFIGS = BCM2837 T6000 T8101 T8103 VMAPPLE SWEET ZENLTE
+ 
+ endif
+ 
+@@ -64,6 +64,7 @@ MACHINE_FLAGS_ARM64_BCM2837 = -DARM64_BOARD_CONFIG_BCM2837
+ # topaz: Cortex-A53/A73 are ARMv8.0 (no LSE atomics, RCpc, PAN or FP16). An explicit
+ # -mcpu: -arch arm64 otherwise keeps clang's apple-m1 default and its LSE/RCpc features
+ MACHINE_FLAGS_ARM64_SWEET = -DARM64_BOARD_CONFIG_SWEET                -mcpu=cortex-a53
++MACHINE_FLAGS_ARM64_ZENLTE = -DARM64_BOARD_CONFIG_ZENLTE              -march=armv8-a
+ 
+ 
+ #
+@@ -262,11 +263,16 @@ ifeq ($(ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG),)
+ # Without embdedded device map, use a default arch string
+ export ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG := $(shell echo $(CURRENT_ARCH_CONFIG) | tr A-Z a-z)
+ ifneq ($(filter arm64,$(ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG)),)
+-# sweet's Cortex-A76/A55 have no pointer authentication: stay plain arm64
++# sweet's Cortex-A76/A55 and zenlte's Cortex-A57/A53 have no pointer
++# authentication: stay plain arm64. Compiling as arm64e would enable
++# __has_feature(ptrauth_calls) while HAS_APPLE_PAC is 0, and the two disagree
++# about struct machine_thread (jop_pid vs reserved9) and struct pmap.
+ ifneq ($(CURRENT_MACHINE_CONFIG),SWEET)
++ifneq ($(CURRENT_MACHINE_CONFIG),ZENLTE)
+ export ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG := arm64e
+ endif
+ endif
++endif
+ 
+ endif
+ 
+diff --git a/osfmk/arm64/arm_vm_init.c b/osfmk/arm64/arm_vm_init.c
+index bafe1bf..14c5eee 100644
+--- a/osfmk/arm64/arm_vm_init.c
++++ b/osfmk/arm64/arm_vm_init.c
+@@ -1825,7 +1825,7 @@ init_ptpages(tt_entry_t *tt, vm_map_address_t start, vm_map_address_t end, bool
+ #define ARM64_PHYSMAP_ALIGNMENT_PADDING (PTOV_TABLE_SIZE * ARM_TT_TWIG_SIZE)
+ #endif
+ 
+-#if defined(SWEET)
++#if defined(SWEET) && !defined(ZENLTE_NO_EARLY_CONSOLE)
+ /*
+  * The reserved low-globals/kernel region is excluded from VM allocation.
+  * Use the otherwise empty 32MB blocks above low globals and below gVirtBase
+@@ -2187,7 +2187,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+ 
+ 	arm_set_user_tbi();
+ 
+-#if defined(SWEET)
++#if defined(SWEET) && !defined(ZENLTE_NO_EARLY_CONSOLE)
+ 	/* phystokv() must still refer to the bootstrap aperture here. */
+ 	sweet_early_map_final();
+ #endif
+@@ -2196,7 +2196,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+ 
+ 	ml_enable_monitor();
+ 
+-#if defined(SWEET)
++#if defined(SWEET) && !defined(ZENLTE_NO_EARLY_CONSOLE)
+ 	/* The final TTBR1 is live; leave the outgoing VA=PA framebuffer alias. */
+ 	sweet_early_relocate(SWEET_EARLY_FB_VA);
+ #endif
+diff --git a/osfmk/arm64/proc_reg.h b/osfmk/arm64/proc_reg.h
+index 94a67a0..5bad9ed 100644
+--- a/osfmk/arm64/proc_reg.h
++++ b/osfmk/arm64/proc_reg.h
+@@ -213,6 +213,14 @@
+ /* D-Cache. */
+ #define MMU_CLINE   6
+ 
++#elif defined (ZENLTE) /* Samsung Exynos 7420: Cortex-A57 + Cortex-A53 */
++
++/* I-Cache. */
++#define MMU_I_CLINE 6
++
++/* D-Cache. */
++#define MMU_CLINE   6
++
+ #elif defined (SWEET) /* Qualcomm Kryo 470: Cortex-A76 + Cortex-A55 */
+ 
+ /* I-Cache. */
+diff --git a/osfmk/arm64/sleh.c b/osfmk/arm64/sleh.c
+index 5e4b82e..f7fa6e5 100644
+--- a/osfmk/arm64/sleh.c
++++ b/osfmk/arm64/sleh.c
+@@ -257,7 +257,7 @@ void cpu_signal_handler(void);
+ extern unsigned int gFastIPI;
+ #endif /* defined(HAS_IPI) */
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(ZENLTE)
+ /* Bring-up: count IRQs taken so the sampler can tell whether the vtimer
+  * (and thus scheduler wakeups) is actually firing. */
+ volatile uint64_t sweet_irq_total, sweet_irq_timer, sweet_irq_ipi, sweet_irq_other;
+@@ -2032,7 +2032,49 @@ sleh_irq(arm_saved_state_t *state)
+ #endif
+ 
+ 
+-#if defined(SWEET)
++#if defined(ZENLTE)
++	/*
++	 * GIC-400 (Exynos 7420): the CPU interface is memory mapped and banked
++	 * per core, so acknowledge through GICC_IAR and end through GICC_EOIR
++	 * instead of the ICC_* system registers. TrustZone owns Group 0; every
++	 * interrupt this kernel handles is Group 1 and arrives as a normal IRQ.
++	 */
++	uint32_t iar = zenlte_gicc_read32(ZENLTE_GICC_IAR);
++	uint32_t intid = iar & 0x3FFU;
++
++	if (intid >= 1020U) {
++		return; /* spurious */
++	}
++	sweet_irq_total++;
++	if (intid == ZENLTE_VTIMER_INTID) {
++		sweet_irq_timer++;
++		sweet_kprof_sample(state);
++		sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_TIMER);
++		cdp->cpu_decrementer = -1; /* Large */
++		INTERRUPT_MASKED_DEBUG_START(rtclock_intr, DBG_INTR_TYPE_TIMER);
++		rtclock_intr(TRUE);
++		INTERRUPT_MASKED_DEBUG_END();
++		zenlte_gicc_write32(ZENLTE_GICC_EOIR, iar);
++	} else if (intid < 16U) {
++		sweet_irq_ipi++;
++		sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_IPI);
++		/* Ack before handling so an IPI raised meanwhile is not lost */
++		zenlte_gicc_write32(ZENLTE_GICC_EOIR, iar);
++		__builtin_arm_isb(ISB_SY);
++		cpu_signal_handler();
++	} else {
++		sweet_irq_other++;
++		sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_OTHER);
++		if (cdp->interrupt_handler) {
++			cdp->interrupt_handler(cdp->interrupt_target,
++			    cdp->interrupt_refCon,
++			    cdp->interrupt_nub,
++			    intid);
++		}
++		zenlte_gicc_write32(ZENLTE_GICC_EOIR, iar);
++	}
++	__builtin_arm_isb(ISB_SY);
++#elif defined(SWEET)
+ 	/*
+ 	 * sweet: TrustZone owns GIC Group 0, so the timer and IPIs that other
+ 	 * ARM64 targets take as FIQs arrive here as Group 1 IRQs.
+diff --git a/osfmk/arm64/sweet_early.c b/osfmk/arm64/sweet_early.c
+index bbb9318..81e6fc1 100644
+--- a/osfmk/arm64/sweet_early.c
++++ b/osfmk/arm64/sweet_early.c
+@@ -8,7 +8,7 @@
+  */
+ #include <arm64/sweet_early.h>
+ 
+-#if defined(SWEET)
++#if defined(SWEET) && !defined(ZENLTE_NO_EARLY_CONSOLE)
+ #include <stdint.h>
+ #include <kern/misc_protos.h>
+ 
+diff --git a/osfmk/arm64/sweet_early.h b/osfmk/arm64/sweet_early.h
+index e7f11ea..a00558f 100644
+--- a/osfmk/arm64/sweet_early.h
++++ b/osfmk/arm64/sweet_early.h
+@@ -6,7 +6,12 @@
+ #include <stdarg.h>
+ #include <stdint.h>
+ 
+-#if defined(SWEET)
++/*
++ * The early console is real on the sweet/x676c boards and compiled out on
++ * zenlte, whose panel console is the ADT-driven one in pe_serial.c (see
++ * ZENLTE_NO_EARLY_CONSOLE in ZENLTE.h).
++ */
++#if defined(SWEET) && !defined(ZENLTE_NO_EARLY_CONSOLE)
+ void sweet_early_mark(unsigned int stage, const char *label);
+ void sweet_early_putc(char c);
+ void sweet_early_panic(const char *fmt, va_list *args);
+@@ -22,6 +27,21 @@ static inline void sweet_early_mark(unsigned int stage, const char *label)
+ 	(void)label;
+ }
+ static inline void sweet_early_disable(void) {}
++static inline void sweet_early_relocate(uint64_t base)
++{
++	(void)base;
++}
++/*
++ * panic_trap_to_debugger() calls this under `defined(SWEET)` to put a first
++ * copy of the panic text on the early panel. zenlte has no early panel; its
++ * panic output goes through the ADT-driven framebuffer console in
++ * pe_serial.c, so this is a no-op rather than a missing symbol.
++ */
++static inline void sweet_early_panic(const char *fmt, va_list *args)
++{
++	(void)fmt;
++	(void)args;
++}
+ static inline void sweet_pstore_append(const char *buf, int len)
+ {
+ 	(void)buf;
+diff --git a/pexpert/arm/pe_fiq.c b/pexpert/arm/pe_fiq.c
+index 6089db9..6c72ebc 100644
+--- a/pexpert/arm/pe_fiq.c
++++ b/pexpert/arm/pe_fiq.c
+@@ -79,6 +79,7 @@ pe_init_fiq()
+ 	int error;
+ 	DTEntry entry;
+ 
++
+ 	// gicd_base is 0x0 only before it's initialized by the boot processor.
+ 	// Avoid calling SecureDT* routines on secondary processors to avoid
+ 	// race conditions because they are not thread-safe.
+@@ -222,9 +223,55 @@ pe_init_fiq()
+ 	__builtin_arm_isb(ISB_SY);
+ #endif /* SWEET */
+ }
+-#else
++#elif !defined(ARM64_BOARD_CONFIG_ZENLTE)
+ void
+ pe_init_fiq()
+ {
+ }
+ #endif
++
++#ifdef ARM64_BOARD_CONFIG_ZENLTE
++/*
++ * Samsung Exynos 7420 (Galaxy S6 / S6 Edge / S6 Edge+ / Note 5): GIC-400.
++ *
++ * A GICv2 part, so none of the GICv3 work above applies: no redistributors
++ * to wake, no ICC_* system registers, and no ARE_NS / EnableGrp1A bits. The
++ * whole initialisation is a few memory-mapped writes at fixed physical
++ * addresses taken from the vendor device tree (exynos7420.dtsi).
++ *
++ * Group 0 belongs to TrustZone. The boot loader hands the SoC to us at EL1
++ * with the secure side configured, and non-secure writes to Group 0 are
++ * ignored, so this only ever touches Group 1 - which then arrives as a normal
++ * IRQ (see sleh_irq in osfmk/arm64/sleh.c).
++ */
++void
++pe_init_fiq()
++{
++	/* Distributor (0x11001000): forward Group 1. */
++	zenlte_gicd_write32(ZENLTE_GICD_CTLR,
++	    zenlte_gicd_read32(ZENLTE_GICD_CTLR) | ZENLTE_GICD_CTLR_ENABLEGRP1);
++
++	/*
++	 * CPU interface (0x11002000), banked per core: Group 1 on, split EOI
++	 * off so one EOIR write ends the interrupt, binary point 0, and a
++	 * priority mask that lets every priority through.
++	 */
++	zenlte_gicc_write32(ZENLTE_GICC_CTLR,
++	    (zenlte_gicc_read32(ZENLTE_GICC_CTLR) & ~ZENLTE_GICC_CTLR_EOIMODE)
++	    | ZENLTE_GICC_CTLR_ENABLEGRP1);
++	zenlte_gicc_write32(ZENLTE_GICC_BPR, 0);
++	zenlte_gicc_write32(ZENLTE_GICC_PMR, 0xFF);
++
++	/*
++	 * SGIs and PPIs share the low 32-bit bank of both ISENABLER0 and the
++	 * priority registers, and a write lands in this core's bank. Enable
++	 * the timer PPI and the IPI SGI.
++	 */
++	zenlte_gicd_write32(ZENLTE_GICD_IPRIORITYR + (ZENLTE_VTIMER_INTID & ~3U),
++	    0xA0A0A0A0);
++	zenlte_gicd_write32(ZENLTE_GICD_ISENABLER,
++	    (1U << ZENLTE_VTIMER_INTID) | (1U << ZENLTE_IPI_SGI));
++
++	__builtin_arm_isb(ISB_SY);
++}
++#endif /* ARM64_BOARD_CONFIG_ZENLTE */
+diff --git a/pexpert/arm/pe_serial.c b/pexpert/arm/pe_serial.c
+index 636199e..da4bfe2 100644
+--- a/pexpert/arm/pe_serial.c
++++ b/pexpert/arm/pe_serial.c
+@@ -716,18 +716,52 @@ extern unsigned char iso_font[256 * 16];
+ #define FBCON_SCALE     2
+ #define FBCON_FG        0xffffffffu
+ #define FBCON_BG        0xff000000u
+-#define FBCON_MAX_PIXELS (1080 * 2400)
+-#define FBCON_GRID_MAX_COLS 136
+-#define FBCON_GRID_MAX_ROWS 150
++/*
++ * The console geometry has to cover the widest android panel in this tree:
++ * zenlte is 1600x2560, which at FBCON_SCALE 2 is a 100x80 character grid.
++ * Keep the cell grid a little larger than any board needs; it costs one byte
++ * per cell.
++ */
++#define FBCON_GRID_MAX_COLS 200
++#define FBCON_GRID_MAX_ROWS 160
+ 
+ extern int sweet_console_muted;
+ 
+ static volatile uint32_t *fbcon_base;
+ static uint32_t fbcon_width, fbcon_height, fbcon_stride;
+ static uint32_t fbcon_cols, fbcon_rows, fbcon_col, fbcon_row;
+-uint32_t fbcon_shadow[FBCON_MAX_PIXELS] __attribute__((aligned(64)));
++/*
++ * Scrolling used to shift a full-panel DRAM pixel mirror and then stream it
++ * back out. On a 1600x2560 panel that mirror alone is 16 MB of kernel BSS for
++ * a console, so the mirror is gone: the character grid below is the only
++ * state, and a scroll repaints the surviving rows from it.
++ */
+ static uint8_t fbcon_char_grid[FBCON_GRID_MAX_ROWS][FBCON_GRID_MAX_COLS];
+ 
++/* Paint one glyph cell at grid position (row, col). */
++static void
++fbcon_draw_cell(uint8_t c, uint32_t row, uint32_t col)
++{
++	const unsigned char *glyph = iso_font + (unsigned int)c * 16;
++	uint32_t x0 = col * 8 * FBCON_SCALE, y0 = row * 16 * FBCON_SCALE;
++	uint32_t stride_px = fbcon_stride / 4;
++	for (uint32_t gy = 0; gy < 16; gy++) {
++		for (uint32_t sy = 0; sy < FBCON_SCALE; sy++) {
++			uint32_t y = y0 + gy * FBCON_SCALE + sy;
++			if (y >= fbcon_height) {
++				return;
++			}
++			volatile uint32_t *vram_line = fbcon_base + y * stride_px + x0;
++			for (uint32_t gx = 0; gx < 8; gx++) {
++				uint32_t px = (glyph[gy] & (1u << gx)) ? FBCON_FG : FBCON_BG;
++				for (uint32_t sx = 0; sx < FBCON_SCALE; sx++) {
++					vram_line[gx * FBCON_SCALE + sx] = px;
++				}
++			}
++		}
++	}
++}
++
+ static void
+ fbcon_clear_row(uint32_t row)
+ {
+@@ -741,13 +775,10 @@ fbcon_clear_row(uint32_t row)
+ 	uint32_t width_u64 = fbcon_width / 2;
+ 	uint64_t bg64 = ((uint64_t)FBCON_BG << 32) | FBCON_BG;
+ 	volatile uint64_t *base64 = (volatile uint64_t *)fbcon_base;
+-	uint64_t *shadow64 = (uint64_t *)fbcon_shadow;
+ 
+ 	for (uint32_t y = row * 16 * FBCON_SCALE; y < (row + 1) * 16 * FBCON_SCALE && y < fbcon_height; y++) {
+ 		volatile uint64_t *line_vram = base64 + y * stride_u64;
+-		uint64_t *line_shadow = shadow64 + y * width_u64;
+ 		for (uint32_t x = 0; x < width_u64; x++) {
+-			line_shadow[x] = bg64;
+ 			line_vram[x] = bg64;
+ 		}
+ 	}
+@@ -760,33 +791,41 @@ fbcon_scroll(void)
+ 		return;
+ 	}
+ 	uint32_t cell_h = 16 * FBCON_SCALE;
+-	uint32_t top = (fbcon_rows - 1) * cell_h;
+-	uint32_t stride_u64 = fbcon_stride / 8;
+-	uint32_t width_u64 = fbcon_width / 2;
+-	uint64_t bg64 = ((uint64_t)FBCON_BG << 32) | FBCON_BG;
+-	volatile uint64_t *base64 = (volatile uint64_t *)fbcon_base;
+-	uint64_t *shadow64 = (uint64_t *)fbcon_shadow;
+ 
+-	/* 1. Fast scroll Character Grid in L1 cache (5 KB) */
++	/*
++	 * The character grid is the only record of what is on the panel, so a
++	 * scroll moves it up one cell row and then repaints from it. cell_width
++	 * stays whole cells: a grid column is 8 * FBCON_SCALE pixels wide.
++	 */
+ 	if (fbcon_rows > 1 && fbcon_rows <= FBCON_GRID_MAX_ROWS) {
+-		bcopy(&fbcon_char_grid[1], &fbcon_char_grid[0], (fbcon_rows - 1) * sizeof(fbcon_char_grid[0]));
++		bcopy(&fbcon_char_grid[1], &fbcon_char_grid[0],
++		    (size_t)(fbcon_rows - 1) * sizeof(fbcon_char_grid[0]));
+ 		bzero(&fbcon_char_grid[fbcon_rows - 1], sizeof(fbcon_char_grid[0]));
+ 	}
+ 
+-	/* 2. Fast scroll inside cached DRAM shadow buffer (L1/L2 hits) */
+-	bcopy((const void *)(shadow64 + cell_h * width_u64), (void *)shadow64, (size_t)top * width_u64 * 8);
++	uint32_t stride_u64 = fbcon_stride / 8;
++	uint32_t width_u64 = fbcon_width / 2;
++	uint64_t bg64 = ((uint64_t)FBCON_BG << 32) | FBCON_BG;
++	volatile uint64_t *base64 = (volatile uint64_t *)fbcon_base;
+ 
+-	/* 3. Clear bottom row in shadow buffer */
+-	for (uint32_t y = top; y < top + cell_h && y < fbcon_height; y++) {
+-		uint64_t *dst = shadow64 + y * width_u64;
++	/*
++	 * Repaint only the cell columns actually in use: the right edge of a
++	 * panel whose width is not a multiple of the cell width keeps whatever
++	 * was there, which is what the previous row-at-a-time writer did too.
++	 */
++	for (uint32_t y = 0; y < fbcon_rows * cell_h && y < fbcon_height; y++) {
++		volatile uint64_t *line_vram = base64 + y * stride_u64;
+ 		for (uint32_t x = 0; x < width_u64; x++) {
+-			dst[x] = bg64;
++			line_vram[x] = bg64;
+ 		}
+ 	}
+-
+-	/* 4. Stream shadow buffer to physical VRAM using memcpy (fast vector writes) */
+-	for (uint32_t y = 0; y < top + cell_h && y < fbcon_height; y++) {
+-		memcpy((void *)(base64 + y * stride_u64), (const void *)(shadow64 + y * width_u64), width_u64 * 8);
++	for (uint32_t r = 0; r < fbcon_rows && r < FBCON_GRID_MAX_ROWS; r++) {
++		for (uint32_t c = 0; c < fbcon_cols && c < FBCON_GRID_MAX_COLS; c++) {
++			uint8_t ch = fbcon_char_grid[r][c];
++			if (ch) {
++				fbcon_draw_cell(ch, r, c);
++			}
++		}
+ 	}
+ 
+ 	fbcon_row = fbcon_rows - 1;
+@@ -842,24 +881,7 @@ fbcon_transmit_data(uint8_t c)
+ 	    fbcon_row < FBCON_GRID_MAX_ROWS && fbcon_col < FBCON_GRID_MAX_COLS) {
+ 		fbcon_char_grid[fbcon_row][fbcon_col] = c;
+ 	}
+-	const unsigned char *glyph = iso_font + c * 16;
+-	uint32_t x0 = fbcon_col * 8 * FBCON_SCALE, y0 = fbcon_row * 16 * FBCON_SCALE;
+-	uint32_t stride_px = fbcon_stride / 4;
+-	for (uint32_t gy = 0; gy < 16; gy++) {
+-		for (uint32_t sy = 0; sy < FBCON_SCALE; sy++) {
+-			uint32_t y = y0 + gy * FBCON_SCALE + sy;
+-			volatile uint32_t *vram_line = fbcon_base + y * stride_px + x0;
+-			uint32_t *shadow_line = fbcon_shadow + y * fbcon_width + x0;
+-			for (uint32_t gx = 0; gx < 8; gx++) {
+-				uint32_t px = (glyph[gy] & (1u << gx)) ? FBCON_FG : FBCON_BG;
+-				for (uint32_t sx = 0; sx < FBCON_SCALE; sx++) {
+-					uint32_t off = gx * FBCON_SCALE + sx;
+-					shadow_line[off] = px;
+-					vram_line[off] = px;
+-				}
+-			}
+-		}
+-	}
++	fbcon_draw_cell(c, fbcon_row, fbcon_col);
+ 	fbcon_col++;
+ }
+ 
+@@ -906,8 +928,16 @@ fbcon_probe(void)
+ 	if (SecureDTGetProperty(entry, "stride", (void const **)&val, &size) == kSuccess) {
+ 		fbcon_stride = *val;
+ 	}
+-	if (!fbcon_width || !fbcon_height || fbcon_stride < fbcon_width * 4 ||
+-	    (uint64_t)fbcon_width * fbcon_height > FBCON_MAX_PIXELS) {
++	/*
++	 * No pixel-count cap any more: the only per-panel state is the cell
++	 * grid, so what has to fit is the character grid, not a pixel mirror.
++	 * Reject a panel whose grid would not fit the grid array.
++	 */
++	if (!fbcon_width || !fbcon_height || fbcon_stride < fbcon_width * 4) {
++		return;
++	}
++	if (fbcon_width / (8 * FBCON_SCALE) > FBCON_GRID_MAX_COLS ||
++	    fbcon_height / (16 * FBCON_SCALE) > FBCON_GRID_MAX_ROWS) {
+ 		return;
+ 	}
+ 	sweet_early_mark(17, "fbcon config read; mapping");
+diff --git a/pexpert/pexpert/arm64/Makefile b/pexpert/pexpert/arm64/Makefile
+index c7d274f..644854d 100644
+--- a/pexpert/pexpert/arm64/Makefile
++++ b/pexpert/pexpert/arm64/Makefile
+@@ -18,7 +18,8 @@ PRIVATE_KERNELFILES = \
+ 	H13.h \
+ 	VMAPPLE.h \
+ 	BCM2837.h \
+-	SWEET.h
++	SWEET.h \
++	zenlte.h
+ 
+ 
+ # Headers installed into System.framework/PrivateHeaders (userspace internal SDK only).
+diff --git a/pexpert/pexpert/arm64/ZENLTE.h b/pexpert/pexpert/arm64/ZENLTE.h
+new file mode 100644
+index 0000000..f139f2a
+--- /dev/null
++++ b/pexpert/pexpert/arm64/ZENLTE.h
+@@ -0,0 +1,157 @@
++/*
++ * Board config for the Samsung Galaxy S6 Edge+ ("zenlte", SM-G928F) and the
++ * other Exynos 7420 boards (S6, S6 Edge, Note 5): Cortex-A57 x4 + A53 x4,
++ * ARMv8.0-A, no PAN.
++ *
++ * Generic ARM like BCM2837 (no APPLE_ARM64_ARCH_FAMILY: none of Apple's
++ * implementation-defined system registers exist), 16K pages. Unlike every
++ * other phone board here this SoC has a GIC-400, not a GICv3: no
++ * redistributors, no ICC_* system registers, one memory-mapped CPU interface
++ * frame banked per core. Group 0 belongs to TrustZone, so every interrupt the
++ * kernel owns is a Group 1 IRQ taken through sleh_irq().
++ *
++ * All addresses are from the vendor device tree:
++ *   samsungexynos7420/android_kernel_samsung_universal7420,
++ *   arch/arm64/boot/dts/exynos7420.dtsi (lineage-19.1)
++ *
++ * Untested on hardware.
++ */
++
++#ifndef _PEXPERT_ARM64_ZENLTE_H
++#define _PEXPERT_ARM64_ZENLTE_H
++
++#define NO_MONITOR                1
++#define NO_ECORE                  1
++
++#define ZENLTE                    1
++
++/*
++ * SWEET enables the userspace-facing IOKit services that iOS 16 needs and
++ * that are not board specific: SweetSurface (the IOSurface kernel side),
++ * SweetPlatformExpert, SweetAMFIService, SweetKeyStore, SweetCPU, SweetBusy,
++ * SweetEntitlements and SweetWatchdog. Those eight files are gated on
++ * `defined(SWEET)` alone.
++ *
++ * Deliberately NOT defined here: ARM64_BOARD_CONFIG_SWEET. That macro gates
++ * the twelve board-specific drivers - sweet_rpmh, sweet_spmi, sweet_pwrap,
++ * sweet_cpufreq, sweet_i2c1, sweet_ufs, sweet_usb, sweet_touch, sweet_keys,
++ * SweetBattery, SweetFramebuffer and sweet_amfi - every one of which pokes
++ * fixed physical addresses that belong to Qualcomm SM7150 or MediaTek MT6789
++ * hardware. On an Exynos 7420 those addresses are unrelated blocks, so
++ * leaving the macro undefined is what keeps them out of this kernel.
++ */
++#define SWEET                     1
++
++/*
++ * No MT6789-style early framebuffer console here.
++ *
++ * The sweet/x676c boards map a 32MB alias of LK's splash block and of a
++ * ramoops pstore block through the bootstrap TTBR0 and then keep them at
++ * fixed kernel VAs, because their debug UART is unusable and that console is
++ * the only early output they have. Both blocks are MediaTek addresses
++ * (SWEET_EARLY_FB_BLOCK 0xfe000000, SWEET_PSTORE_BLOCK 0x48000000); on the
++ * Exynos 7420 they are ordinary DRAM.
++ *
++ * zenlte instead prints to its panel through the framebuffer serial console
++ * in pe_serial.c, which takes the framebuffer address from the ADT's
++ * sweet-fbcon node rather than from a compile-time constant. That path needs
++ * no early alias, so the whole mechanism stays off.
++ */
++#define ZENLTE_NO_EARLY_CONSOLE   1
++
++/* Four A57 (cluster 0) and four A53 (cluster 1), PSCI CPU_ON. */
++#define ZENLTE_SMP_MAX_CPUS       8
++
++#define ARM_ARCH_TIMER
++#define __ARM_ARCH__              8
++#define __ARM_VMSA__              8
++#define __ARM_VFP__               4
++#define __ARM_COHERENT_CACHE__    1
++#define __ARM_DEBUG__             7
++#define __ARM_ENABLE_SWAP__       1
++/*
++ * ARMv8.0-A: no crypto extension and no PAN. Defining either would emit
++ * instructions these cores do not have.
++ */
++#define __ARM_16K_PG__            1
++
++/* GICv2, not GICv3. */
++#define HAS_GIC_V2                1
++
++#ifndef ASSEMBLER
++#define PLATFORM_PANIC_LOG_DISABLED
++#endif /* ! ASSEMBLER */
++
++/*
++ * The PPIs are the usual 13/14/11/10 (secure physical, physical, virtual,
++ * hypervisor). XNU drives the physical timer, so INTID 14.
++ */
++#define ZENLTE_VTIMER_INTID       14
++#define ZENLTE_IPI_SGI            1
++#define ZENLTE_SPURIOUS_INTID     1023
++
++/*
++ * Aliases for the names pe_fiq.c, sleh.c and SweetCPU.cpp use inside their
++ * sweet-shaped code. Those paths test ZENLTE/HAS_GIC_V2 first and are
++ * unreachable here, but they still have to compile.
++ */
++#define SWEET_SMP_MAX_CPUS        ZENLTE_SMP_MAX_CPUS
++#define SWEET_VTIMER_INTID        ZENLTE_VTIMER_INTID
++#define SWEET_IPI_SGI             ZENLTE_IPI_SGI
++
++/* GIC-400 frames, exynos7420.dtsi gic node. */
++#define ZENLTE_GICD_PA            0x11001000UL
++#define ZENLTE_GICC_PA            0x11002000UL
++
++/* GICv2 register offsets (Arm IHI 0048). */
++#define ZENLTE_GICD_CTLR          0x000
++#define ZENLTE_GICD_TYPER         0x004
++#define ZENLTE_GICD_IGROUPR       0x080
++#define ZENLTE_GICD_ISENABLER     0x100
++#define ZENLTE_GICD_ICENABLER     0x180
++#define ZENLTE_GICD_ICPENDR       0x280
++#define ZENLTE_GICD_IPRIORITYR    0x400
++#define ZENLTE_GICD_ITARGETSR     0x800
++#define ZENLTE_GICD_SGIR          0xF00
++#define ZENLTE_GICC_CTLR          0x000
++#define ZENLTE_GICC_PMR           0x004
++#define ZENLTE_GICC_BPR           0x008
++#define ZENLTE_GICC_IAR           0x00C
++#define ZENLTE_GICC_EOIR          0x010
++
++/* GIC-400 control bits. No ARE_NS and no RWP on a GICv2. */
++#define ZENLTE_GICD_CTLR_ENABLEGRP0  0x1
++#define ZENLTE_GICD_CTLR_ENABLEGRP1  0x2
++#define ZENLTE_GICC_CTLR_ENABLEGRP0  0x1
++#define ZENLTE_GICC_CTLR_ENABLEGRP1  0x2
++#define ZENLTE_GICC_CTLR_EOIMODE     0x2
++
++#ifndef ASSEMBLER
++
++static inline uint32_t
++zenlte_gicd_read32(uint32_t off)
++{
++	return *(volatile uint32_t *)(ZENLTE_GICD_PA + off);
++}
++
++static inline void
++zenlte_gicd_write32(uint32_t off, uint32_t val)
++{
++	*(volatile uint32_t *)(ZENLTE_GICD_PA + off) = val;
++}
++
++static inline uint32_t
++zenlte_gicc_read32(uint32_t off)
++{
++	return *(volatile uint32_t *)(ZENLTE_GICC_PA + off);
++}
++
++static inline void
++zenlte_gicc_write32(uint32_t off, uint32_t val)
++{
++	*(volatile uint32_t *)(ZENLTE_GICC_PA + off) = val;
++}
++
++#endif /* ! ASSEMBLER */
++
++#endif /* ! _PEXPERT_ARM64_ZENLTE_H */
+diff --git a/pexpert/pexpert/arm64/board_config.h b/pexpert/pexpert/arm64/board_config.h
+index fee661e..1eeccbd 100644
+--- a/pexpert/pexpert/arm64/board_config.h
++++ b/pexpert/pexpert/arm64/board_config.h
+@@ -108,6 +108,29 @@
+ 
+ #endif  /* ARM64_BOARD_CONFIG_SWEET */
+ 
++#ifdef ARM64_BOARD_CONFIG_ZENLTE
++/*
++ * Samsung Galaxy S6 Edge+ (SM-G928F) and the other Exynos 7420 boards: four
++ * Cortex-A57 plus four Cortex-A53, ARMv8.0-A, GIC-400.
++ *
++ * This is its own machine config, not a variant of SWEET. SWEET is the
++ * Qualcomm SM7150 / MediaTek MT6789 family: GICv3, homogeneous SMP, and about
++ * 9000 lines of drivers that poke fixed physical addresses belonging to
++ * unrelated hardware on an Exynos. What this board shares with that family is
++ * the userspace-facing IOKit surface (SweetSurface, SweetPlatformExpert),
++ * which is reached by defining SWEET in ZENLTE.h rather than by building
++ * the SWEET board itself.
++ */
++#include <pexpert/arm64/ZENLTE.h>
++
++#define MAX_L2_CLINE                   6
++#define MAX_CPUS                       8
++#define MAX_CPU_CLUSTERS               2  /* A57 cluster + A53 cluster */
++
++#define CORE_NCTRS                     8 /* Placeholder; KPC is not enabled for this target */
++
++#endif  /* ARM64_BOARD_CONFIG_ZENLTE */
++
+ #ifdef ARM64_BOARD_CONFIG_VMAPPLE
+ #include <pexpert/arm64/VMAPPLE.h>
+ 
