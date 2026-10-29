@@ -1,0 +1,293 @@
+From: S6 Edge+ bring-up (zenlte / Exynos 7420)
+Subject: [zenlte] Exynos 7420 bring-up: GIC-400 (GICv2) interrupt path
+
+Every existing ARM64 board in this tree that is not an Apple SoC takes its
+interrupts through a GICv3: ICC_* system registers, ICC_IGRPEN1_EL1 for the
+group, and a redistributor per core. Exynos 7420 - Galaxy S6, S6 Edge,
+S6 Edge+ (SM-G928), Note 5 - has a GIC-400: memory-mapped GICC_* on one
+frame banked per core, no redistributors, and SGI delivery through GICD_SGIR.
+
+This patch adds a ZENLTE machine configuration. Only the interrupt path and
+the cache geometry differ from a generic ARMv8.0 build; nothing here is
+Apple-specific and no existing configuration changes.
+
+Hardware values, from samsungexynos7420/android_kernel_samsung_universal7420,
+arch/arm64/boot/dts/exynos7420.dtsi (lineage-19.1):
+
+  gic: interrupt-controller@11001000
+    reg = <0x11001000 0x1000>   distributor
+          <0x11002000 0x1000>   CPU interface
+          <0x11004000 0x2000>   GICH
+          <0x11006000 0x2000>   GICV
+  timer:
+    interrupts = <1 13 0xff01>, <1 14 0xff01>, <1 11 0xff01>, <1 10 0xff01>
+
+Groups: Group 0 belongs to TrustZone on this SoC. The kernel runs at EL1 with
+the secure side already configured by the boot loader, so everything it owns
+is Group 1 and arrives as a normal IRQ. pe_init_fiq programs the distributor
+and the banked CPU interface accordingly, and sleh_irq acknowledges and ends
+through GICC_IAR / GICC_EOIR.
+
+Timer: the architected PPIs are the usual 13/14/11/10. XNU drives the
+physical timer, INTID 14.
+
+CPU: Cortex-A57 x4 (cluster 0) + Cortex-A53 x4 (cluster 1), ARMv8.0-A, with
+no PAN. Build with -march=armv8-a, not the armv8.2-a the Qualcomm ports use.
+
+Untested on hardware. First milestone: pe_init_fiq leaves the GIC-400 enabled
+and the timer tick runs.
+
+--- a/makedefs/MakeInc.def
++++ b/makedefs/MakeInc.def
+@@ -29,7 +29,7 @@
+ else ifneq ($(findstring _host,$(RC_ProjectName)),)
+ SUPPORTED_ARM64_MACHINE_CONFIGS = NONE
+ else
+-SUPPORTED_ARM64_MACHINE_CONFIGS = BCM2837 T6000 T8101 T8103 VMAPPLE
++SUPPORTED_ARM64_MACHINE_CONFIGS = BCM2837 T6000 T8101 T8103 VMAPPLE ZENLTE
+ 
+ endif
+ 
+@@ -60,6 +60,7 @@
+ MACHINE_FLAGS_ARM64_T8103 = -DARM64_BOARD_CONFIG_T8103                  -mcpu=apple-a14
+ MACHINE_FLAGS_ARM64_T6000 = -DARM64_BOARD_CONFIG_T6000 		-mcpu=apple-a14
+ MACHINE_FLAGS_ARM64_VMAPPLE = -DARM64_BOARD_CONFIG_VMAPPLE              -march=armv8.5a
++MACHINE_FLAGS_ARM64_ZENLTE = -DARM64_BOARD_CONFIG_ZENLTE              -march=armv8-a
+ MACHINE_FLAGS_ARM64_BCM2837 = -DARM64_BOARD_CONFIG_BCM2837
+ 
+ 
+--- a/pexpert/pexpert/arm64/board_config.h
++++ b/pexpert/pexpert/arm64/board_config.h
+@@ -7,6 +7,10 @@
+ 
+ #include <mach/machine.h>
+ 
++#if defined(ZENLTE)
++#include <pexpert/arm64/zenlte.h>
++#endif
++
+ /*
+  * Per-SoC configuration.  General order is:
+  *
+--- a/osfmk/arm64/proc_reg.h
++++ b/osfmk/arm64/proc_reg.h
+@@ -156,6 +156,12 @@
+ 
+ /* D-Cache */
+ #define MMU_CLINE   6                      /* cache line size as 1<<MMU_CLINE (64) */
++
++#elif defined (ZENLTE)
++
++/* Exynos 7420: Cortex-A57 + Cortex-A53, 64-byte I and D cache lines. */
++#define MMU_I_CLINE 6
++#define MMU_D_CLINE 6
+ 
+ #elif defined (APPLETWISTER)
+ 
+--- a/pexpert/arm/pe_fiq.c
++++ b/pexpert/arm/pe_fiq.c
+@@ -141,6 +141,36 @@
+ 		}
+ 	}
+ 
++#if defined(ZENLTE)
++	/*
++	 * GIC-400. Group 0 stays with TrustZone: the boot loader hands the SoC
++	 * to us at EL1 with the secure side configured, and non-secure writes to
++	 * Group 0 are ignored. Everything this kernel owns is Group 1 and so
++	 * arrives as a normal IRQ (see sleh_irq in osfmk/arm64/sleh.c).
++	 *
++	 * There are no redistributors to wake. The CPU interface is banked per
++	 * core, and group and priority are programmed there.
++	 */
++
++	// Distributor: forward Group 1.
++	zenlte_gicd_write32(ZENLTE_GICD_CTLR,
++	    zenlte_gicd_read32(ZENLTE_GICD_CTLR) | ZENLTE_GICD_CTLR_ENABLEGRP1);
++
++	// CPU interface (this core's bank): Group 1 on, no split EOI.
++	zenlte_gicc_write32(ZENLTE_GICC_CTLR,
++	    (zenlte_gicc_read32(ZENLTE_GICC_CTLR) & ~ZENLTE_GICC_CTLR_EOIMODE)
++	    | ZENLTE_GICC_CTLR_ENABLEGRP1);
++	zenlte_gicc_write32(ZENLTE_GICC_BPR, 0);
++	zenlte_gicc_write32(ZENLTE_GICC_PMR, 0xFF);
++
++	// SGIs and PPIs share the low 32-bit bank of ISENABLER0 on every core.
++	zenlte_gicd_write32(ZENLTE_GICD_IPRIORITYR + (ZENLTE_VTIMER_INTID & ~3U),
++	    0xA0A0A0A0);
++	zenlte_gicd_write32(ZENLTE_GICD_ISENABLER,
++	    (1U << ZENLTE_VTIMER_INTID) | (1U << ZENLTE_IPI_SGI));
++
++	__builtin_arm_isb(ISB_SY);
++#else
+ 	// Configure timers and legacy FIQ to be group 0
+ 	gicr_write32(GICR_IGROUPR0, 0x81FFFFFF);
+ 
+@@ -168,6 +198,7 @@
+ 	gicd_write32(GICD_CTLR, gicd_ctlr);
+ 	__builtin_arm_wsr64("ICC_IGRPEN0_EL1", 1);
+ 	__builtin_arm_isb(ISB_SY);
++#endif /* ZENLTE */
+ }
+ #else
+ void
+--- a/osfmk/arm64/sleh.c
++++ b/osfmk/arm64/sleh.c
+@@ -1850,8 +1850,48 @@
+ #if MACH_ASSERT
+ 	int preemption_level = sleh_get_preemption_level();
+ #endif
++
++
++#if defined(ZENLTE)
++	/*
++	 * GIC-400: acknowledge through the banked CPU interface instead of
++	 * ICC_IAR1_EL1, and end through GICC_EOIR. Group 0 belongs to
++	 * TrustZone, so everything here is Group 1.
++	 */
++	{
++		uint32_t zen_iar   = zenlte_gicc_read32(ZENLTE_GICC_IAR);
++		uint32_t zen_intid = zen_iar & 0x3FFU;
+ 
++		if (zen_intid == ZENLTE_SPURIOUS_INTID || zen_intid >= 1020U) {
++			return; /* spurious */
++		}
+ 
++		if (zen_intid == ZENLTE_VTIMER_INTID) {
++			sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_TIMER);
++			cdp->cpu_decrementer = -1; /* Large */
++			INTERRUPT_MASKED_DEBUG_START(rtclock_intr, DBG_INTR_TYPE_TIMER);
++			rtclock_intr(TRUE);
++			INTERRUPT_MASKED_DEBUG_END();
++			zenlte_gicc_write32(ZENLTE_GICC_EOIR, zen_iar);
++		} else if (zen_intid < 16U) {
++			sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_IPI);
++			/* End before dispatching so an SGI raised meanwhile is kept. */
++			zenlte_gicc_write32(ZENLTE_GICC_EOIR, zen_iar);
++			__builtin_arm_isb(ISB_SY);
++			cpu_signal_handler();
++		} else {
++			sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_OTHER);
++			if (cdp->interrupt_handler) {
++				cdp->interrupt_handler(cdp->interrupt_target,
++				    cdp->interrupt_refCon,
++				    cdp->interrupt_nub,
++				    zen_intid);
++			}
++			zenlte_gicc_write32(ZENLTE_GICC_EOIR, zen_iar);
++		}
++		__builtin_arm_isb(ISB_SY);
++	}
++#else
+ 	sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_OTHER);
+ 
+ #if USE_APPLEARMSMP
+@@ -1863,6 +1903,7 @@
+ 	    cdp->interrupt_nub,
+ 	    cdp->interrupt_source);
+ #endif
++#endif /* ZENLTE */
+ 
+ 	entropy_collect();
+ 
+--- /dev/null
++++ b/pexpert/pexpert/arm64/zenlte.h
+@@ -0,0 +1,98 @@
++/*
++ * Samsung Exynos 7420 (Galaxy S6 / S6 Edge / S6 Edge+ / Note 5).
++ *
++ * GIC-400 (GICv2), ARMv8.0-A, 24 MHz architected timer.
++ *
++ * Every address is from the vendor kernel device tree:
++ * samsungexynos7420/android_kernel_samsung_universal7420,
++ * arch/arm64/boot/dts/exynos7420.dtsi.
++ *
++ * Untested on hardware.
++ */
++#ifndef _PEXPERT_ARM64_ZENLTE_H_
++#define _PEXPERT_ARM64_ZENLTE_H_
++
++#define ZENLTE                            1
++
++#define ARM_ARCH_TIMER
++#define __ARM_ARCH__                      8
++#define __ARM_VMSA__                      8
++#define __ARM_VFP__                       4
++#define __ARM_COHERENT_CACHE__            1
++#define __ARM_DEBUG__                     7
++#define __ARM_ENABLE_SWAP__               1
++#define __ARM_16K_PG__                    1
++
++/*
++ * GICv2. No redistributors: the CPU interface is one frame, banked per core.
++ * Group 0 belongs to TrustZone, so everything the kernel owns is Group 1 and
++ * arrives as a normal IRQ.
++ */
++#define HAS_GIC_V2                        1
++
++/*
++ * Architected timer PPIs in the vendor numbering:
++ *   <1 13> secure physical, <1 14> non-secure physical,
++ *   <1 11> virtual,         <1 10> hypervisor.
++ * XNU drives the physical timer: INTID 14.
++ */
++#define ZENLTE_VTIMER_INTID               14
++#define ZENLTE_IPI_SGI                    1
++#define ZENLTE_SPURIOUS_INTID             1023
++
++/* GIC-400 frames (exynos7420.dtsi gic node) */
++#define ZENLTE_GICD_PA                    0x11001000UL
++#define ZENLTE_GICC_PA                    0x11002000UL
++
++/* GICv2 register offsets (Arm IHI 0048) */
++#define ZENLTE_GICD_CTLR                  0x0000
++#define ZENLTE_GICD_TYPER                 0x0004
++#define ZENLTE_GICD_IGROUPR               0x0080
++#define ZENLTE_GICD_ISENABLER             0x0100
++#define ZENLTE_GICD_ICENABLER             0x0180
++#define ZENLTE_GICD_ICPENDR               0x0280
++#define ZENLTE_GICD_IPRIORITYR            0x0400
++#define ZENLTE_GICD_ITARGETSR             0x0800
++#define ZENLTE_GICD_SGIR                  0x0F00
++#define ZENLTE_GICC_CTLR                  0x0000
++#define ZENLTE_GICC_PMR                   0x0004
++#define ZENLTE_GICC_BPR                   0x0008
++#define ZENLTE_GICC_IAR                   0x000C
++#define ZENLTE_GICC_EOIR                  0x0010
++
++/* GIC-400 control bits. There is no ARE_NS and no RWP. */
++#define ZENLTE_GICD_CTLR_ENABLEGRP0       0x1
++#define ZENLTE_GICD_CTLR_ENABLEGRP1       0x2
++#define ZENLTE_GICC_CTLR_ENABLEGRP0       0x1
++#define ZENLTE_GICC_CTLR_ENABLEGRP1       0x2
++#define ZENLTE_GICC_CTLR_EOIMODE          0x2
++
++#ifndef ASSEMBLER
++
++static inline uint32_t
++zenlte_gicd_read32(uint32_t off)
++{
++	return *(volatile uint32_t *)(ZENLTE_GICD_PA + off);
++}
++
++static inline void
++zenlte_gicd_write32(uint32_t off, uint32_t val)
++{
++	*(volatile uint32_t *)(ZENLTE_GICD_PA + off) = val;
++}
++
++static inline uint32_t
++zenlte_gicc_read32(uint32_t off)
++{
++	return *(volatile uint32_t *)(ZENLTE_GICC_PA + off);
++}
++
++static inline void
++zenlte_gicc_write32(uint32_t off, uint32_t val)
++{
++	*(volatile uint32_t *)(ZENLTE_GICC_PA + off) = val;
++}
++
++#endif /* !ASSEMBLER */
++
++#endif /* ! _PEXPERT_ARM64_ZENLTE_H_ */
