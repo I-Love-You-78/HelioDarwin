@@ -141,7 +141,7 @@ index 5e4b82e..f7fa6e5 100644
  	 * sweet: TrustZone owns GIC Group 0, so the timer and IPIs that other
  	 * ARM64 targets take as FIQs arrive here as Group 1 IRQs.
 diff --git a/pexpert/arm/pe_fiq.c b/pexpert/arm/pe_fiq.c
-index 6089db9..1c3d9bc 100644
+index 6089db9..6c72ebc 100644
 --- a/pexpert/arm/pe_fiq.c
 +++ b/pexpert/arm/pe_fiq.c
 @@ -79,6 +79,7 @@ pe_init_fiq()
@@ -152,7 +152,14 @@ index 6089db9..1c3d9bc 100644
  	// gicd_base is 0x0 only before it's initialized by the boot processor.
  	// Avoid calling SecureDT* routines on secondary processors to avoid
  	// race conditions because they are not thread-safe.
-@@ -228,3 +229,49 @@ pe_init_fiq()
+@@ -222,9 +223,55 @@ pe_init_fiq()
+ 	__builtin_arm_isb(ISB_SY);
+ #endif /* SWEET */
+ }
+-#else
++#elif !defined(ARM64_BOARD_CONFIG_ZENLTE)
+ void
+ pe_init_fiq()
  {
  }
  #endif
@@ -199,7 +206,7 @@ index 6089db9..1c3d9bc 100644
 +	zenlte_gicd_write32(ZENLTE_GICD_ISENABLER,
 +	    (1U << ZENLTE_VTIMER_INTID) | (1U << ZENLTE_IPI_SGI));
 +
-+	isb();
++	__builtin_arm_isb(ISB_SY);
 +}
 +#endif /* ARM64_BOARD_CONFIG_ZENLTE */
 diff --git a/pexpert/pexpert/arm64/Makefile b/pexpert/pexpert/arm64/Makefile
