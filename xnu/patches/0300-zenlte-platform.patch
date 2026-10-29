@@ -839,3 +839,25 @@ index fee661e..1eeccbd 100644
  #ifdef ARM64_BOARD_CONFIG_VMAPPLE
  #include <pexpert/arm64/VMAPPLE.h>
  
+diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
+index e7b918f..4a5dda2 100644
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -513,7 +513,7 @@ LEXT(start_first_cpu)
+ 	mov		x20, x0
+ 	mov		x21, #0
+ 
+-#if defined(SWEET)
++#if defined(SWEET) && !defined(ZENLTE_NO_EARLY_CONSOLE)
+ 	/* Stage 0: white 64x32 band, no stack or page tables needed. */
+ 	MOV64	x0, (SWEET_EARLY_FB_PA + 2368 * 4320)
+ 	mov		w1, #-1
+@@ -678,7 +678,7 @@ Lkernelcache_base_found:
+ 	lsr		x5,  x24, #(ARM_TT_L2_SHIFT)
+ 	create_bootstrap_mapping x14, x15, x5, x3, x2, x9, x10, x11, x12, x13
+ 
+-#if defined(SWEET)
++#if defined(SWEET) && !defined(ZENLTE_NO_EARLY_CONSOLE)
+ 	/*
+ 	 * Splash framebuffer and pstore: one 32MB Device block each in the
+ 	 * EXISTING V=P L2 table. Both blocks and RAM use L1 index 0 (16K pages:
